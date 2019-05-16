@@ -1,11 +1,11 @@
 import re
 import sqlite3
-from pprint import pprint as printer
+import http.client
+import html.parser
 
 # TODO change the name of the file and create a package
 # TODO create an option to run this like a CLI as well as a package
 # TODO consider the right security context including permissions on the file
-# TODO workout how to download the appropriate master.idx files from edgar potentially threaded
 # TODO consider how to handle and catch various error conditions
 # TODO consider logging
 # TODO capture statistics about the number of entries for logging, debugging, etc.
@@ -14,6 +14,33 @@ from pprint import pprint as printer
 # TODO Should we think about a housekeeping DB table describing the last time things were loaded
 # TODO should we consider a housekeeping DB table that has other statistics, etc.
 
+EDGARSERVER = "www.sec.gov"
+EDGARPATH = "/Archives/edgar/full-index/"
+FILETYPE = "master.gz"
+FILENAME = "master"
+FILEEXT = ".gz"
+
+
+def get_masters(years, quarters=[1, 2, 3, 4]):
+    session = http.client.HTTPSConnection(EDGARSERVER)
+    idxs = []
+    for year in years:
+        for quarter in quarters:
+            # TODO Add try statement to account for failed connections where directories don't exist
+            session.request("GET", EDGARPATH + '/' + str(year) + '/QTR' + str(quarter) + '/' + FILETYPE)
+            resp = session.getresponse()
+            print(resp.status, resp.reason)
+            if resp.status is 200: # If the directory exists we'll get a 200 status otherwise we need to continue
+                fil_name = FILENAME + '-' + str(year) + '-' + 'QTR' + str(quarter) + FILEEXT
+                dat = resp.read()
+                fil = open(fil_name, 'ab')
+                fil.write(dat)
+                fil.close()
+                idxs.append(fil_name)
+            else:
+                continue
+    session.close()
+    return idxs
 
 
 def build_idx(file_name, company_name=None, report_type="10-K"):
@@ -88,8 +115,9 @@ def create_db(idx, db_name="edgar_idx"):
     conn.close()
 
 
-f1 = open("master.idx")
-index = build_idx(f1)
-f1.close()
-create_db(index)
-
+# f1 = open("master.idx")
+# index = build_idx(f1)
+# f1.close()
+# create_db(index)
+y = [2019, 2018]
+indexes = get_masters([2018, 2019])
