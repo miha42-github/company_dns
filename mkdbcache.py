@@ -6,14 +6,12 @@ import os
 import gzip
 import argparse
 import sys
+from datetime import date
 
-# TODO change the name of the file and create a package
-# TODO create an option to run this like a CLI as well as a package
+# TODO think about creating a class here
 # TODO consider the right security context including permissions on the file
 # TODO consider how to handle and catch various error conditions
 # TODO capture statistics about the number of entries for logging, debugging, etc.
-# TODO test substrings to create smaller db files
-# TODO Should we think about a housekeeping DB table describing the last time things were loaded
 # TODO should we consider a housekeeping DB table that has other statistics, etc.
 
 EDGARSERVER = "www.sec.gov"
@@ -25,6 +23,7 @@ EDGARARCHIVES = "Archives/"
 
 def get_masters(years, quarters=[1, 2, 3, 4]):
     logger.info('Fetching the master indexes for years %s and quarters %s', years, quarters)
+    num = 0
     global session
     session = http.client.HTTPSConnection(EDGARSERVER)
     fils = []
@@ -53,21 +52,25 @@ def get_masters(years, quarters=[1, 2, 3, 4]):
                 fil = open(fil_name, 'ab')
                 fil.write(dat)
                 fil.close()
+                num += 1
                 fils.append(fil_name)
             else:
                 continue
     session.close()
-    return fils
+    return fils, num
 
 
 def clean_masters (path='./'):
     logger.info('Cleaning up cached master.gz instances from the filesystem.')
+    num = 0
     fil_type = re.compile('master\-\d+\-\S+\.gz$')
     for subdir, dirs, files in os.walk(path):
         for fil in files:
             if fil_type.match(fil):
                 logger.debug('Removing cache file: %s', path + fil)
+                num += 1
                 os.remove(path + fil)
+    return num
 
 
 
@@ -88,9 +91,12 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
     raw_dict = []
     raw_array = []
     # TODO handle a gzip
-    for line in file_name.read():
+    for line in file_name:
         line = line.rstrip()
         line = line.strip()
+        # TODO add logger for each line
+        # TODO count the number of lines and return the int value
+        # TODO separate year and month from the date time string in the entry
         if line:
             # Used to generate the header of the file specific index
             if header_re.match(line) and not skip_re.match(line):
@@ -138,7 +144,11 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
 
 def clean_db(db_name="edgar_idx.db", path="./"):
     logger.info('Cleaning up the db cache instance, %s, from the filesystem.', path + db_name)
-    os.remove(path + db_name)
+    try:
+        os.remove(path + db_name)
+    except FileNotFoundError:
+        logger.warning('The supplied file name, %s, for the db cache was not found.', db_name)
+        return
 
 
 def create_db(db_name="edgar_idx.db"):
@@ -168,34 +178,42 @@ def close_db(conn):
     conn.close()
 
 
-# f1 = open("master.idx") TODO these files are now gzipped so gunzip is required
-# index = build_idx(f1)
-# f1.close()
+def clean_all (db_name="edgar_idx.db", path="./"):
+    clean_db(db_name, path)
+    clean_masters(path)
 
 
+# TODO add __main__
 
-# Set up the logger for the module
-global logger
-logging.basicConfig(format='%(asctime)s | %(levelname)s | %(message)s', level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-logger.info('Initiating the db_cache build.')
-
+# capture the command line options for when this is run as a separate utility
+my_year = []
+my_year.append(int(date.today().year))
 parser = argparse.ArgumentParser(description="A utility to create a db cache for select SEC edgar data.")
 parser.add_argument('--cleanall', '-a', action="store_true", help="Clean up the master.idx files and db cache and exit.")
 parser.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
 parser.add_argument('--cleanmaster', '-m', action="store_true", help="Clean up the master.gz files only and exit.")
 parser.add_argument('--regendb', '-r', action="store_true", help="Create a new db cache from existing data and exit.")
 parser.add_argument('--getmaster', '-g', action="store_true", help="Get the master.gz files only and exit.")
+parser.add_argument('--years', '-y', metavar='Y', type=int, nargs='+', default=my_year, help='Define the years of interest defaults to the current year.')
+
+# For the purposes of logging verbosity DEBUG = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10
+parser.add_argument('--verbose', '-v', type=int, choices=[50, 40, 30, 20, 10], default=30, help="Set the logging verbosity.")
 args = parser.parse_args()
 
+# Set up the logger for the module
+global logger
+logging.basicConfig(format='%(asctime)s | %(levelname)s | %(message)s', level=args.verbose)
+logger = logging.getLogger(__name__)
+# TODO Add file name to logger
+
+# TODO move the richer items in the if statements below into individual rich functions
 global files
-files=[]
-path="./"
+files = []
+path = "./"
 if args.cleanall:
     # Capture the master index files from EDGAR which will be used to create the SQLite DB
     logger.info('Cleaning up existing cache db and associated files.')
-    clean_masters()
-    clean_db()
+    clean_all()
     sys.exit(0)
 elif args.cleandb:
     logger.info('Cleaning up existing cache db.')
@@ -203,11 +221,14 @@ elif args.cleandb:
     sys.exit(0)
 elif args.cleanmaster:
     logger.info('Cleaning up existing master.gz files.')
-    clean_masters()
+    total = clean_masters()
+    print('Cleaned up ' + str(total) + ' master.gz files from the filesystem.')
     sys.exit(0)
 elif args.getmaster:
-
-elif regendb:
+    (fils, total) = get_masters(args.years)
+    print('Downloaded ' + str(total) + ' master.gz files from EDGAR.')
+    sys.exit(0)
+elif args.regendb:
     logger.info('Regenerating cache db from existing master.gz files.')
     logger.debug('Capturing existing master.gz files from the filesystem.')
     my_index = []
@@ -224,19 +245,34 @@ elif regendb:
                 f.close()
                 load_companies(my_cursor, my_conn, my_index['payload_array'])
     close_db(my_conn)
-
-
-files = get_masters([2019, 2018])  # TODO this should be a parameter and the default should be this year
-
-(my_cursor, my_conn) = create_db()
-if args.clean is True:
+    sys.exit(0)
+else:
+    logger.info('Initiating the db_cache build.')
+    my_index = []
+    clean_db()
+    (my_conn, my_cursor) = create_db()
     create_companies(my_cursor, my_conn)
+    fils = get_masters(args.years)
+    for fil in fils:
+        logger.debug('Loading file: %s', fil)
+        f = gzip.open(path + fil)
+        my_index = build_idx(f)
+        f.close()
+        load_companies(my_cursor, my_conn, my_index['payload_array'])
+    close_db(my_conn)
 
-for fil in files:
-    f = gzip.open(fil, 'rt')
-    index = build_idx(f)
-    load_companies(my_cursor, my_conn, index['payload_array'])
 
-close_db(my_conn)
+#files = get_masters([2019, 2018])
+
+#(my_cursor, my_conn) = create_db()
+#if args.clean is True:
+#    create_companies(my_cursor, my_conn)
+
+#for fil in files:
+#    f = gzip.open(fil, 'rt')
+#    index = build_idx(f)
+#    load_companies(my_cursor, my_conn, index['payload_array'])
+
+#close_db(my_conn)
 
 
