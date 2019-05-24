@@ -1,3 +1,17 @@
+#  Copyright 2019 Michael Hay & Manju Ramanathpura
+#  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+#  in compliance with the License. You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software distributed under the License
+#  is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+#  or implied. See the License for the specific language governing permissions and limitations under
+#  the License.
+#
+#  $Id:$
+
+
 import re
 import sqlite3
 import http.client
@@ -21,7 +35,6 @@ FILETYPE = "master.gz"
 FILENAME = "master"
 FILEEXT = ".gz"
 EDGARARCHIVES = "Archives/"
-
 
 def get_masters(years, quarters=[1, 2, 3, 4]):
     logger.info('Fetching the master indexes for years %s and quarters %s', years, quarters)
@@ -95,8 +108,7 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
     for line in file_name:
         line = line.rstrip()
         line = line.strip()
-        # TODO count the number of lines and return the int value
-        # TODO separate year and month from the date time string in the entry
+
         if line:
             # Used to generate the header of the file specific index
             if header_re.match(line) and not skip_re.match(line):
@@ -112,15 +124,18 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
             f_path = "https://" + EDGARSERVER + '/' + EDGARARCHIVES + f_path
 
             if form == report_type:  # Filter in only the report types we want to see, default is 10-k only
+                (year, month, day) = date.split('-')
                 if company_name is None:
                     entry_dict = {
                         'CIK': cik,
                         'Company Name': company,
                         'Form Type': form,
-                        'Date Filed': date,
+                        'Year Filed': year,
+                        'Month Filed': month,
+                        'Day Filed': day,
                         'File Name': f_path
                     }
-                    raw_array.append((cik, company, form, date, f_path))
+                    raw_array.append((cik, company, form, year, month, day, f_path))
                     raw_dict.append(entry_dict)
                     num += 1
                     logger.debug('Processed file entry %s', str(line))
@@ -129,11 +144,13 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
                         'CIK': cik,
                         'Company Name': company,
                         'Form Type': form,
-                        'Date Filed': date,
+                        'Year Filed': year,
+                        'Month Filed': month,
+                        'Day Filed': day,
                         'File Name': f_path
                     }
                     raw_dict.append(entry_dict)
-                    raw_array.append((cik, company, form, date, f_path))
+                    raw_array.append((cik, company, form, year, month, day, f_path))
                     num += 1
                     logger.debug('Processed file entry %s', str(line))
             else:
@@ -167,17 +184,16 @@ def create_db(db_name="edgar_idx.db"):
     return conn, c
 
 
-def create_companies (c, conn):
+def create_companies(c, conn):
     logger.info('Creating table to store company data in the db cache file.')
-    # TODO add year month and day columns all as ints
-    c.execute('CREATE TABLE companies (cik int, name text, form text, date text, file text)')
+    c.execute('CREATE TABLE companies (cik int, name text, form text, year int, month int, day int, file text)')
     conn.commit()
 
 
 def load_companies(c, conn, companies):
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
-    c.executemany('INSERT INTO companies VALUES (?,?,?,?,?)', companies)
+    c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?,?)', companies)
     conn.commit()
     return num
 
@@ -187,77 +203,26 @@ def close_db(conn):
     conn.close()
 
 
-def clean_all (db_name="edgar_idx.db", path="./"):
-    clean_db(db_name, path)
-    print('Cleaned up ' + path + db_name)
-    num = clean_masters(path)
-    print('Cleaned up ' + str(num) + ' master.gz files from the filesystem.')
-
-
-# TODO add __main__
-
-# capture the command line options for when this is run as a separate utility
-my_year = []
-my_year.append(int(date.today().year))
-par = argparse.ArgumentParser(description="A utility to create a db cache for select SEC edgar data.")
-par.add_argument('--cleanall', '-a', action="store_true", help="Clean up the master.idx files and db cache and exit.")
-par.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
-par.add_argument('--cleanmaster', '-m', action="store_true", help="Clean up the master.gz files only and exit.")
-par.add_argument('--regendb', '-r', action="store_true", help="Create a new db cache from existing data and exit.")
-par.add_argument('--getmaster', '-g', action="store_true", help="Get the master.gz files only and exit.")
-par.add_argument('--years', '-y', metavar='Y', type=int, nargs='+', default=my_year, help='Define the years of interest defaults to the current year.')
-
-# For the purposes of logging verbosity DEBUG = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10
-par.add_argument('--verbose', '-v', type=int, choices=[50, 40, 30, 20, 10], default=30, help="Set the logging verbosity.")
-args = par.parse_args()
-
-# Set up the logger for the module
-global logger
-logging.basicConfig(format='%(asctime)s | %(levelname)s | %(message)s', level=args.verbose)
-logger = logging.getLogger(__name__)
-# TODO Add file name to logger
-
-# TODO move the richer items in the if statements below into individual rich functions
-global files
-files = []
-path = "./"
-if args.cleanall:
-    logger.info('Cleaning up existing cache db and associated files.')
-    clean_all()
-    sys.exit(0)
-elif args.cleandb:
-    logger.info('Cleaning up existing cache db.')
-    clean_db()
-    sys.exit(0)
-elif args.cleanmaster:
-    logger.info('Cleaning up existing master.gz files.')
-    total = clean_masters()
-    print('Cleaned up ' + str(total) + ' master.gz files from the filesystem.')
-    sys.exit(0)
-elif args.getmaster:
-    (fils, total) = get_masters(args.years)
-    print('Downloaded ' + str(total) + ' master.gz files from EDGAR.')
-    sys.exit(0)
-elif args.regendb:
-    logger.info('Regenerating cache db from existing master.gz files.')
+def regen_db(path):
     logger.debug('Capturing existing master.gz files from the filesystem.')
-    my_index = []
     clean_db()
-    (my_cursor, my_conn) = create_db()
+    my_index = []
+    (my_conn, my_cursor) = create_db()
     create_companies(my_cursor, my_conn)
     fil_type = re.compile('master\-\d+\-\S+\.gz$')
     for subdir, dirs, fils in os.walk(path):
         for fil in fils:
             if fil_type.match(fil):
                 logger.debug('Loading file: %s', fil)
-                f = gzip.open(path + fil)
+                f = gzip.open(path + fil, 'rt')
                 (my_index, total) = build_idx(f)
                 f.close()
                 print('Processed ' + str(total) + ' entries in file ' + fil)
                 load_companies(my_cursor, my_conn, my_index['payload_array'])
     close_db(my_conn)
-    sys.exit(0)
-else:
+
+
+def build_db(years):
     logger.info('Initiating the db_cache build.')
     my_index = []
     clean_db()
@@ -273,6 +238,67 @@ else:
         total = load_companies(my_cursor, my_conn, my_index['payload_array'])
         print('Inserted ' + str(total) + ' entries in db cache file.')
     close_db(my_conn)
+
+
+def clean_all (db_name="edgar_idx.db", path="./"):
+    clean_db(db_name, path)
+    print('Cleaned up ' + path + db_name)
+    num = clean_masters(path)
+    print('Cleaned up ' + str(num) + ' master.gz files from the filesystem.')
+
+
+
+
+# TODO add __main__
+if __name__ == '__main__':
+    # capture the command line options for when this is run as a separate utility
+    my_year = []
+    my_year.append(int(date.today().year))
+    par = argparse.ArgumentParser(description="A utility to create a db cache for select SEC edgar data.")
+    par.add_argument('--cleanall', '-a', action="store_true", help="Clean up the master.idx files and db cache and exit.")
+    par.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
+    par.add_argument('--cleanmaster', '-m', action="store_true", help="Clean up the master.gz files only and exit.")
+    par.add_argument('--regendb', '-r', action="store_true", help="Create a new db cache from existing data and exit.")
+    par.add_argument('--getmaster', '-g', action="store_true", help="Get the master.gz files only and exit.")
+    par.add_argument('--years', '-y', metavar='Y', type=int, nargs='+', default=my_year, help='Define the years of interest defaults to the current year.')
+
+    # For the purposes of logging verbosity DEBUG = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10
+    par.add_argument('--verbose', '-v', type=int, choices=[50, 40, 30, 20, 10], default=30, help="Set the logging verbosity.")
+    args = par.parse_args()
+
+    # Set up the logger for the module
+    global logger
+    logging.basicConfig(format='%(asctime)s | %(levelname)s | %(name)s | %(message)s', level=args.verbose)
+    logger = logging.getLogger(__file__)
+
+    global files
+    files = []
+    path = "./"
+    if args.cleanall:
+        logger.info('Cleaning up existing cache db and associated files.')
+        clean_all()
+        sys.exit(0)
+    elif args.cleandb:
+        logger.info('Cleaning up existing cache db.')
+        clean_db()
+        sys.exit(0)
+    elif args.cleanmaster:
+        logger.info('Cleaning up existing master.gz files.')
+        total = clean_masters()
+        print('Cleaned up ' + str(total) + ' master.gz files from the filesystem.')
+        sys.exit(0)
+    elif args.getmaster:
+        (fils, total) = get_masters(args.years)
+        print('Downloaded ' + str(total) + ' master.gz files from EDGAR.')
+        sys.exit(0)
+    elif args.regendb:
+        logger.info('Regenerating cache db from existing master.gz files.')
+        regen_db(path)
+        sys.exit(0)
+    else:
+        logger.info('Initiating the db_cache build.')
+        build_db(args.years)
+        sys.exit(0)
 
 
 
