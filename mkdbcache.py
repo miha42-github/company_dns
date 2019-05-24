@@ -1,4 +1,4 @@
-#  Copyright 2019 Michael Hay & Manju Ramanathpura
+#  Copyright 2019 Cameron Solutions
 #  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 #  in compliance with the License. You may obtain a copy of the License at
 #
@@ -9,7 +9,7 @@
 #  or implied. See the License for the specific language governing permissions and limitations under
 #  the License.
 #
-#  $Id:$
+#
 
 
 import re
@@ -22,12 +22,21 @@ import argparse
 import sys
 from datetime import date
 
-# TODO think about creating a class here
+
+__author__ = "Michael Hay"
+__copyright__ = "Copyright 2019, Cameron Solutions"
+__license__ = "ASF 2.0"
+__version__ = "1.0.0"
+__maintainer__ = "Michael Hay"
+__status__ = "Prototype"
+__id__ = "$Id$"
+
+
+# TODO think about creating a class here?
 # TODO consider the right security context including permissions on the file
 # TODO consider how to handle and catch various error conditions
 # TODO capture statistics about the number of entries for logging, debugging, etc.
-# TODO add copyright and license
-# TODO add method signatures and descriptions to clean up the documentation
+# TODO fix function signatures and descriptions to clean up the documentation
 
 EDGARSERVER = "www.sec.gov"
 EDGARPATH = "/Archives/edgar/full-index/"
@@ -36,7 +45,12 @@ FILENAME = "master"
 FILEEXT = ".gz"
 EDGARARCHIVES = "Archives/"
 
+
 def get_masters(years, quarters=[1, 2, 3, 4]):
+    """
+
+    :type quarters: object
+    """
     logger.info('Fetching the master indexes for years %s and quarters %s', years, quarters)
     num = 0
     global session
@@ -76,6 +90,10 @@ def get_masters(years, quarters=[1, 2, 3, 4]):
 
 
 def clean_masters (path='./'):
+    """
+
+    :param db_name:
+    """
     logger.info('Cleaning up cached master.gz instances from the filesystem.')
     num = 0
     fil_type = re.compile('master\-\d+\-\S+\.gz$')
@@ -164,6 +182,10 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
 
 
 def clean_db(db_name="edgar_idx.db", path="./"):
+    """
+
+    :type path: object
+    """
     logger.info('Cleaning up the db cache instance, %s, from the filesystem.', path + db_name)
     try:
         os.remove(path + db_name)
@@ -185,12 +207,20 @@ def create_db(db_name="edgar_idx.db"):
 
 
 def create_companies(c, conn):
+    """
+
+    :param db_name:
+    """
     logger.info('Creating table to store company data in the db cache file.')
     c.execute('CREATE TABLE companies (cik int, name text, form text, year int, month int, day int, file text)')
     conn.commit()
 
 
 def load_companies(c, conn, companies):
+    """
+
+    :param db_name:
+    """
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
     c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?,?)', companies)
@@ -199,11 +229,19 @@ def load_companies(c, conn, companies):
 
 
 def close_db(conn):
+    """
+
+    :param db_name:
+    """
     logger.info('Closing the connection to the database file.')
     conn.close()
 
 
 def regen_db(path):
+    """
+
+    :param db_name:
+    """
     logger.debug('Capturing existing master.gz files from the filesystem.')
     clean_db()
     my_index = []
@@ -223,6 +261,10 @@ def regen_db(path):
 
 
 def build_db(years):
+    """
+
+    :param db_name:
+    """
     logger.info('Initiating the db_cache build.')
     my_index = []
     clean_db()
@@ -241,6 +283,10 @@ def build_db(years):
 
 
 def clean_all (db_name="edgar_idx.db", path="./"):
+    """
+
+    :param db_name:
+    """
     clean_db(db_name, path)
     print('Cleaned up ' + path + db_name)
     num = clean_masters(path)
