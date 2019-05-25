@@ -37,6 +37,8 @@ __id__ = "$Id$"
 # TODO consider how to handle and catch various error conditions
 # TODO capture statistics about the number of entries for logging, debugging, etc.
 # TODO fix function signatures and descriptions to clean up the documentation
+# TODO clean up variable names
+# TODO move print statements out of methods
 
 EDGARSERVER = "www.sec.gov"
 EDGARPATH = "/Archives/edgar/full-index/"
@@ -91,8 +93,9 @@ def get_masters(years, quarters=[1, 2, 3, 4]):
 
 def clean_masters (path='./'):
     """
+    Remove all master.gz files regardless of their name
 
-    :param db_name:
+    :param path: specify the path of the master.gz files
     """
     logger.info('Cleaning up cached master.gz instances from the filesystem.')
     num = 0
@@ -108,10 +111,11 @@ def clean_masters (path='./'):
 
 def build_idx(file_name, company_name=None, report_type="10-K"):
     """
+    Generate an index suitable to load into a db cache
 
-    :param file_name:
-    :param company_name:
-    :param report_type:
+    :param file_name: name of the master.gz file to process
+    :param company_name: name of a specific company to focus the index on, default None
+    :param report_type: type of report to capture, default 10-K
     """
     logger.info('Creating the data structure from the compressed index file.')
     global entry_dict
@@ -138,7 +142,8 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
             (cik, company, form, date, fil) = line.split('|')
 
             #  edgar/data/1000045/0001104659-19-005360.txt <- This is the file name structure we'll handle
-            f_path = re.sub('\d+\-\d+\-\d+\.txt', '', fil)
+            f_path = re.sub('\.txt', '', fil)
+            f_path = re.sub('-', '', f_path)
             f_path = "https://" + EDGARSERVER + '/' + EDGARARCHIVES + f_path
 
             if form == report_type:  # Filter in only the report types we want to see, default is 10-k only
@@ -260,17 +265,17 @@ def regen_db(path):
     close_db(my_conn)
 
 
-def build_db(years):
+def build_db(years, path='./'):
     """
 
-    :param db_name:
+    :param years:
     """
     logger.info('Initiating the db_cache build.')
     my_index = []
     clean_db()
     (my_conn, my_cursor) = create_db()
     create_companies(my_cursor, my_conn)
-    (fils, total) = get_masters(args.years)
+    (fils, total) = get_masters(years)
     for fil in fils:
         logger.debug('Loading file: %s', str(fil))
         f = gzip.open(path + fil, 'rt')
@@ -293,10 +298,8 @@ def clean_all (db_name="edgar_idx.db", path="./"):
     print('Cleaned up ' + str(num) + ' master.gz files from the filesystem.')
 
 
-
-
-# TODO add __main__
 if __name__ == '__main__':
+
     # capture the command line options for when this is run as a separate utility
     my_year = []
     my_year.append(int(date.today().year))
@@ -319,7 +322,7 @@ if __name__ == '__main__':
 
     global files
     files = []
-    path = "./"
+    my_path = "./"
     if args.cleanall:
         logger.info('Cleaning up existing cache db and associated files.')
         clean_all()
@@ -339,7 +342,7 @@ if __name__ == '__main__':
         sys.exit(0)
     elif args.regendb:
         logger.info('Regenerating cache db from existing master.gz files.')
-        regen_db(path)
+        regen_db(my_path)
         sys.exit(0)
     else:
         logger.info('Initiating the db_cache build.')
