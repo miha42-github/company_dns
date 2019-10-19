@@ -2,16 +2,24 @@
 
 """Core RESTful service to retrieve EDGAR information about companies."""
 from typing import List, Any
+from pprint import pprint
 
 from flask import Flask, jsonify, abort, make_response
 from flask_httpauth import HTTPBasicAuth
-from flask_restful import Api, Resource, fields, marshal, reqparse
+from flask_restful import Api, Resource, reqparse
+from flask_restplus import fields, marshal
+
 from pyedgar.utilities.indices import IndexMaker
 from pyedgar.filing import Filing
 from pyedgar.index import EDGARIndex
+
 from os import path
-import os.path
 import re
+
+# Constants
+EDGARSERVER = "www.sec.gov"
+EDGARARCHIVES = "Archives/edgar/data"
+EDGARURI = "https://"
 
 # Setup the application name and basic operations
 app = Flask(__name__, static_url_path="")
@@ -23,7 +31,7 @@ auth = HTTPBasicAuth()
 @auth.get_password
 def get_password(username):
     if username == 'edgar':
-        return 'this_is_your_service'
+        return 'foo'
     return None
 
 
@@ -69,14 +77,35 @@ def _get10ks() -> object:
     return all_10ks
 
 
-companies_fields = {
-    'name': fields.String,
-    'headers': fields.Arbitrary,
-    'abstract': fields.String,
-    'done': fields.Boolean,
-    'uri': fields.Url('filings')
+filing_fields = {
+    'accession-number': fields.String,
+    'central-index-key': fields.String,
+    'conformed-period-of-report': fields.String,
+    'conformed-submission-type': fields.String,
+    'date-as-of-change': fields.String,
+    'directory_url': fields.String,
+    'filed-as-of-date': fields.String,
+    'film-number': fields.String,
+    'public-document-count': fields.String,
+    'flat': fields.Boolean,
+    'url': fields.String,
 }
 
+companies_fields = {
+    'company_name': fields.String,
+    'country': fields.String,
+    'state': fields.String,
+    'city': fields.String,
+    'street': fields.String,
+    'zip_code': fields.String,
+    'business_phone': fields.String,
+    'industry': fields.String,
+    'form_type': fields.String,
+    'fiscal_end': fields.String,
+    'irs_number': fields.String,
+    'sec_file_number': fields.String,
+    '10k_filing': fields.Nested(filing_fields)
+}
 
 class edgarFilingAPI(Resource):
     decorators = [auth.login_required]
@@ -84,7 +113,7 @@ class edgarFilingAPI(Resource):
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
         self.index = _get10ks()
-        self.reqparse.add_argument('name', required=True, help="No company name provided",
+        self.reqparse.add_argument('filing', required=True, help="No company name provided",
                                    location="json")
         super(edgarFilingAPI, self).__init__()
 
@@ -120,8 +149,8 @@ class edgarFilingAPI(Resource):
                                      'city': str(f.headers['city']).strip(),
                                      'street': str(f.headers['street1']).strip(),
                                      'zip_code': str(f.headers['zip']).strip(),
-                                     'business_phone': '+1' + str(f.headers['business-phone']).strip(),
-                                     'state_of_incorporation': str(f.headers['state-of-incorporation']).strip(),
+                                     'business_phone': str(f.headers['business-phone']).strip(),
+                                     # 'state_of_incorporation': str(f.headers['state-of-incorporation']).strip(),
                                      'industry': str(f.headers['standard-industrial-classification']).strip(),
                                      'form_type': str(f.headers['form-type']).strip(),
                                      'fiscal_end': str(f.headers['fiscal-year-end']).strip(),
@@ -139,10 +168,11 @@ class edgarFilingAPI(Resource):
                     companies_dict[my_cik][my_report].update({'directory_url': root_url})
 
                 companies_dict[my_cik][my_report].update({item: f.headers[item]})
+                pprint(companies_dict)
 
             if len(companies_dict) == 0:
                 abort(404)
-            return {'headers': marshal(companies_dict, companies_fields)}
+            return [marshal(companies_dict[_cik], companies_fields) for _cik in companies_dict.keys()]
 
 
 class edgar10KAbstractAPI(Resource):
@@ -155,9 +185,9 @@ class edgar10KAbstractAPI(Resource):
         pass
 
 
-api.add_resource(edgarFilingAPI, '/edgar/api/v1.0/filings', endpoint="filings")
-api.add_resource(edgar10KAbstractAPI, '/edgar/api/v1.0/abstracts', endpoint="abstract")
+_initialize()
+api.add_resource(edgarFilingAPI, '/edgar/api/v1.0/filings/<string:company>', endpoint="filings")
+api.add_resource(edgar10KAbstractAPI, '/edgar/api/v1.0/abstract', endpoint="abstract")
 
 if __name__ == '__main__':
-    _initialize()
     app.run(debug=True)
