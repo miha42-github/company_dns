@@ -14,7 +14,10 @@
 
 import sqlite3
 import cmd
+import urllib.request
 from pprint import pprint as printer
+import re
+from xbrl import XBRLParser, GAAP, GAAPSerializer
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2019, Cameron Solutions"
@@ -24,7 +27,7 @@ __maintainer__ = "Michael Hay"
 __status__ = "Prototype"
 __id__ = "$Id$"
 
-EDGARDB = 'edgar_idx.db'
+EDGARDB = 'edgar_10k_idx.db'
 
 # TODO make this a simple CLI allowing for searching based upon company name without needing SQL
 # TODO implement an ability to download the file referenced in the entry
@@ -32,6 +35,10 @@ EDGARDB = 'edgar_idx.db'
 # TODO when we're looking at downloading files from edgar create hashes and store the result in the DB for update track
 # TODO turn this into an API service with flask or keep this separate?
 # TODO download the file and parse the results into something that is readable and usable
+# TODO change back to the txt file name in the master.gz file
+# TODO look at structring things by year
+# TODO surface the 10K HTML URLs
+# TODO consider JSON output
 
 e_conn = sqlite3.connect(EDGARDB)
 ec = e_conn.cursor()
@@ -39,13 +46,15 @@ ec = e_conn.cursor()
 
 class FalshCmd(cmd.Cmd):
 
-    prompt = 'falsh>'
+    prompt = 'falsh> '
     intro = 'A shell to retrieve firmalitics from various databases like SEC Edgar'
     ruler = '_'
 
     def do_cquery(self, query):
         for row in ec.execute("SELECT * FROM companies WHERE name LIKE '%" + query + "%'"):
-            printer(row[1] + ' has CIK: ' + str(row[0]))
+            printer('[Company: ' + row[1] + ' ' + 'CIK: ' + str(row[0]) + '] ' + 'Date - ' + str(row[2]) + str(row[3])
+                    + str(row[4]) + ' | Accession - ' + row[5])
+
 
     def help_cquery(self):
         print("\ncquery [company name OR string]\nQuery either a company name or partial name.")
@@ -53,6 +62,19 @@ class FalshCmd(cmd.Cmd):
     def do_cikquery(self, query):
         for row in ec.execute("SELECT * FROM companies WHERE cik is '" + query + "'"):
             printer(row[1] + '(CIK: ' + str(row[0]) + "): "+ row[6])
+
+    def do_10ksummary(self):
+        pass
+
+    def do_get10kfile(self, query):
+        for row in ec.execute("SELECT * FROM companies WHERE cik is '" + query + "'"):
+            print("Retrieving: " + row[6])
+            fil = row[6].split('/')[7]
+            urllib.request.urlretrieve(row[6], fil)
+            xb = XBRLParser()
+            xbrl = xb.parse(fil)
+            gaap = xb.parseGAAP(xbrl, ignore_errors=1)
+            print(gaap.revenue)
 
     def emptyline(self):
         pass
