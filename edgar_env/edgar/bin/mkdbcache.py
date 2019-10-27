@@ -20,7 +20,9 @@ import os
 import gzip
 import argparse
 import sys
+import csv
 from datetime import date
+
 
 
 __author__ = "Michael Hay"
@@ -48,50 +50,7 @@ FILEEXT = ".gz"
 EDGARARCHIVES = "Archives/"
 
 
-def get_masters(years, quarters=[1, 2, 3, 4]):
-    """
-
-    :type quarters: object
-    """
-    logger.info('Fetching the master indexes for years %s and quarters %s', years, quarters)
-    num = 0
-    global session
-    session = http.client.HTTPSConnection(EDGARSERVER)
-    fils = []
-    for year in years:
-        for quarter in quarters:
-            try:
-                url_name = str(year) + '/QTR' + str(quarter) + '/' + FILETYPE
-                session.request("GET", EDGARPATH + '/' + url_name)
-            except http.client.CannotSendRequest as e:
-                logger.warning('Cannot fetch the requested resource %s', url_name)
-                session.close()
-                session = http.client.HTTPSConnection(EDGARSERVER)
-                continue
-
-            try:
-                resp = session.getresponse()
-            except http.client.ResponseNotReady as e:
-                logger.warning('The referenced master.gz does not exist and the connection terminated.')
-                continue
-
-            logger.debug('HTTP response code: %s, %s', resp.status, resp.reason)
-            if resp.status is 200: # If the directory exists we'll get a 200 status otherwise we need to continue
-                fil_name = FILENAME + '-' + str(year) + '-' + 'QTR' + str(quarter) + FILEEXT
-                logger.debug('Downloading master.idx for year %s and quarter %s as %s', str(year), str(quarter), fil_name)
-                dat = resp.read()
-                fil = open(fil_name, 'ab')
-                fil.write(dat)
-                fil.close()
-                num += 1
-                fils.append(fil_name)
-            else:
-                continue
-    session.close()
-    return fils, num
-
-
-def clean_masters (path='./'):
+def clean_masters(path='./'):
     """
     Remove all master.gz files regardless of their name
 
@@ -109,7 +68,7 @@ def clean_masters (path='./'):
     return num
 
 
-def build_idx(file_name, company_name=None, report_type="10-K"):
+def build_idx(file_name):
     """
     Generate an index suitable to load into a db cache
 
@@ -118,75 +77,23 @@ def build_idx(file_name, company_name=None, report_type="10-K"):
     :param report_type: type of report to capture, default 10-K
     """
     logger.info('Creating the data structure from the compressed index file.')
-    global entry_dict
-    global entry_array
-    header_re = re.compile('^\w+.*:', re.IGNORECASE)  # Detect the headers for the idx
-    ignore_re = re.compile('^-.*$')  # Skip the separator which is '----'
-    skip_re = re.compile('^\S+\|')  # Skip an entry if it has a | symbol
-    idx = {}
-    raw_dict = []
-    raw_array = []
+    header_re = re.compile('^cik', re.IGNORECASE)  # Detect the headers for the idx
+    idx = list()
     num = 0
-    for line in file_name:
-        line = line.rstrip()
-        line = line.strip()
-
-        if line:
-            # Used to generate the header of the file specific index
-            if header_re.match(line) and not skip_re.match(line):
-                (key, value) = line.split(':', 1)
-                idx[key] = value
+    with open(file_name, newline='') as content:
+        csv_reader = csv.reader(content, delimiter='\t')
+        for entry in csv_reader:
+            if header_re.match(entry[0]):
                 continue
-            elif ignore_re.match(line):
-                continue
-            (cik, company, form, date, fil) = line.split('|')
-
-            #  edgar/data/1000045/0001104659-19-005360.txt <- This is the file name structure we'll handle
-            f_path = re.sub('\.txt', '', fil)
-            f_path = re.sub('-', '', f_path)
-            f_path = "https://" + EDGARSERVER + '/' + EDGARARCHIVES + f_path
-
-            if form == report_type:  # Filter in only the report types we want to see, default is 10-k only
-                (year, month, day) = date.split('-')
-                if company_name is None:
-                    entry_dict = {
-                        'CIK': cik,
-                        'Company Name': company,
-                        'Form Type': form,
-                        'Year Filed': year,
-                        'Month Filed': month,
-                        'Day Filed': day,
-                        'File Name': f_path
-                    }
-                    raw_array.append((cik, company, form, year, month, day, f_path))
-                    raw_dict.append(entry_dict)
-                    num += 1
-                    logger.debug('Processed file entry %s', str(line))
-                elif company_name.lower() in company.lower():
-                    entry_dict = {
-                        'CIK': cik,
-                        'Company Name': company,
-                        'Form Type': form,
-                        'Year Filed': year,
-                        'Month Filed': month,
-                        'Day Filed': day,
-                        'File Name': f_path
-                    }
-                    raw_dict.append(entry_dict)
-                    raw_array.append((cik, company, form, year, month, day, f_path))
-                    num += 1
-                    logger.debug('Processed file entry %s', str(line))
-            else:
-                continue
-        else:
-            continue
-
-    idx['payload_dict'] = raw_dict
-    idx['payload_array'] = raw_array
-    return idx, num
+            my_cik = entry[0]
+            my_company = entry[1]
+            (my_year, my_month, my_day) = entry[3].split('-')
+            my_accession = entry[4]
+            idx.append([my_cik, my_company, int(my_year), int(my_month),int(my_day), my_accession])
+    return idx, len(idx)
 
 
-def clean_db(db_name="edgar_idx.db", path="./"):
+def clean_db(db_name="edgar_10k_idx.db", path="./"):
     """
 
     :type path: object
@@ -199,7 +106,7 @@ def clean_db(db_name="edgar_idx.db", path="./"):
         return
 
 
-def create_db(db_name="edgar_idx.db"):
+def create_db(db_name="edgar_10k_idx.db"):
     """
 
     :param db_name:
@@ -217,7 +124,7 @@ def create_companies(c, conn):
     :param db_name:
     """
     logger.info('Creating table to store company data in the db cache file.')
-    c.execute('CREATE TABLE companies (cik int, name text, form text, year int, month int, day int, file text)')
+    c.execute('CREATE TABLE companies (cik int, name text, year int, month int, day int, accession text)')
     conn.commit()
 
 
@@ -228,7 +135,7 @@ def load_companies(c, conn, companies):
     """
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
-    c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?,?)', companies)
+    c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?)', companies)
     conn.commit()
     return num
 
@@ -264,26 +171,23 @@ def regen_db(path):
                 load_companies(my_cursor, my_conn, my_index['payload_array'])
     close_db(my_conn)
 
+# TODO: Pull in the appropriate PyEdgar module to download the right set of data
+# TODO: Make the command line switches handle years and type of cache 10-k or other to create
+# TODO: Rewire the cleanup operations to clean up the appropriate GZ files even during DB Create
 
-def build_db(years, path='./'):
+def build_db(file_name):
     """
 
     :param years:
     """
     logger.info('Initiating the db_cache build.')
-    my_index = []
     clean_db()
     (my_conn, my_cursor) = create_db()
     create_companies(my_cursor, my_conn)
-    (fils, total) = get_masters(years)
-    for fil in fils:
-        logger.debug('Loading file: %s', str(fil))
-        f = gzip.open(path + fil, 'rt')
-        (my_index, total) = build_idx(f)
-        print('Processed ' + str(total) + ' entries in file ' + fil)
-        f.close()
-        total = load_companies(my_cursor, my_conn, my_index['payload_array'])
-        print('Inserted ' + str(total) + ' entries in db cache file.')
+    (my_index, total) = build_idx(file_name)
+    print('Processed ' + str(total) + ' entries in file ' + file_name)
+    total = load_companies(my_cursor, my_conn, my_index)
+    print("Inserted {0} entries in db cache file.".format(str(total)))
     close_db(my_conn)
 
 
@@ -331,22 +235,13 @@ if __name__ == '__main__':
         logger.info('Cleaning up existing cache db.')
         clean_db()
         sys.exit(0)
-    elif args.cleanmaster:
-        logger.info('Cleaning up existing master.gz files.')
-        total = clean_masters()
-        print('Cleaned up ' + str(total) + ' master.gz files from the filesystem.')
-        sys.exit(0)
-    elif args.getmaster:
-        (fils, total) = get_masters(args.years)
-        print('Downloaded ' + str(total) + ' master.gz files from EDGAR.')
-        sys.exit(0)
     elif args.regendb:
         logger.info('Regenerating cache db from existing master.gz files.')
         regen_db(my_path)
         sys.exit(0)
     else:
         logger.info('Initiating the db_cache build.')
-        build_db(args.years)
+        build_db('form_10-K.tab')
         sys.exit(0)
 
 
