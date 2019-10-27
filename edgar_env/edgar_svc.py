@@ -131,6 +131,7 @@ class edgarFilingAPI(Resource):
                 companies_list.append(self.index.loc[[key]].values.tolist())
 
         for entry in companies_list:
+            print (entry)
             n = entry[0]
             cik = n[0]
             name = n[1]
@@ -171,7 +172,7 @@ class edgarFilingAPI(Resource):
 
                 temp_dict.update({item: f.headers[item]})
             companies_dict[my_cik]['10ks'].append(temp_dict)
-            pprint(companies_dict)
+            # pprint(companies_dict)
 
             if len(companies_dict) == 0:
                 abort(404)
@@ -188,7 +189,7 @@ class edgar10KAbstractAPI(Resource):
         pass
 
 
-_initialize()
+_initialize(my_year=2007)
 api.add_resource(edgarFilingAPI, '/edgar/api/v1.0/filings/<string:company>', endpoint="filings")
 api.add_resource(edgar10KAbstractAPI, '/edgar/api/v1.0/abstract', endpoint="abstract")
 
