@@ -104,8 +104,9 @@ companies_fields = {
     'fiscal_end': fields.String,
     'irs_number': fields.String,
     'sec_file_number': fields.String,
-    '10k_filing': fields.Nested(filing_fields)
+    '10ks': fields.List(fields.Nested(filing_fields))
 }
+
 
 class edgarFilingAPI(Resource):
     decorators = [auth.login_required]
@@ -139,10 +140,10 @@ class edgarFilingAPI(Resource):
             my_cik = str(f.headers['central-index-key']).strip()
             my_report = str(f.headers['conformed-period-of-report']).strip()
             if my_cik in companies_dict:
-                companies_dict[my_cik].update({my_report: dict()})
+                companies_dict[my_cik].update({'10ks': list()})
             else:
                 companies_dict[my_cik] = dict()
-                companies_dict[my_cik] = {my_report: dict(),
+                companies_dict[my_cik] = {'10ks': list(),
                                      'company_name': str(f.headers['company-conformed-name']).strip().lstrip("'"),
                                      'country': 'United States of America',
                                      'state': str(f.headers['state']).strip(),
@@ -158,17 +159,19 @@ class edgarFilingAPI(Resource):
                                      'sec_file_number': str(f.headers['sec-file-number']).strip(),
                                      }
 
+            temp_dict = dict()
             for item in f.headers:
                 if to_skip.match(item):
                     continue
                 elif to_mod.match(item):
                     directory = my_cik + '/' + str(f.headers[item].replace('-', ''))
-                    companies_dict[my_cik][my_report].update({'url': f.urls[1]})
                     root_url = EDGARURI + EDGARSERVER + '/' + EDGARARCHIVES + '/' + directory + '/'
-                    companies_dict[my_cik][my_report].update({'directory_url': root_url})
+                    temp_dict['directory_url'] = root_url
+                    temp_dict['url'] = f.urls[1]
 
-                companies_dict[my_cik][my_report].update({item: f.headers[item]})
-                pprint(companies_dict)
+                temp_dict.update({item: f.headers[item]})
+            companies_dict[my_cik]['10ks'].append(temp_dict)
+            pprint(companies_dict)
 
             if len(companies_dict) == 0:
                 abort(404)
