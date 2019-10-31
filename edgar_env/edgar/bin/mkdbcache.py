@@ -14,21 +14,19 @@
 
 import re
 import sqlite3
-import http.client
 import logging
 import os
-import gzip
 import argparse
 import sys
 import csv
-from datetime import date
-
+from pyedgar.utilities.indices import IndexMaker
+from os import path
 
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2019, Cameron Solutions"
 __license__ = "ASF 2.0"
-__version__ = "1.0.0"
+__version__ = "1.5.0"
 __maintainer__ = "Michael Hay"
 __status__ = "Prototype"
 __id__ = "$Id$"
@@ -38,33 +36,60 @@ __id__ = "$Id$"
 # TODO consider the right security context including permissions on the file
 # TODO consider how to handle and catch various error conditions
 # TODO capture statistics about the number of entries for logging, debugging, etc.
-# TODO fix function signatures and descriptions to clean up the documentation
-# TODO clean up variable names
 # TODO move print statements out of methods
+# TODO Consider putting an __ in front of "internal methods" which are only called by wrapping functions
 
-EDGARSERVER = "www.sec.gov"
-EDGARPATH = "/Archives/edgar/full-index/"
-FILETYPE = "master.gz"
-FILENAME = "master"
-FILEEXT = ".gz"
-EDGARARCHIVES = "Archives/"
+PATH = "./"
+CACHE_CONTROL = '.cache_exists'
+DB_CONTROL = '.db_exists'
+DB_CACHE = 'edgar_cache.db'
 
 
-def clean_masters(path='./'):
+def initialize(start_year=2010):
     """
-    Remove all master.gz files regardless of their name
+    Using the appropriate method in PyEdgar download the file cache for that defines the relevant SEC filings for
+    companies given the start_year variable. The method in this package then will format the content into tab
+    delimited files and prepare them for processing.
 
-    :param path: specify the path of the master.gz files
+    :type start_year: int
+    ;param start_year: define the start year for the initialization of the cache
     """
-    logger.info('Cleaning up cached master.gz instances from the filesystem.')
+    # TODO: Look at PyEdgar to understand why there are extra Alerts and WARNINGS printed.
+
+    if path.exists(PATH + CACHE_CONTROL):
+        return True
+    else:
+        i = IndexMaker()
+        i.extract_indexes(start_year=start_year)  # Download and create the index
+        open(PATH + CACHE_CONTROL, 'w').close()  # Create the file that controls the reindexing
+        return True
+
+
+def clean_cache():
+    """
+    Remove all cache file instances which include tab delimited files and gz files, and return the number of files
+    removed.
+
+    """
+    logger.info('Cleaning up cache control file.')
+    try:
+        os.remove(PATH + CACHE_CONTROL)
+    except FileNotFoundError:
+        logger.warning('The supplied file name, %s, for the db cache control was not found.', CACHE_CONTROL)
+
+    logger.info('Cleaning up cached quarterly EDGAR instances from the filesystem.')
     num = 0
-    fil_type = re.compile('master\-\d+\-\S+\.gz$')
-    for subdir, dirs, files in os.walk(path):
+    tab_type = re.compile('^form.*\.tab$')
+    gz_type = re.compile('^full_index_\d+.*\.gz$')
+    for subdir, dirs, files in os.walk(PATH):
         for fil in files:
-            if fil_type.match(fil):
-                logger.debug('Removing cache file: %s', path + fil)
+            if tab_type.match(fil) or gz_type.match(fil):
+                logger.debug('Removing cache file: %s', PATH + fil)
                 num += 1
-                os.remove(path + fil)
+                try:
+                    os.remove(PATH + fil)
+                except FileNotFoundError:
+                    logger.warning('The supplied file name, %s, for the file cache was not found.', fil)
     return num
 
 
@@ -72,9 +97,7 @@ def build_idx(file_name):
     """
     Generate an index suitable to load into a db cache
 
-    :param file_name: name of the master.gz file to process
-    :param company_name: name of a specific company to focus the index on, default None
-    :param report_type: type of report to capture, default 10-K
+    :param file_name: name of the *.tab file to process
     """
     logger.info('Creating the data structure from the compressed index file.')
     header_re = re.compile('^cik', re.IGNORECASE)  # Detect the headers for the idx
@@ -93,26 +116,28 @@ def build_idx(file_name):
     return idx, len(idx)
 
 
-def clean_db(db_name="edgar_10k_idx.db", path="./"):
+def clean_db():
     """
+    Remove the DB Cache from the file system including the control file
 
-    :type path: object
     """
-    logger.info('Cleaning up the db cache instance, %s, from the filesystem.', path + db_name)
+    logger.info('Cleaning up the db cache instance, %s, from the filesystem.', PATH + DB_CACHE)
     try:
-        os.remove(path + db_name)
+        os.remove(PATH + DB_CACHE)
+        os.remove(PATH + DB_CONTROL)
     except FileNotFoundError:
-        logger.warning('The supplied file name, %s, for the db cache was not found.', db_name)
+        logger.warning('The supplied file names, %s and %s, for the db cache was not found.', DB_CACHE, DB_CONTROL)
         return
 
 
-def create_db(db_name="edgar_10k_idx.db"):
+def create_db():
     """
+    Create an empty database cache file and return the DB cursor
 
-    :param db_name:
+    :param db_name: name of the database cache file
     """
-    logger.info('Attaching to the database file %s.', db_name)
-    conn = sqlite3.connect(db_name)
+    logger.info('Attaching to the database file %s.', PATH + DB_CACHE)
+    conn = sqlite3.connect(DB_CACHE)
     c = conn.cursor()
     conn.commit()
     return conn, c
@@ -120,6 +145,7 @@ def create_db(db_name="edgar_10k_idx.db"):
 
 def create_companies(c, conn):
     """
+    Create the company table in the DB
 
     :param db_name:
     """
@@ -130,56 +156,37 @@ def create_companies(c, conn):
 
 def load_companies(c, conn, companies):
     """
+    Load the EDGAR company data into the DB cache file
 
-    :param db_name:
     """
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
     c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?)', companies)
     conn.commit()
+    open(PATH + DB_CONTROL, 'w').close()  # Create the file that controls the reindexing
     return num
 
 
 def close_db(conn):
     """
+    Close the DB cache file and connection
 
-    :param db_name:
+    :param conn: connection to the database
     """
     logger.info('Closing the connection to the database file.')
     conn.close()
 
 
-def regen_db(path):
-    """
-
-    :param db_name:
-    """
-    logger.debug('Capturing existing master.gz files from the filesystem.')
-    clean_db()
-    my_index = []
-    (my_conn, my_cursor) = create_db()
-    create_companies(my_cursor, my_conn)
-    fil_type = re.compile('master\-\d+\-\S+\.gz$')
-    for subdir, dirs, fils in os.walk(path):
-        for fil in fils:
-            if fil_type.match(fil):
-                logger.debug('Loading file: %s', fil)
-                f = gzip.open(path + fil, 'rt')
-                (my_index, total) = build_idx(f)
-                f.close()
-                print('Processed ' + str(total) + ' entries in file ' + fil)
-                load_companies(my_cursor, my_conn, my_index['payload_array'])
-    close_db(my_conn)
-
-# TODO: Pull in the appropriate PyEdgar module to download the right set of data
-# TODO: Make the command line switches handle years and type of cache 10-k or other to create
-# TODO: Rewire the cleanup operations to clean up the appropriate GZ files even during DB Create
-
 def build_db(file_name):
     """
+    Perform all operations needed to build the DB cache file
 
-    :param years:
+    ;param file_name: name of the tab file to pull into create the cache
+
     """
+
+    # TODO If the DB_CONTROL file exists this process should not run, and that needs to be fixed
+
     logger.info('Initiating the db_cache build.')
     clean_db()
     (my_conn, my_cursor) = create_db()
@@ -191,32 +198,34 @@ def build_db(file_name):
     close_db(my_conn)
 
 
-def clean_all (db_name="edgar_idx.db", path="./"):
+def clean_all():
     """
+    Clean up all cache files, control files and the DB cache.  The underlying functions will gracefully handle any
+    errors like files not being found, etc.
 
-    :param db_name:
     """
-    clean_db(db_name, path)
-    print('Cleaned up ' + path + db_name)
-    num = clean_masters(path)
-    print('Cleaned up ' + str(num) + ' master.gz files from the filesystem.')
+    clean_db()
+    print('Cleaned up ' + PATH + DB_CACHE)
+    num = clean_cache()
+    print('Cleaned up ' + str(num) + ' cache files from the filesystem.')
 
 
 if __name__ == '__main__':
 
-    # capture the command line options for when this is run as a separate utility
-    my_year = []
-    my_year.append(int(date.today().year))
-    par = argparse.ArgumentParser(description="A utility to create a db cache for select SEC edgar data.")
-    par.add_argument('--cleanall', '-a', action="store_true", help="Clean up the master.idx files and db cache and exit.")
-    par.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
-    par.add_argument('--cleanmaster', '-m', action="store_true", help="Clean up the master.gz files only and exit.")
-    par.add_argument('--regendb', '-r', action="store_true", help="Create a new db cache from existing data and exit.")
-    par.add_argument('--getmaster', '-g', action="store_true", help="Get the master.gz files only and exit.")
-    par.add_argument('--years', '-y', metavar='Y', type=int, nargs='+', default=my_year, help='Define the years of interest defaults to the current year.')
+    # TODO Consider only allowing the initialization operation to run
 
-    # For the purposes of logging verbosity DEBUG = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10
-    par.add_argument('--verbose', '-v', type=int, choices=[50, 40, 30, 20, 10], default=30, help="Set the logging verbosity.")
+    # capture the command line options for when this is run as a separate utility
+    par = argparse.ArgumentParser(description="A utility to create a db cache for select SEC edgar data.")
+    par.add_argument('--cleanall', '-a', action="store_true", help="Clean up the cache files and db cache and exit.")
+    par.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
+    par.add_argument('--cleancache', '-c', action="store_true", help="Clean up the cache files only and exit.")
+    par.add_argument('--getmaster', '-g', action="store_true", help="Get the master.gz files only and exit.")
+    par.add_argument('--year', '-y', metavar='Y', type=int, default=2010,
+                     help='Define the year to start from, defaults to 2010.')
+
+    # For the purposes of logging verbosity SILENT = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10
+    par.add_argument('--verbose', '-v', type=int, choices=[50, 40, 30, 20, 10],
+                     default=30, help="Set the logging verbosity.")
     args = par.parse_args()
 
     # Set up the logger for the module
@@ -224,26 +233,22 @@ if __name__ == '__main__':
     logging.basicConfig(format='%(asctime)s | %(levelname)s | %(name)s | %(message)s', level=args.verbose)
     logger = logging.getLogger(__file__)
 
-    global files
-    files = []
     my_path = "./"
     if args.cleanall:
         logger.info('Cleaning up existing cache db and associated files.')
         clean_all()
         sys.exit(0)
+    elif args.cleancache:
+        logger.info('Cleaning up existing cache file on the file system.')
+        clean_cache()
+        sys.exit(0)
     elif args.cleandb:
         logger.info('Cleaning up existing cache db.')
         clean_db()
         sys.exit(0)
-    elif args.regendb:
-        logger.info('Regenerating cache db from existing master.gz files.')
-        regen_db(my_path)
-        sys.exit(0)
     else:
-        logger.info('Initiating the db_cache build.')
-        build_db('form_10-K.tab')
+        logger.info('Initiating the db_cache build, default start year is 2010 unless overridden.')
+        initialize(start_year=args.year)
+        build_db('form_all.tab')
+        clean_cache()
         sys.exit(0)
-
-
-
-
