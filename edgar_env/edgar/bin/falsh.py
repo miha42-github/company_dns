@@ -14,10 +14,8 @@
 
 import sqlite3
 import cmd
-import urllib.request
 from pprint import pprint as printer
-import re
-from xbrl import XBRLParser, GAAP, GAAPSerializer
+from pyedgar.filing import Filing
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2019, Cameron Solutions"
@@ -27,20 +25,22 @@ __maintainer__ = "Michael Hay"
 __status__ = "Prototype"
 __id__ = "$Id$"
 
-EDGARDB = 'edgar_10k_idx.db'
+PATH = "./"
+DB_CACHE = 'edgar_cache.db'
+COMPANY = 1
+CIK = 0
+YEAR = 4
+MONTH = 2
+DAY = 3
+ACCESSION = 5
 
 # TODO make this a simple CLI allowing for searching based upon company name without needing SQL
-# TODO implement an ability to download the file referenced in the entry
-# TODO add the appropriate configuration data as a JSON string in the DB
-# TODO when we're looking at downloading files from edgar create hashes and store the result in the DB for update track
-# TODO turn this into an API service with flask or keep this separate?
-# TODO download the file and parse the results into something that is readable and usable
-# TODO change back to the txt file name in the master.gz file
-# TODO look at structring things by year
 # TODO surface the 10K HTML URLs
-# TODO consider JSON output
+# TODO pull in PyEdgar to print out the header information
+# TODO pull in PyEdgar to print out a company description from an 10K or similar
+# TODO try a query to something other than a 10k
 
-e_conn = sqlite3.connect(EDGARDB)
+e_conn = sqlite3.connect(PATH + DB_CACHE)
 ec = e_conn.cursor()
 
 
@@ -52,8 +52,14 @@ class FalshCmd(cmd.Cmd):
 
     def do_cquery(self, query):
         for row in ec.execute("SELECT * FROM companies WHERE name LIKE '%" + query + "%'"):
-            printer('[Company: ' + row[1] + ' ' + 'CIK: ' + str(row[0]) + '] ' + 'Date - ' + str(row[2]) + str(row[3])
-                    + str(row[4]) + ' | Accession - ' + row[5])
+            printer({
+                'Company': row[COMPANY],
+                'CIK': row[CIK],
+                'Year': row[YEAR],
+                'Month': row[MONTH],
+                'Day': row[DAY],
+                'Accession': row[ACCESSION]
+            })
 
 
     def help_cquery(self):
@@ -61,20 +67,15 @@ class FalshCmd(cmd.Cmd):
 
     def do_cikquery(self, query):
         for row in ec.execute("SELECT * FROM companies WHERE cik is '" + query + "'"):
-            printer(row[1] + '(CIK: ' + str(row[0]) + "): "+ row[6])
+            printer(row[1] + '(CIK: ' + str(row[0]) + "): " + row[5])
 
-    def do_10ksummary(self):
-        pass
+    def do_10kheaders(self, cik_accession):
+        (cik, accession) = cik_accession.split(':')
+        f = Filing (cik, accession)
+        printer(f.headers)
 
     def do_get10kfile(self, query):
-        for row in ec.execute("SELECT * FROM companies WHERE cik is '" + query + "'"):
-            print("Retrieving: " + row[6])
-            fil = row[6].split('/')[7]
-            urllib.request.urlretrieve(row[6], fil)
-            xb = XBRLParser()
-            xbrl = xb.parse(fil)
-            gaap = xb.parseGAAP(xbrl, ignore_errors=1)
-            print(gaap.revenue)
+        pass
 
     def emptyline(self):
         pass
