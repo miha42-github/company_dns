@@ -29,16 +29,20 @@ PATH = "./"
 DB_CACHE = 'edgar_cache.db'
 COMPANY = 1
 CIK = 0
-YEAR = 4
-MONTH = 2
-DAY = 3
+YEAR = 2
+MONTH = 3
+DAY = 4
 ACCESSION = 5
+FORM = 6
 
 # TODO make this a simple CLI allowing for searching based upon company name without needing SQL
 # TODO surface the 10K HTML URLs
 # TODO pull in PyEdgar to print out the header information
 # TODO pull in PyEdgar to print out a company description from an 10K or similar
-# TODO try a query to something other than a 10k
+# TODO try a query to something other than a 10k and this implies getting the form type in the db cache
+# COMMENT The structure above should be related to the process of picking the company name and then from there
+# gathering more information such as address, phone, industry, etc.  This would suggest that there are two
+# other RESTful methods: get_headers and get_abstract -> from a 10k or 10q
 
 e_conn = sqlite3.connect(PATH + DB_CACHE)
 ec = e_conn.cursor()
@@ -51,16 +55,20 @@ class FalshCmd(cmd.Cmd):
     ruler = '_'
 
     def do_cquery(self, query):
+        companies = {}
+        # TODO Consider filtering in only 10-Ks, S1s, etc. this would use regex to match
         for row in ec.execute("SELECT * FROM companies WHERE name LIKE '%" + query + "%'"):
-            printer({
-                'Company': row[COMPANY],
-                'CIK': row[CIK],
-                'Year': row[YEAR],
-                'Month': row[MONTH],
-                'Day': row[DAY],
-                'Accession': row[ACCESSION]
-            })
-
+            my_row = [row[MONTH], row[DAY], row[FORM], row[ACCESSION]]
+            if row[CIK] in companies:
+                if str(row[YEAR]) in companies[row[CIK]]:
+                    companies[row[CIK]][str(row[YEAR])].append(my_row)
+                else:
+                    companies[row[CIK]][str(row[YEAR])] = []
+                    companies[row[CIK]][str(row[YEAR])].append(my_row)
+            else:
+                companies[row[CIK]]={'name': row[COMPANY], str(row[YEAR]): []}
+                companies[row[CIK]][str(row[YEAR])].append(my_row)
+        printer(companies)
 
     def help_cquery(self):
         print("\ncquery [company name OR string]\nQuery either a company name or partial name.")
@@ -69,12 +77,12 @@ class FalshCmd(cmd.Cmd):
         for row in ec.execute("SELECT * FROM companies WHERE cik is '" + query + "'"):
             printer(row[1] + '(CIK: ' + str(row[0]) + "): " + row[5])
 
-    def do_10kheaders(self, cik_accession):
+    def do_getheaders(self, cik_accession):
         (cik, accession) = cik_accession.split(':')
         f = Filing (cik, accession)
         printer(f.headers)
 
-    def do_get10kfile(self, query):
+    def do_getfiledesc(self, query):
         pass
 
     def emptyline(self):
