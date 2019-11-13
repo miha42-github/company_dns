@@ -7,25 +7,25 @@ United states.  The intention of these utilities and the associated micro-servic
 is to enable other portions of Medium Roast to have ready access to public information
 about firms in a more automated fashion.
 
-#Key Dependencies
+# Key Dependencies
 - [PyEdgar](https://github.com/gaulinmp/pyedgar) - used to interface with the SEC's EDGAR repository
 - [SQLite](https://www.sqlite.org/index.html) - helps all utilities and the RESTful service quickly and expressively
 respond to interactions with the other elements to find appropriate company data
 - [Flask](https://www.palletsprojects.com/p/flask/) and associated utilities - used to realize the RESTful service
 - [nginx](http://nginx.org) - enables hosting of the RESTful service
 
-#Utilities
+# Utilities
 - mkdbcache.py - through PyEdgar interacts withe SEC EDGAR repository, and 
 generates a SQLite database cache file which can be used by other utilities
 - falsh.py - allows a command shell interaction with the SQLite database
 cache file enabling from simple to expressive queries.
 - cutils.py - a set of common helper functions and utilities used by other functions
 
-#RESTful Service
+# RESTful Service
 - edgar_svc.py - implements a RESTful service with 3 API calls available to ensure that
 an eventual end user can find information about a potential company they are interested in.
 
-#Usage for mkdbcache.py
+# Usage for mkdbcache.py
 ```
 usage: mkdbcache.py [-h] [--cleanall] [--cleandb] [--cleancache] [--getmaster]
                     [--year Y] [--verbose {50,40,30,20,10}]
@@ -43,7 +43,7 @@ optional arguments:
                         Set the logging verbosity.
 
 ```
-#Example syntax and usage for falsh.py
+# Example syntax and usage for falsh.py
 ```
 falsh> help
 
