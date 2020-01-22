@@ -36,8 +36,8 @@ __id__ = "$Id$"
 # TODO consider the right security context including permissions on the file
 # TODO consider how to handle and catch various error conditions
 # TODO capture statistics about the number of entries for logging, debugging, etc.
-# TODO move print statements out of methods
 # TODO Consider putting an __ in front of "internal methods" which are only called by wrapping functions
+# TODO Need to add the form type 10k, 8k, etc. to the db schema and content
 
 PATH = "./"
 CACHE_CONTROL = '.cache_exists'
@@ -54,15 +54,14 @@ def initialize(start_year=2010):
     :type start_year: int
     ;param start_year: define the start year for the initialization of the cache
     """
-    # TODO: Look at PyEdgar to understand why there are extra Alerts and WARNINGS printed.
 
     if path.exists(PATH + CACHE_CONTROL):
-        return True
+        return True, "Cache already exists, will not fetch cache files"
     else:
         i = IndexMaker()
         i.extract_indexes(start_year=start_year)  # Download and create the index
         open(PATH + CACHE_CONTROL, 'w').close()  # Create the file that controls the reindexing
-        return True
+        return True, "Downloaded cache files from the SEC"
 
 
 def clean_cache():
@@ -110,9 +109,10 @@ def build_idx(file_name):
                 continue
             my_cik = entry[0]
             my_company = entry[1]
+            my_form = entry[2]
             (my_year, my_month, my_day) = entry[3].split('-')
             my_accession = entry[4]
-            idx.append([my_cik, my_company, int(my_year), int(my_month),int(my_day), my_accession])
+            idx.append([my_cik, my_company, int(my_year), int(my_month), int(my_day), my_accession, my_form])
     return idx, len(idx)
 
 
@@ -150,7 +150,7 @@ def create_companies(c, conn):
     :param db_name:
     """
     logger.info('Creating table to store company data in the db cache file.')
-    c.execute('CREATE TABLE companies (cik int, name text, year int, month int, day int, accession text)')
+    c.execute('CREATE TABLE companies (cik int, name text, year int, month int, day int, accession text, form text)')
     conn.commit()
 
 
@@ -161,7 +161,7 @@ def load_companies(c, conn, companies):
     """
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
-    c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?)', companies)
+    c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?,?)', companies)
     conn.commit()
     open(PATH + DB_CONTROL, 'w').close()  # Create the file that controls the reindexing
     return num
@@ -186,16 +186,18 @@ def build_db(file_name):
     """
 
     # TODO If the DB_CONTROL file exists this process should not run, and that needs to be fixed
+    # TODO When you change to account for the above return the print statements as strings and also create a return statement as a string saying the DB Create was not needed
 
-    logger.info('Initiating the db_cache build.')
-    clean_db()
-    (my_conn, my_cursor) = create_db()
-    create_companies(my_cursor, my_conn)
-    (my_index, total) = build_idx(file_name)
-    print('Processed ' + str(total) + ' entries in file ' + file_name)
-    total = load_companies(my_cursor, my_conn, my_index)
-    print("Inserted {0} entries in db cache file.".format(str(total)))
-    close_db(my_conn)
+    if path.exists(PATH + DB_CONTROL):
+        return True, "Not regenerating the data base cache as it already exists"
+    else:
+        logger.info('Initiating the db_cache build.')
+        (my_conn, my_cursor) = create_db()
+        create_companies(my_cursor, my_conn)
+        (my_index, total) = build_idx(file_name)
+        total = load_companies(my_cursor, my_conn, my_index)
+        close_db(my_conn)
+        return True, "Created the database cache with " + str(total) + " entries stored in " + DB_CACHE
 
 
 def clean_all():
@@ -247,8 +249,12 @@ if __name__ == '__main__':
         clean_db()
         sys.exit(0)
     else:
+        # TODO If the DB_CONTROL file exists should any of this execute?
         logger.info('Initiating the db_cache build, default start year is 2010 unless overridden.')
-        initialize(start_year=args.year)
-        build_db('form_all.tab')
+        clean_db()
+        (status, msg) = initialize(start_year=args.year)
+        print (msg)
+        (status, msg) = build_db('form_all.tab')
+        print (msg)
         clean_cache()
         sys.exit(0)
