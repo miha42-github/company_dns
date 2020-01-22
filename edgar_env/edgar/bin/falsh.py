@@ -22,7 +22,6 @@ __license__ = "ASF 2.0"
 __version__ = "1.0.0"
 __maintainer__ = "Michael Hay"
 __status__ = "Prototype"
-__id__ = "$Id$"
 
 class FalshCmd(cmd.Cmd):
 
