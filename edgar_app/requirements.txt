@@ -1,0 +1,8 @@
+flask
+flask_restful
+flask_httpauth
+flask_restplus
+pyedgar
+requests
+pandas
+bs4
