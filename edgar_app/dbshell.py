@@ -14,7 +14,7 @@
 
 import cmd
 from pprint import pprint as printer
-from cutils import EdgarUtilities as EU
+from apputils import EdgarUtilities as EU
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2019, Cameron Solutions"

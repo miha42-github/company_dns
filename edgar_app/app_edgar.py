@@ -7,7 +7,7 @@ from flask import Flask, jsonify, abort, make_response
 from flask_httpauth import HTTPBasicAuth
 from flask_restful import Api, Resource, reqparse
 from flask_restplus import fields, marshal
-from cutils import EdgarUtilities as EU
+from apputils import EdgarUtilities as EU
 import re
 
 

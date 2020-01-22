@@ -13,10 +13,8 @@
 
 
 import sqlite3
-import cmd
 import re
 import requests
-from pprint import pprint as printer
 from pyedgar.filing import Filing
 from bs4 import BeautifulSoup
 
