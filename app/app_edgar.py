@@ -1,21 +1,17 @@
 #!edgar/bin/python
 
 """Core RESTful service to retrieve EDGAR information about companies."""
-from typing import List, Any
-from pprint import pprint as printer
 from flask import Flask, jsonify, abort, make_response
 from flask_httpauth import HTTPBasicAuth
 from flask_restful import Api, Resource, reqparse
-from flask_restplus import fields, marshal
 from apputils import EdgarUtilities as EU
-import re
 
 
 # Setup the application name and basic operations
 app = Flask(__name__, static_url_path="")
 api = Api(app)
 auth = HTTPBasicAuth()
-
+VERSION = '1.0'
 
 # Perform the basics for authentication
 @auth.get_password
@@ -78,10 +74,25 @@ class edgar10KURLAPI(Resource):
         print(m_url)
         return {'url': m_url}, 200
 
+class edgarHelpAPI(Resource):
+    decorators = [auth.login_required]
+
+    def __init__(self):
+        self.reqparse = reqparse.RequestParser()
+        super(edgarHelpAPI, self).__init__()
+
+    def get(self):
+        help_string = {'version': VERSION,
+                'FilingURL': '/edgar/api/v1.0/filings/<string:query>',
+                '10kHeaderURL': '/edgar/api/v1.0/header/<string:cikaccession>',
+                '10KURL': '/edgar/api/v1.0/10kurl/<path:l_url>'}
+        return help_string, 200
+
 
 api.add_resource(edgarFilingAPI, '/edgar/api/v1.0/filings/<string:query>')
 api.add_resource(edgar10KHeaderAPI, '/edgar/api/v1.0/header/<string:cikaccession>')
 api.add_resource(edgar10KURLAPI, '/edgar/api/v1.0/10kurl/<path:l_url>')
+api.add_resource(edgarHelpAPI, '/edgar/api/v1.0/help')
 
 if __name__ == '__main__':
     app.run(debug=True)
