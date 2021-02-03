@@ -1,11 +1,17 @@
 # Introduction to edgar_svc
-To enable a more automated approach to gathering information about public companies,
-a set of utilities (mkdbcache.py and falsh.py) and a RESTful service (edgar_scv.py)
-have been created.  This initial focus is related to the [SEC's EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html),
-which keeps data on public companies who are listed on stock exchanges in the 
-United states.  The intention of these utilities and the associated micro-service
-is to enable other portions of Medium Roast to have ready access to public information
-about firms in a more automated fashion.
+To enable a more automated approach to gathering information about public companies, a set of utilities (mkdbcache.py and falsh.py) and a RESTful service (edgar_scv.py) have been created.  This initial focus is related to the [SEC's EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html), which keeps data on public companies who are listed on stock exchanges in the United states.  Over time additions, in the form of other open repositories like what's available in the UK, will be considered.
+
+# Motivation
+The intention of these utilities, and the associated RESTful service, is to enable open access, Apache Software Foundation V2 License, to open data maintained by the SEC.  There are certainly other API overlays available, at a cost, and given some research into these other tools/services the best alternative is/was to open source this set of tools.  We hope that you will review and potentially work with us a we improve this tool set over time.  There are certainly a few things we'll be working on soonish as we pull this tool into our developing application.  Notably, here are the things that are likelly to be worked:
+1. Ensure that this will properly run in docker using docker-compose
+2. Beef up the installation and configuration documentation so anyone can partake
+3. Enable TLS for all of the communications with the service
+4. Get NGINX working properly, it is broken now
+5. Create some super simple wrapping scripts to operationalize the service
+6. Have fun refactoring the code, and potentially invite other developers in to particpate
+
+# Notice
+Since this code falls under a liberal ASF license, there is no warranty or guarantee of support.  Additionally, since the development work we're pursuing isn't yet needing to pull data in from this service this code has been "hibernating" a bit.  This is a nice way of saying it may not work, and we're not yet in a position to improve/fix the code base.  However if you get it running please let us know, and when we come back here we will endeavor to update this README accordingly.  So stay tuned...
 
 # Key Dependencies
 - [PyEdgar](https://github.com/gaulinmp/pyedgar) - used to interface with the SEC's EDGAR repository
