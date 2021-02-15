@@ -1,16 +1,17 @@
-#!/usr/bin/python3
-#  Copyright 2019 Cameron Solutions
-#  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-#  in compliance with the License. You may obtain a copy of the License at
-#
-#  http://www.apache.org/licenses/LICENSE-2.0
-#
-#  Unless required by applicable law or agreed to in writing, software distributed under the License
-#  is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-#  or implied. See the License for the specific language governing permissions and limitations under
-#  the License.
-#
-#
+#!/usr/bin/env python3
+
+"""
+Copyright 2021 mediumroast.io.  All rights reserved
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+in compliance with the License. You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License
+is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+or implied. See the License for the specific language governing permissions and limitations under
+the License.
+"""
 
 
 import re
@@ -25,20 +26,12 @@ from os import path
 
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2019, Cameron Solutions"
+__copyright__ = "Copyright 2021, mediumroast.io"
 __license__ = "ASF 2.0"
 __version__ = "1.5.0"
 __maintainer__ = "Michael Hay"
 __status__ = "Prototype"
 __id__ = "$Id$"
-
-
-# TODO think about creating a class here?
-# TODO consider the right security context including permissions on the file
-# TODO consider how to handle and catch various error conditions
-# TODO capture statistics about the number of entries for logging, debugging, etc.
-# TODO Consider putting an __ in front of "internal methods" which are only called by wrapping functions
-# TODO Need to add the form type 10k, 8k, etc. to the db schema and content
 
 PATH = "./"
 CACHE_CONTROL = '.cache_exists'
@@ -46,7 +39,7 @@ DB_CONTROL = '.db_exists'
 DB_CACHE = 'edgar_cache.db'
 
 
-def initialize(start_year=2010):
+def initialize(start_year=2019):
     """
     Using the appropriate method in PyEdgar download the file cache for that defines the relevant SEC filings for
     companies given the start_year variable. The method in this package then will format the content into tab
@@ -108,6 +101,7 @@ def build_idx(file_name):
         for entry in csv_reader:
             if header_re.match(entry[0]):
                 continue
+            logger.debug('Detected 10K form proceeding to process')
             my_cik = entry[0]
             my_company = entry[1]
             my_form = entry[2]
@@ -223,8 +217,8 @@ if __name__ == '__main__':
     par.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
     par.add_argument('--cleancache', '-c', action="store_true", help="Clean up the cache files only and exit.")
     par.add_argument('--getmaster', '-g', action="store_true", help="Get the master.gz files only and exit.")
-    par.add_argument('--year', '-y', metavar='Y', type=int, default=2010,
-                     help='Define the year to start from, defaults to 2010.')
+    par.add_argument('--year', '-y', metavar='Y', type=int, default=2018,
+                     help='Define the year to start from, defaults to 2018.')
 
     # For the purposes of logging verbosity SILENT = 50, ERROR = 40, WARNING = 30, INFO = 20, DEBUG = 10
     par.add_argument('--verbose', '-v', type=int, choices=[50, 40, 30, 20, 10],

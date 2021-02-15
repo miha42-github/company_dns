@@ -1,0 +1,29 @@
+version: '3'
+services:
+  nginx:
+    image: nginx
+    ports:
+      - "8082:80"
+    volumes:
+      - ./nginx:/etc/nginx/conf.d
+    networks:
+      - api_nw
+    depends_on:
+      - edgar_svc
+
+  edgar_svc:
+    build: edgar_svc
+    ports:
+      - "4200:80"
+    networks:
+      - api_nw
+    volumes:
+      - dbvol:/var/lib/sqlite/data
+
+volumes:
+  dbvol:
+    driver: local
+
+networks:
+  api_nw:
+    driver: bridge
