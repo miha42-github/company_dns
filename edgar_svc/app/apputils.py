@@ -38,7 +38,7 @@ class EdgarUtilities:
         self.authors = ['Michael Hay', 'John Goodman']
         self.copyright = "Copyright 2020 and 2021 mediumroast.io. All rights reserved."
         self.locator = ArcGIS (timeout=2)
-        self.API_KEY = 'ws43_Kdcm8CcbZrxSDUcyHbbb-UkMPXqkTmly-Yg2tg'
+        self.API_KEY = 'YOUR API KEY'
 
     def locate (self, place):
         l = self.locator.geocode (place)
