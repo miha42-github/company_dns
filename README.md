@@ -1,17 +1,26 @@
 # Introduction to edgar_svc
-To enable a more automated approach to gathering information about public companies, a set of utilities (mkdbcache.py and falsh.py) and a RESTful service (edgar_scv.py) have been created.  This initial focus is related to the [SEC's EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html), which keeps data on public companies who are listed on stock exchanges in the United states.  Over time additions, in the form of other open repositories like what's available in the UK, will be considered.
+To enable a more automated approach to gathering information about public companies, a set of utilities (mkdbcache.py and dbshell.py) and a RESTful service (edgar_svc.py) have been created.  This initial focus is related to the [SEC's EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html), which keeps data on public companies who are listed on stock exchanges in the United states.  Over time additions, including other open repositories like the UK, will be considered.  While there are other EDGAR API overlays available, at a cost, for the purposes of the authors had in mind an open source alternative was preferred.
 
 # Motivation
-The intention of these utilities, and the associated RESTful service, is to enable open access, Apache Software Foundation V2 License, to open data maintained by the SEC.  There are certainly other API overlays available, at a cost, and given some research into these other tools/services the best alternative is/was to open source this set of tools.  We hope that you will review and potentially work with us a we improve this tool set over time.  There are certainly a few things we'll be working on soonish as we pull this tool into our developing application.  Notably, here are the things that are likelly to be worked:
-1. Ensure that this will properly run in docker using docker-compose
-2. Beef up the installation and configuration documentation so anyone can partake
-3. Enable TLS for all of the communications with the service
-4. Get NGINX working properly, it is broken now
-5. Create some super simple wrapping scripts to operationalize the service
-6. Have fun refactoring the code, and potentially invite other developers in to particpate
+The intention of these utilities, and the associated RESTful service, is to enable open access, Apache Software Foundation V2 License, to open data maintained by the SEC.   We hope that you will review and potentially work with us a we improve this tool set over time.  There are certainly a few things we'll be working on soonish as we pull this tool into our developing application.  
+## Design Principals
+As the tool was being built the following thinking was progressed.  The authors had a very specific purpose in mind when creating the tool and these choices reflect that thinking.
+- This tool is meant to be a very thin overlay on top of the EDGAR data and is intent upon providing a kind of naming service for publicly listed companies in the US.  Therefore, the system can be completely blown away and quickly regenerated.  
+- As of now there isn't any authentication either HTTP, JWT or API-key based again there's nothing proprietary about the dataset or the service itself and the system can be completely regenerated in say 15-20 minutes depending on how much EDGAR data you want to represent.
+- Relative data completeness and associated functionaliites were favored over performance.  The implication is that less data could boost performance, and certainly if more data was put into the cache or a full fledged DB was used with more local data the performance could be better. (More on this in Future Work below.)
+- The emphasis of the present tool is on 10K and related reports for the listing of reports in the response.  While the DB cache includes other SEC filing metadata, like 8K, the wrapping API presently excludes it.
+
+# License
+Since this code falls under a liberal ASF 2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.
 
 # Notice
-Since this code falls under a liberal ASF license, there is no warranty or guarantee of support.  Additionally, since the development work we're pursuing isn't yet needing to pull data in from this service this code has been "hibernating" a bit.  This is a nice way of saying it may not work, and we're not yet in a position to improve/fix the code base.  However if you get it running please let us know, and when we come back here we will endeavor to update this README accordingly.  So stay tuned...
+A significant update for the code has been pursued and completed making it ready for usage beyond the maintainers.  We will likely be continuing to progress a bit over time including taking care of some of the items listed below in Future Work.  If we're in the mood for an adventure we might look at the UK and apparently the Japanese government might have some data/structure similar to the SEC's EDGAR. 
+
+# Future work
+Here are the things that are likelly to be worked but without any strict deadline:
+1. Create some super simple wrapping scripts to operationalize the service
+2. Have fun refactoring the code, and potentially invite other developers in to particpate
+3. Consider a new endpoints that purely pull from the DB Cache.  This would likely result in performance speedups as no external services like GeoPy would be called.
 
 # Key Dependencies
 - [PyEdgar](https://github.com/gaulinmp/pyedgar) - used to interface with the SEC's EDGAR repository
@@ -19,17 +28,19 @@ Since this code falls under a liberal ASF license, there is no warranty or guara
 respond to interactions with the other elements to find appropriate company data
 - [Flask](https://www.palletsprojects.com/p/flask/) and associated utilities - used to realize the RESTful service
 - [nginx](http://nginx.org) - enables hosting of the RESTful service
+- Docker & Docker Compose - Container and server framework
+- GeoPy with ArcGIS - Enables proper address formatting and reporting of lat-long pairs
+- BeautifulSoup - Used for light parsing of EDGAR data served by the SEC
 
 # Utilities
 - mkdbcache.py - through PyEdgar interacts withe SEC EDGAR repository, and 
 generates a SQLite database cache file which can be used by other utilities
-- falsh.py - allows a command shell interaction with the SQLite database
+- dbshell.py - allows a command shell interaction with the SQLite database
 cache file enabling from simple to expressive queries.
-- cutils.py - a set of common helper functions and utilities used by other functions
+- apputils.py - a set of common helper functions and utilities used by other functions
 
 # RESTful Service
-- edgar_svc.py - implements a RESTful service with 3 API calls available to ensure that
-an eventual end user can find information about a potential company they are interested in.
+- edgar_svc.py - implements a RESTful service with 2 endpoints: `/V1/help` & `/V1/edgar/company/<string:query>`. In this case `<string:query>` is any string, properly URL encoded which matches a company the user is looking for.
 
 # Usage for mkdbcache.py
 ```
@@ -49,129 +60,102 @@ optional arguments:
                         Set the logging verbosity.
 
 ```
-# Example syntax and usage for falsh.py
+# Example syntax and usage for dbshell.py
 ```
-falsh> help
+A shell to retrieve company demographics from the SEC Edgar related to public companies
+edgar> help
 
 Documented commands (type help <topic>):
 ________________________________________
-exit  get10kurl  getfilings  getheaders  help
+exit  getall  help
 
-falsh> help getfilings
-
-getcompanies [company name OR string]
-Query either a company name or partial name.
-falsh> help get10kurl
-
-get10kurl [https://...html]
-Retrieve and print the URL for the 10k filing taking in the
-URL from the 10k index HTML file.
-falsh> help getheaders
-
-getheaders [cik:accession]
-Retrieve and print the headers for the document described by
-CIK:Accession.
-falsh> 
+edgar> 
 ```
-Example 'getfilings' query and result for the company "google".
+# Example 'getall' query and result for the company "google".
 ```
-falsh> getfilings google
-{1288776: {'10-K': [[2,
-                     11,
-                     2016,
-                     '0001652044-16-000012',
-                     'https://www.sec.gov/Archives/edgar/data/1288776/000165204416000012/',
-                     'https://www.sec.gov/Archives/edgar/data/1288776/000165204416000012/0001652044-16-000012-index.html']],
-           '10-K/A': [[3,
-                       29,
-                       2016,
-                       '0001193125-16-520367',
-                       'https://www.sec.gov/Archives/edgar/data/1288776/000119312516520367/',
-                       'https://www.sec.gov/Archives/edgar/data/1288776/000119312516520367/0001193125-16-520367-index.html']],
-           'name': 'GOOGLE INC.'}}
+edgar> getall alphabet
+{'companies': {'Alphabet Inc.': {'CIK': '1652044',
+                                 'antitrustAct': '34',
+                                 'companyFilings': 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=1652044&action=getcompany',
+                                 'companyName': 'Alphabet Inc.',
+                                 'fiscalYearEnd': '1231',
+                                 'forms': {'0001193125-19-028757': {'day': 6,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000119312519028757/0001193125-19-028757-index.html',
+                                                                    'formType': '10-K/A',
+                                                                    'month': 2,
+                                                                    'url': '',
+                                                                    'year': 2019},
+                                           '0001652044-18-000007': {'day': 6,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204418000007/0001652044-18-000007-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'url': '',
+                                                                    'year': 2018},
+                                           '0001652044-19-000004': {'day': 5,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204419000004/0001652044-19-000004-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'url': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204419000004/goog10-kq42018.htm',
+                                                                    'year': 2019},
+                                           '0001652044-20-000008': {'day': 4,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204420000008/0001652044-20-000008-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'url': 'https://www.sec.gov/ix?doc=/Archives/edgar/data/1652044/000165204420000008/goog10-k2019.htm',
+                                                                    'year': 2020},
+                                           '0001652044-21-000010': {'day': 3,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204421000010/0001652044-21-000010-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'url': 'https://www.sec.gov/ix?doc=/Archives/edgar/data/1652044/000165204421000010/goog-20201231.htm',
+                                                                    'year': 2021}},
+                                 'irsNumber': '611767919',
+                                 'lattitude': 37.42239799696132,
+                                 'longAddress': '1600 Amphitheatre Pkwy, '
+                                                'Mountain View, California, '
+                                                '94043',
+                                 'longitude': -122.08421196885604,
+                                 'phone': '650-253-0000',
+                                 'standardIndustryCode': '7370 '
+                                                         'Services-Computer '
+                                                         'Programming, Data '
+                                                         'Processing, Etc., '
+                                                         'Office of Technology',
+                                 'stateOfIncorporation.': 'DE'}},
+ 'totalCompanies': 1}
+edgar> 
 ```
-Example 'getheaders' query for the 2016 10-K filing.
-```
-falsh>  getheaders 1288776:0001652044-16-000012
-{'<sec-document>0001652044-16-000012.txt': '20160211',
- '<sec-header>0001652044-16-000012.hdr.sgml': '20160211',
- 'accession-number': '0001652044-16-000012',
- 'business-phone': '650-253-0000',
- 'central-index-key': '0001652044',
- 'city': 'MOUNTAIN VIEW',
- 'company-conformed-name': 'Alphabet Inc.',
- 'conformed-period-of-report': '20151231',
- 'conformed-submission-type': '10-K',
- 'date-as-of-change': '20160211',
- 'date-of-name-change': '20040428',
- 'filed-as-of-date': '20160211',
- 'filer': {'business-address': {'business-phone': '650-253-0000',
-                                'city': 'MOUNTAIN VIEW',
-                                'state': 'CA',
-                                'street1': '1600 AMPHITHEATRE PARKWAY',
-                                'zip': '94043'},
-           'company-data': {'central-index-key': '0001652044',
-                            'company-conformed-name': 'Alphabet Inc.',
-                            'fiscal-year-end': '1231',
-                            'irs-number': '611767919',
-                            'standard-industrial-classification': 'SERVICES-COMPUTER '
-                                                                  'PROGRAMMING, '
-                                                                  'DATA '
-                                                                  'PROCESSING, '
-                                                                  'ETC. [7370]',
-                            'state-of-incorporation': 'DE'},
-           'filing-values': {'film-number': '161412149',
-                             'form-type': '10-K',
-                             'sec-act': '1934 Act',
-                             'sec-file-number': '001-37580'},
-           'mail-address': {'city': 'MOUNTAIN VIEW',
-                            'state': 'CA',
-                            'street1': '1600 AMPHITHEATRE PARKWAY',
-                            'zip': '94043'}},
- 'filer_0': {'business-address': {'business-phone': '650 253-0000',
-                                  'city': 'MOUNTAIN VIEW',
-                                  'state': 'CA',
-                                  'street1': '1600 AMPHITHEATRE PARKWAY',
-                                  'zip': '94043'},
-             'company-data': {'central-index-key': '0001288776',
-                              'company-conformed-name': 'GOOGLE INC.',
-                              'fiscal-year-end': '1231',
-                              'irs-number': '770493581',
-                              'standard-industrial-classification': 'SERVICES-COMPUTER '
-                                                                    'PROGRAMMING, '
-                                                                    'DATA '
-                                                                    'PROCESSING, '
-                                                                    'ETC. '
-                                                                    '[7370]',
-                              'state-of-incorporation': 'DE'},
-             'filing-values': {'film-number': '161412150',
-                               'form-type': '10-K',
-                               'sec-act': '1934 Act',
-                               'sec-file-number': '001-36380'},
-             'former-company': {'date-of-name-change': '20040428',
-                                'former-conformed-name': 'Google Inc.'},
-             'mail-address': {'city': 'MOUNTAIN VIEW',
-                              'state': 'CA',
-                              'street1': '1600 AMPHITHEATRE PARKWAY',
-                              'zip': '94043'}},
- 'film-number': '161412149',
- 'fiscal-year-end': '1231',
- 'flat': False,
- 'form-type': '10-K',
- 'former-conformed-name': 'Google Inc.',
- 'irs-number': '611767919',
- 'public-document-count': '119',
- 'sec-act': '1934 Act',
- 'sec-file-number': '001-37580',
- 'standard-industrial-classification': 'SERVICES-COMPUTER PROGRAMMING, DATA '
-                                       'PROCESSING, ETC. [7370]',
- 'state': 'CA',
- 'state-of-incorporation': 'DE',
- 'street1': '1600 AMPHITHEATRE PARKWAY',
- 'zip': '94043'}
-```
-Example response for 'get10kurl'.
-```
-falsh> get10kurl https://www.sec.gov/Archives/edgar/data/51143/000104746919000712/0001047469-19-000712-index.html
-https://www.sec.gov/Archives/edgar/data/51143/000104746919000712/a2237254z10-k.htm
-```
+# Installation
+The follwing basic steps are provided for the purposes of getting the tool running.  There are two basic paths:
+1. Run as a tool using the dbshell and the SQLite DB built by dbcontrol
+2. Operate this as a RESTful service called edgar_svc which will front end the SQLite DB
+## Download the code
+Pull or clone the repo using your GitHub account or by other means.  We'll not repeat the steps needed to setup GitHub connectivity, but you'll need to do all of that work and then pull the code.  Once downloaded you should see the following directory structure:
+'''
+edgar_svc/
+          |
+          LICENSE
+          docker-compose.yml
+          README.md
+          edgar_svc/
+                    |
+                    Dockerfile
+                    requirements.txt
+                    app/
+                        |
+                        app_edgar.py
+                        apputils.py
+                        dbcontrol.py
+                        dbshell.py
+                        pyedgar.conf
+                        uwsgi.ini
+          nginx/
+                |
+                default.conf
+'''
+## Pre-execution
+Enter into `edgar_svc/edgar_svc/app` and execute dbshell.py.  This has the effect of creating the SQLite DB cache with a default start data for the cache of 2018.  The utility will download EDGAR data, process it, and then create a predefined DB which both modes of execution will leverage.
+## Mode 1 - dbshell
+At this point when the `edgar_svc/edgar_svc/app/edgar_cache.db` has been created all you will need to do is run `edgar_svc/edgar_svc/app/dbshell.py`.  This will start the shell and allow you to interact with the cache with a single command `getall`.
+## Mode 2 - app_edgar
+From `edgar_svc` run `docker-compose build` which will cause the image to be built.  Once the build successfull completes run `docker-compose up` which will start the service running on port TCP/4200. To test the service you will need some kind of a RESTful client generally the format of the query should be: `http://host:4200/V1/company/<string:query>`.  The query can be any properly encoded string which correlates to the company you're looking to find.  An example output from an in development application that is being worked can be found below.
