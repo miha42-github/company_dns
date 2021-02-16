@@ -27,6 +27,7 @@ class FalshCmd(cmd.Cmd):
     def __init__(self):
         self.authors = ['Michael Hay', 'John Goodman']
         self.copyright = "Copyright 2020 and 2021 mediumroast.io. All rights reserved."
+        super(FalshCmd, self).__init__()
 
     def do_getall (self, query):
         e = EU()
