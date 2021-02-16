@@ -33,7 +33,7 @@ respond to interactions with the other elements to find appropriate company data
 - BeautifulSoup - Used for light parsing of EDGAR data served by the SEC
 
 # Utilities
-- mkdbcache.py - through PyEdgar interacts withe SEC EDGAR repository, and 
+- dbcontrol.py - through PyEdgar interacts withe SEC EDGAR repository, and 
 generates a SQLite database cache file which can be used by other utilities
 - dbshell.py - allows a command shell interaction with the SQLite database
 cache file enabling from simple to expressive queries.
@@ -42,9 +42,9 @@ cache file enabling from simple to expressive queries.
 # RESTful Service
 - edgar_svc.py - implements a RESTful service with 2 endpoints: `/V1/help` & `/V1/edgar/company/<string:query>`. In this case `<string:query>` is any string, properly URL encoded which matches a company the user is looking for.
 
-# Usage for mkdbcache.py
+# Usage for dbcontrol.py
 ```
-usage: mkdbcache.py [-h] [--cleanall] [--cleandb] [--cleancache] [--getmaster]
+usage: dbcontrol.py [-h] [--cleanall] [--cleandb] [--cleancache] [--getmaster]
                     [--year Y] [--verbose {50,40,30,20,10}]
 
 A utility to create a db cache for select SEC edgar data.
@@ -55,7 +55,7 @@ optional arguments:
   --cleandb, -d         Clean up the db cache only and exit.
   --cleancache, -c      Clean up the cache files only and exit.
   --getmaster, -g       Get the master.gz files only and exit.
-  --year Y, -y Y        Define the year to start from, defaults to 2010.
+  --year Y, -y Y        Define the year to start from, defaults to 2018.
   --verbose {50,40,30,20,10}, -v {50,40,30,20,10}
                         Set the logging verbosity.
 
@@ -158,4 +158,6 @@ Enter into `edgar_svc/edgar_svc/app` and execute dbshell.py.  This has the effec
 ## Mode 1 - dbshell
 At this point when the `edgar_svc/edgar_svc/app/edgar_cache.db` has been created all you will need to do is run `edgar_svc/edgar_svc/app/dbshell.py`.  This will start the shell and allow you to interact with the cache with a single command `getall`.
 ## Mode 2 - app_edgar
-From `edgar_svc` run `docker-compose build` which will cause the image to be built.  Once the build successfull completes run `docker-compose up` which will start the service running on port TCP/4200. To test the service you will need some kind of a RESTful client generally the format of the query should be: `http://host:4200/V1/company/<string:query>`.  The query can be any properly encoded string which correlates to the company you're looking to find.  An example output from an in development application that is being worked can be found below.
+From `edgar_svc` run `docker-compose build` which will cause the image to be built.  Once the build successfull completes run `docker-compose up` which will start the service running on port TCP/4200. To test the service you will need some kind of a RESTful client generally the format of the query should be: `http://host:4200/V1/company/<string:query>`.  The query can be any properly encoded string which correlates to the company you're looking to find.  An example output from an in development application that is being worked can be found below.  
+
+![RESTful call to http://host:4200/V1/company/oil](https://github.com/miha42-github/edgar_svc/blob/master/images/restful_example.png)
