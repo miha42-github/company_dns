@@ -130,8 +130,8 @@ The follwing basic steps are provided for the purposes of getting the tool runni
 1. Run as a tool using the dbshell and the SQLite DB built by dbcontrol
 2. Operate this as a RESTful service called edgar_svc which will front end the SQLite DB
 ## Download the code
-Pull or clone the repo using your GitHub account or by other means.  We'll not repeat the steps needed to setup GitHub connectivity, but you'll need to do all of that work and then pull the code.  Once downloaded you should see the following directory structure:
-'''
+Pull or clone the repo using your GitHub account or by other means.  We'll not repeat the steps needed to setup GitHub connectivity, but you'll need to do all of that work and then pull the code.  Once downloaded you should see the following directory structure:  
+```
 edgar_svc/
           |
           LICENSE
@@ -152,7 +152,7 @@ edgar_svc/
           nginx/
                 |
                 default.conf
-'''
+```  
 ## Pre-execution
 Enter into `edgar_svc/edgar_svc/app` and execute dbshell.py.  This has the effect of creating the SQLite DB cache with a default start data for the cache of 2018.  The utility will download EDGAR data, process it, and then create a predefined DB which both modes of execution will leverage.
 ## Mode 1 - dbshell
