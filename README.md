@@ -71,7 +71,7 @@ exit  getall  help
 
 edgar> 
 ```
-# Example 'getall' query and result for the company "google".
+# Example 'getall' query and result for the company "alphabet".
 ```
 edgar> getall alphabet
 {'companies': {'Alphabet Inc.': {'CIK': '1652044',
