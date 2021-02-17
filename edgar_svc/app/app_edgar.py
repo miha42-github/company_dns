@@ -21,39 +21,90 @@ from flask_cors import CORS
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
-VERSION="1"
+VERSION="1.1"
 
-class edgarCompanyAPI(Resource):
+class edgarDetailAPI(Resource):
 
     def __init__(self):
         self.e = EU()
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument('query', required=True, help="No company name provided",
                                    location="json")
-        super(edgarCompanyAPI, self).__init__()
-    
-    
+        super(edgarDetailAPI, self).__init__()
+        
     def get(self, query):
         filings = self.e.getAll(query)
         if len(filings) == 0:
             abort(404)
         return filings, 200
 
+class edgarSummaryAPI(Resource):
+
+    def __init__(self):
+        self.e = EU()
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('query', required=True, help="No company name provided",
+                                   location="json")
+        super(edgarSummaryAPI, self).__init__()
+        
+    def get(self, query):
+        filings = self.e.getAllSummary(query)
+        if len(filings) == 0:
+            abort(404)
+        return filings, 200
+
+class edgarCompanyAPI(Resource):
+
+    def __init__(self):
+        self.e = EU()
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('cik', required=True, help="No CIK provided",
+                                   location="json")
+        super(edgarCompanyAPI, self).__init__()
+        
+    def get(self, cik):
+        details = self.e.getCompanyDetails(cik)
+        if len(details) == 0:
+            abort(404)
+        return details, 200
+
+class edgarCIKAPI(Resource):
+
+    def __init__(self):
+        self.e = EU()
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument('query', required=True, help="No company name provided",
+                                   location="json")
+        super(edgarCIKAPI, self).__init__()
+        
+    def get(self, query):
+        filings = self.e.getAllCIKs(query)
+        if len(filings) == 0:
+            abort(404)
+        return filings, 200
 
 class helpAPI(Resource):
 
     def __init__(self):
         self.reqparse = reqparse.RequestParser()
         super(helpAPI, self).__init__()
-
     
     def get(self):
-        help_string = {'version': VERSION,
-                'Search Companies': '/V1/edgar/company/'}
+        help_string = {
+                'API Version': VERSION,
+                'Description': 'Provided a series of RESTful calls to surface intelligence from the SEC EDGAR data set.',
+                'Search companies and return detailed results': "/V1.0/edgar/companies/detail/<string:query>",
+                'Search companies and return summary results': "/V1.1/edgar/companies/summary/<string:query>",
+                'Search companies and return CIKs': "/V1.1/edgar/companies/ciks/<string:query>",
+                'Return the details for a single company': "/V1.1/edgar/company/details/<string:cik>"
+                }
         return help_string, 200
     
-api.add_resource(edgarCompanyAPI, '/V1/edgar/company/<string:query>')
-api.add_resource(helpAPI, '/V1/help')
+api.add_resource(edgarDetailAPI, '/V1.0/edgar/companies/detail/<string:query>')
+api.add_resource(edgarSummaryAPI, '/V1.1/edgar/companies/summary/<string:query>')
+api.add_resource(edgarCompanyAPI, '/V1.1/edgar/company/details/<string:cik>')
+api.add_resource(edgarCIKAPI, '/V1.1/edgar/companies/ciks/<string:query>')
+api.add_resource(helpAPI, '/V1.1/help')
 
 if __name__ == '__main__':
     app.run(debug=True)

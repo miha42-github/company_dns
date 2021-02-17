@@ -35,8 +35,32 @@ class FalshCmd(cmd.Cmd):
         printer (all_companies)
 
     def help_getall (self):
-        print("\ngetall [company name OR string]\nQuery either a company name or partial name.")
+        print("\ngetall [company name OR string]\nQuery either a company name or partial name, \n and return full details.")
 
+    def do_getsummary (self, query):
+        e = EU()
+        all_companies = e.getAllSummary(query)
+        printer (all_companies)
+
+    def help_getsummary (self):
+        print("\ngetsummary [company name OR string]\nQuery either a company name or partial name, \n and return a summary.")
+
+    def do_getdetails (self, cik):
+        e = EU()
+        all_companies = e.getCompanyDetails(cik)
+        printer (all_companies)
+
+    def help_getdetails (self):
+        print("\ngetdetails [company cik]\nQuery a company's CIK, \n and return demographic details about the company.")
+
+    def do_getciks (self, cik):
+        e = EU()
+        all_companies = e.getAllCIKs(cik)
+        printer (all_companies)
+
+    def help_getciks(self):
+        print("\ngetciks [company name OR string]\nQuery either a company name or partial name, \n and return a list of CIKs.")
+    
     def emptyline(self):
         pass
 
