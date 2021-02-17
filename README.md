@@ -62,14 +62,13 @@ optional arguments:
 ```
 # Example syntax and usage for dbshell.py
 ```
-A shell to retrieve company demographics from the SEC Edgar related to public companies
 edgar> help
 
 Documented commands (type help <topic>):
 ________________________________________
-exit  getall  help
+exit  getall  getciks  getdetails  getsummary  help
 
-edgar> 
+edgar>  
 ```
 # Example 'getall' query and result for the company "alphabet".
 ```
@@ -124,6 +123,114 @@ edgar> getall alphabet
                                  'stateOfIncorporation.': 'DE'}},
  'totalCompanies': 1}
 edgar> 
+```
+# Example 'getsummary' query and result for the company "alphabet".
+```
+edgar> getsummary alphabet
+{'companies': {'Alphabet Inc.': {'CIK': '1652044',
+                                 'companyFilings': 'https://www.sec.gov/cgi-bin/browse-edgar?CIK=1652044&action=getcompany',
+                                 'companyName': 'Alphabet Inc.',
+                                 'forms': {'0001193125-19-028757': {'day': 6,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000119312519028757/0001193125-19-028757-index.html',
+                                                                    'formType': '10-K/A',
+                                                                    'month': 2,
+                                                                    'year': 2019},
+                                           '0001652044-18-000007': {'day': 6,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204418000007/0001652044-18-000007-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'year': 2018},
+                                           '0001652044-19-000004': {'day': 5,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204419000004/0001652044-19-000004-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'year': 2019},
+                                           '0001652044-20-000008': {'day': 4,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204420000008/0001652044-20-000008-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'year': 2020},
+                                           '0001652044-21-000010': {'day': 3,
+                                                                    'filingIndex': 'https://www.sec.gov/Archives/edgar/data/1652044/000165204421000010/0001652044-21-000010-index.html',
+                                                                    'formType': '10-K',
+                                                                    'month': 2,
+                                                                    'year': 2021}},
+                                 'transactionsByIssuer': 'https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK=1652044',
+                                 'transactionsByOwner': 'https://www.sec.gov/cgi-bin/own-disp?action=getowner&CIK=1652044'}},
+ 'totalCompanies': 1}
+edgar> 
+```
+# Example 'getciks' query and result for the string "oil".
+```
+edgar> getciks oil
+{'companies': {'ASIA PACIFIC BOILER Corp': '1527675',
+               'Amazing Energy Oil & Gas, Co.': '1375618',
+               'American Oil & Gas Inc.': '1544400',
+               'BATTALION OIL CORP': '1282648',
+               'Black Ridge Oil & Gas, Inc.': '1490161',
+               'CABOT OIL & GAS CORP': '858470',
+               'CARRIZO OIL & GAS INC': '1040593',
+               'CONTANGO OIL & GAS CO': '1071993',
+               'CoJax Oil & Gas Corp': '1763925',
+               'DAYBREAK OIL & GAS, INC.': '1164256',
+               'DEEP WELL OIL & GAS INC': '869495',
+               'Delta International Oil & Gas Inc.': '1112985',
+               'Extraction Oil & Gas, Inc.': '1655020',
+               'FRONTIER OILFIELD SERVICES INC': '1108645',
+               'Harvest Oil & Gas Corp.': '1361937',
+               'IMPERIAL OIL LTD': '49938',
+               'Invesco DB Oil Fund': '1383058',
+               'Laredo Oil, Inc.': '1442492',
+               'Liberty Oilfield Services Inc.': '1694028',
+               'MARATHON OIL CORP': '101778',
+               'MURPHY OIL CORP': '717423',
+               'MURPHY OIL CORP /DE': '717423',
+               'MV Oil Trust': '1371782',
+               'Magnolia Oil & Gas Corp': '1698990',
+               'NATIONAL OILWELL VARCO INC': '1021860',
+               'NEXTIER OILFIELD SOLUTIONS INC.': '1688476',
+               'NORTH EUROPEAN OIL ROYALTY TRUST': '72633',
+               'NORTHERN OIL & GAS, INC.': '1104485',
+               'NORTHWEST OIL & GAS TRADING COMPANY, INC.': '1762533',
+               'OIL STATES INTERNATIONAL, INC': '1121484',
+               'Oil-Dri Corp of America': '74046',
+               'PANHANDLE OIL & GAS INC': '315131',
+               'Pacific Coast Oil Trust': '1538822',
+               'Perkins Oil & Gas, Inc.': '1567802',
+               'Petro River Oil Corp.': '1172298',
+               'Plastic2Oil, Inc.': '1381105',
+               'PowerShares DB Oil Fund': '1383058',
+               'SPINDLETOP OIL & GAS CO': '867038',
+               'Samson Oil & Gas LTD': '1404079',
+               'Sears Oil & Gas': '1434737',
+               'Solaris Oilfield Infrastructure, Inc.': '1697500',
+               'T-REX OIL, INC.': '1287900',
+               'Tiger Oil & Energy, Inc.': '1386018',
+               'United States 12 Month Oil Fund, LP': '1405528',
+               'United States Brent Oil Fund, LP': '1472494',
+               'United States Diesel-Heating Oil Fund, LP': '1396877',
+               'United States Oil Fund, LP': '1327068',
+               'United States Short Oil Fund, LP': '1439567',
+               'VICTORY OILFIELD TECH, INC.': '700764',
+               'ZION OIL & GAS INC': '1131312'},
+ 'totalCompanies': 50}
+edgar> 
+```
+# Example 'details' query and result for the cik "717423".
+```
+edgar> getdetails 717423
+{'CIK': '717423',
+ 'SIC': '1311 - CRUDE PETROLEUM & NATURAL GAS',
+ 'companyAddress': '9805 Katy Fwy, Houston, Texas, 77024',
+ 'companyName': 'MURPHY OIL CORP',
+ 'fiscalYearEnd': '1231',
+ 'lattitude': 29.783399999040824,
+ 'longitude': -95.53560201802087,
+ 'phone': '2816759000',
+ 'rawAddress': '9805 KATY FWY SUITE G-200 HOUSTON TX 77024',
+ 'stateLocation': 'TX',
+ 'stateOfIncorporation': 'DE'}
+edgar>
 ```
 # Installation
 The follwing basic steps are provided for the purposes of getting the tool running.  There are two basic paths:
