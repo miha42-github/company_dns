@@ -268,3 +268,6 @@ At this point when the `edgar_svc/edgar_svc/app/edgar_cache.db` has been created
 From `edgar_svc` run `docker-compose build` which will cause the image to be built.  Once the build successfull completes run `docker-compose up` which will start the service running on port TCP/4200. To test the service you will need some kind of a RESTful client generally the format of the query should be: `http://host:4200/V1/company/<string:query>`.  The query can be any properly encoded string which correlates to the company you're looking to find.  An example output from an in development application that is being worked can be found below.  
 
 ![RESTful call to http://host:4200/V1/company/oil](https://github.com/miha42-github/edgar_svc/blob/master/images/restful_example.png)
+
+# Appendix
+If you would like to run this on a RasberryPi I'll be adding a couple of configuration files and appropriate instructions later, but until then I suggest you check out [Matt's](https://www.raspberrypi-spy.co.uk/author/matt/) guide to [getting Nginx, UWSGI and Flask running on a Pi](https://www.raspberrypi-spy.co.uk/2018/12/running-flask-under-nginx-raspberry-pi/).  At some point if someone would like to create a docker image for these elements running on the Pi that would be great.
