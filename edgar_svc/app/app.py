@@ -14,7 +14,7 @@ the License.
 """Core RESTful service to retrieve EDGAR information about companies."""
 from flask import Flask, jsonify, abort, make_response
 from flask_restful import Api, Resource, reqparse
-from apputils import EdgarUtilities as EU
+from .edgar import EdgarUtilities as EU
 from flask_cors import CORS
 
 # Setup the application name and basic operations
@@ -93,14 +93,14 @@ class helpAPI(Resource):
         help_string = {
                 'API Version': VERSION,
                 'Description': 'Provided a series of RESTful calls to surface intelligence from the SEC EDGAR data set.',
-                'Search companies and return detailed results': "/V1.0/edgar/companies/detail/<string:query>",
+                'Search companies and return detailed results': "/V1.1/edgar/companies/detail/<string:query>",
                 'Search companies and return summary results': "/V1.1/edgar/companies/summary/<string:query>",
                 'Search companies and return CIKs': "/V1.1/edgar/companies/ciks/<string:query>",
                 'Return the details for a single company': "/V1.1/edgar/company/details/<string:cik>"
                 }
         return help_string, 200
     
-api.add_resource(edgarDetailAPI, '/V1.0/edgar/companies/detail/<string:query>')
+api.add_resource(edgarDetailAPI, '/V1.1/edgar/companies/detail/<string:query>')
 api.add_resource(edgarSummaryAPI, '/V1.1/edgar/companies/summary/<string:query>')
 api.add_resource(edgarCompanyAPI, '/V1.1/edgar/company/details/<string:cik>')
 api.add_resource(edgarCIKAPI, '/V1.1/edgar/companies/ciks/<string:query>')

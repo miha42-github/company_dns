@@ -6,3 +6,4 @@ pandas
 bs4
 flask-cors
 geopy
+wikipedia-api

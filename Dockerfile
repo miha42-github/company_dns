@@ -11,7 +11,7 @@ COPY ./edgar_cache.db /app/edgar_cache.db
 COPY ./.db_exists /app/.db_exists
 
 # Set Flask Environment variables
-ENV FLASK_APP app_edgar.py
+ENV FLASK_APP app.py
 ENV FLASK_RUN_HOST 0.0.0.0
 
 # Run commands to prep the service

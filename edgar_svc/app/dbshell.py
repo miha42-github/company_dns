@@ -16,7 +16,7 @@ the License.
 
 import cmd
 from pprint import pprint as printer
-from apputils import EdgarUtilities as EU
+from .edgar import EdgarUtilities as EU
 
 class FalshCmd(cmd.Cmd):
  

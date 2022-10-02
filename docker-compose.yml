@@ -11,8 +11,8 @@ services:
     depends_on:
       - edgar_svc
 
-  edgar_svc:
-    build: edgar_svc
+  company_dns:
+    build: company_dns
     ports:
       - "4200:80"
     networks:
