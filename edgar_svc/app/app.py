@@ -21,15 +21,19 @@ from flask_cors import CORS
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
-VERSION="1.1"
+VERSION="2.0"
 
 class edgarDetailAPI(Resource):
 
     def __init__(self):
         self.e = EU()
         self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument('query', required=True, help="No company name provided",
-                                   location="json")
+        self.reqparse.add_argument(
+            'query', 
+            required=True, 
+            help="No company name provided",
+            location="json"
+        )
         super(edgarDetailAPI, self).__init__()
         
     def get(self, query):
@@ -43,8 +47,12 @@ class edgarSummaryAPI(Resource):
     def __init__(self):
         self.e = EU()
         self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument('query', required=True, help="No company name provided",
-                                   location="json")
+        self.reqparse.add_argument(
+            'query', 
+            required=True, 
+            help="No company name provided",
+            location="json"
+        )
         super(edgarSummaryAPI, self).__init__()
         
     def get(self, query):
@@ -58,8 +66,12 @@ class edgarCompanyAPI(Resource):
     def __init__(self):
         self.e = EU()
         self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument('cik', required=True, help="No CIK provided",
-                                   location="json")
+        self.reqparse.add_argument(
+            'cik', 
+            required=True, 
+            help="No CIK provided",
+            location="json"
+        )
         super(edgarCompanyAPI, self).__init__()
         
     def get(self, cik):
@@ -73,8 +85,12 @@ class edgarCIKAPI(Resource):
     def __init__(self):
         self.e = EU()
         self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument('query', required=True, help="No company name provided",
-                                   location="json")
+        self.reqparse.add_argument(
+            'query', 
+            required=True, 
+            help="No company name provided",
+            location="json"
+        )
         super(edgarCIKAPI, self).__init__()
         
     def get(self, query):
@@ -92,19 +108,20 @@ class helpAPI(Resource):
     def get(self):
         help_string = {
                 'API Version': VERSION,
-                'Description': 'Provided a series of RESTful calls to surface intelligence from the SEC EDGAR data set.',
-                'Search companies and return detailed results': "/V1.1/edgar/companies/detail/<string:query>",
-                'Search companies and return summary results': "/V1.1/edgar/companies/summary/<string:query>",
-                'Search companies and return CIKs': "/V1.1/edgar/companies/ciks/<string:query>",
-                'Return the details for a single company': "/V1.1/edgar/company/details/<string:cik>"
+                'Description': "RESTful endpoints that gathers company firmographics from SEC EDGAR and Wikipedia.",
+                'Search details': "/" + VERSION+ "/company_dns/companies/detail/<string:query>",
+                'Search summaries': "/" + VERSION+ "/company_dns/companies/summary/<string:query>",
+                'Search companies and return CIKs': "/" + VERSION+ "company_dns/companies/ciks/<string:query>",
+                'Return the details for a single company': "/" + VERSION+ "company_dns/company/details/<string:cik>"
                 }
         return help_string, 200
-    
-api.add_resource(edgarDetailAPI, '/V1.1/edgar/companies/detail/<string:query>')
-api.add_resource(edgarSummaryAPI, '/V1.1/edgar/companies/summary/<string:query>')
-api.add_resource(edgarCompanyAPI, '/V1.1/edgar/company/details/<string:cik>')
-api.add_resource(edgarCIKAPI, '/V1.1/edgar/companies/ciks/<string:query>')
-api.add_resource(helpAPI, '/V1.1/help')
+
+# TODO need to think about how to pass company names, look up stock ticker and then get the CIK maybe ISIN
+api.add_resource(edgarDetailAPI, '/V2.0/company_dns/companies/detail/<string:query>')
+api.add_resource(edgarSummaryAPI, '/V2.0/company_dns/companies/summary/<string:query>')
+api.add_resource(edgarCompanyAPI, '/V2.0/company_dns/company/details/<string:cik>')
+api.add_resource(edgarCIKAPI, '/V2.0/edgar/company_dns/ciks/<string:query>')
+api.add_resource(helpAPI, '/V2.0/help')
 
 if __name__ == '__main__':
     app.run(debug=True)
