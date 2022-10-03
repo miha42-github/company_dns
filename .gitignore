@@ -1,0 +1,4 @@
+*.gz
+*.db
+.db_exists
+__pycache__

@@ -16,7 +16,7 @@ from pyedgar.filing import Filing
 from bs4 import BeautifulSoup
 from geopy.geocoders import ArcGIS
 
-class EdgarUtilities:
+class EdgarQueries:
 
     def __init__(self):
         self.PATH = "./"
@@ -28,6 +28,7 @@ class EdgarUtilities:
         self.DAY = 4
         self.ACCESSION = 5
         self.FORM = 6
+        self.EDGARDATA = "https://data.sec.gov/submissions/"
         self.EDGARSERVER = "www.sec.gov"
         self.EDGARARCHIVES = "Archives/edgar/data"
         self.EDGARURI = "https://"
@@ -37,6 +38,7 @@ class EdgarUtilities:
         self.EDGARSEARCH = "&action=getcompany"
         self.e_conn = sqlite3.connect(self.PATH + self.DB_CACHE)
         self.ec = self.e_conn.cursor()
+        self.user_agent = 'Mediumroast, Inc. michael.hay@mediumroast.io'
         self.authors = ['Michael Hay', 'John Goodman']
         self.copyright = "Copyright 2020 and 2021 mediumroast.io. All rights reserved."
         self.locator = ArcGIS (timeout=2)
@@ -111,6 +113,16 @@ class EdgarUtilities:
 
     
     def getAll (self, query_string):
+        """
+        TODOs
+            1. Some amount of the below could be entered into the cache making the process more streamlined for clients.
+                Specifically, we'd want to experiment with the lat/long data sets to see if that could be potentially stored or not.
+                The determining factor will be if ArcGIS or another geocoding service can support the number of calls needed to really
+                populate the Cache DB.
+            2. The SIC number and SIC string needs to be pulled into separate columns.  This should set up the potential for looking up
+                the SIC string and matching it to an overall structure.  Not sure where to get the SIC mapping structure.  Perhaps the 
+                OSHA site can provide some intelligence or maybe there is a python module.
+        """
         all_companies = {
             'companies': [],
             'totalCompanies': 0
@@ -141,16 +153,7 @@ class EdgarUtilities:
             if tmp_companies.get (company_name) == None:
                 if not company_info['rawAddress'] == 'BLANK': (long, lat, address) = self.locate (company_info['rawAddress'])
                 tmp_companies[company_name] = {
-                    """
-                    TODOs
-                        1. Some amount of the below could be entered into the cache making the process more streamlined for clients.
-                           Specifically, we'd want to experiment with the lat/long data sets to see if that could be potentially stored or not.
-                           The determining factor will be if ArcGIS or another geocoding service can support the number of calls needed to really
-                           populate the Cache DB.
-                        2. The SIC number and SIC string needs to be pulled into separate columns.  This should set up the potential for looking up
-                           the SIC string and matching it to an overall structure.  Not sure where to get the SIC mapping structure.  Perhaps the 
-                           OSHA site can provide some intelligence or maybe there is a python module.
-                    """
+        
                     'CIK': cik_no,
                     'companyName': company_name,
                     'companyFilings': self.EDGARURI + self.EDGARSERVER + self.BROWSEEDGAR + cik_no + self.EDGARSEARCH,
@@ -174,7 +177,76 @@ class EdgarUtilities:
         all_companies['totalCompanies'] = len (tmp_companies)
         return all_companies
 
+    def get_firmographics(self, cik):
+        """Pull from the JSON formatted data from the SEC.
+
+        Using the JSON formatted file (available from the following URL https://data.sec.gov/submissions/CIK0000051143.json)
+        gather key firmographic information and return to the caller.  In some cases the data will be blank.  This means it 
+        will be necessary to either leave it blank, have another process fill in the blank, or have an entity manually do it.
+
+        NOTICE - the CIK is padded with five 0s.
+        
+        An example structure of the object follows.
+
+        {
+            "cik": "51143",
+            "entityType": "operating",
+            "sic": "3570",
+            "sicDescription": "Computer & office Equipment",
+            "insiderTransactionForOwnerExists": 1,
+            "insiderTransactionForIssuerExists": 1,
+            "name": "INTERNATIONAL BUSINESS MACHINES CORP",
+            "tickers": [
+                "IBM"
+            ],
+            "exchanges": [
+                "NYSE"
+            ],
+            "ein": "130871985",
+            "description": "",
+            "website": "",
+            "investorWebsite": "",
+            "category": "Large accelerated filer",
+            "fiscalYearEnd": "1231",
+            "stateOfIncorporation": "NY",
+            "stateOfIncorporationDescription": "NY",
+            "addresses": {
+                "mailing": {
+                    "street1": "1 NEW ORCHARD RD",
+                    "street2": null,
+                    "city": "ARMONK",
+                    "stateOrCountry": "NY",
+                    "zipCode": "10504",
+                    "stateOrCountryDescription": "NY"
+                },
+                "business": {
+                    "street1": "1 NEW ORCHARD ROAD",
+                    "street2": null,
+                    "city": "ARMONK",
+                    "stateOrCountry": "NY",
+                    "zipCode": "10504",
+                    "stateOrCountryDescription": "NY"
+                }
+            },
+            "phone": "9144991900",
+            "flags": "",
+            "formerNames": [],
+            "filings": {}
+        }
+
+        Additionally, we will append the JSON URL for all company facts
+        """
+        
+        headers = {
+            'User-Agent': self.user_agent,
+            'Accept-Encoding': 'gzip, deflate'
+        }
+
     def get10kurl(self, l_url):
+        headers = {
+            'User-Agent': self.user_agent,
+            'Accept-Encoding': 'gzip, deflate'
+        }
         company_info = {
             'phone': 'BLANK',
             'rawAddress': 'BLANK',
@@ -187,7 +259,8 @@ class EdgarUtilities:
         l_url: str
         l10k_url = ""
         t_url = self.EDGARURI + self.EDGARSERVER  # Establish the basic URL for the EDGAR service
-        page = requests.get(l_url)
+        print(l_url)
+        page = requests.get(l_url, headers=headers)
         html = page.content
         soup = BeautifulSoup(html, 'html.parser')
         table = soup.find_all('table')[0]  # Get the first table in the 10k HTML index
