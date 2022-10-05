@@ -14,7 +14,7 @@ the License.
 """Core RESTful service to retrieve EDGAR information about companies."""
 from flask import Flask, jsonify, abort, make_response
 from flask_restful import Api, Resource, reqparse
-from .edgar import EdgarUtilities as EU
+from .lib.edgar import EdgarUtilities as EU
 from flask_cors import CORS
 
 # Setup the application name and basic operations
