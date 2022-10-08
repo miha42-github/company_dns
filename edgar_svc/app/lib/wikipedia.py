@@ -3,6 +3,7 @@ import wptools
 import pprint
 import re
 import sys
+import argparse
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2022, Mediumroast, Inc. All rights reserved."
@@ -14,10 +15,42 @@ __date__ = '2022-October-4'
 
 #### Globals ####
 UKN = 'Unknown'
+DEBUG = None
 
 class WikipediaQueries:
-    def __init__(self, company_name):
-        self.company_name = company_name
+    def __init__(self, name='wikipedia', description='A module and simple CLI too to search for company data in wikipedia.'):
+        self.company_name = None
+        self.NAME = name
+        self.DESC = description
+
+
+    def get_cli_args(self):
+        """Parse common CLI arguments including system configs and behavior switches.
+        """
+        # Set up the argument parser
+        parser = argparse.ArgumentParser(prog=self.NAME, description=self.DESC)
+
+        # Setup the command line switches
+        parser.add_argument(
+            '--company',
+            help="Company name to search for in Wikipedia.",
+            type=str,
+            dest='company_name',
+            required=True
+        )
+        parser.add_argument(
+            "--debug",
+            help="Turn on debugging",
+            dest="debug",
+            type=int,
+            default=0,
+        )
+
+        # Parse the CLI
+        cli_args = parser.parse_args()
+
+        # Return parsed arguments
+        return cli_args
 
     def _get_item(self, obj, variants, rules, idx):
         for variant in variants:
@@ -43,38 +76,83 @@ class WikipediaQueries:
                       '   | [[S&P 100]] component'
                       '   | [[S&P 500]] component}} {{NASDAQ|TSLA}}' <-- Get this last part as it is consistent
         """
-        tmp_match = re.search(r'{{.*\w+\|\w+}}', traded_as)
-        
-        # {{NASDAQ|TSLA}}
-        tmp_stock = str(tmp_match.group())
+        # print('Traded>>', traded_as.strip())
+        tmp_match = re.findall(r'{{\S+\|\S+}}|[^}]*', traded_as.strip())
+        tmp_match = list(filter(None, tmp_match))
+        # print('Match>>', tmp_match)
+
+        # {{NASDAQ|TSLA
+        tmp_stock = tmp_match[0] if len(tmp_match) == 1 else tmp_match[-1]
+        # print('Stock>>', tmp_stock)
         
         # NASDAQ|TSLA
-        tmp_stock = tmp_stock.strip(r'[\{\}]')
+        # tmp_stock = tmp_stock.strip(r'[\{\}]')
 
         # [NASDAQ, TSLA]
-        return tmp_stock.split('|')
+        
+        # return tmp_stock.split('|')
 
 
     def get_firmographics(self):
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
 
         # Store data here for return to the caller
         firmographics = dict()
 
-        company_page = wptools.page(self.company_name, silent=True)
-        parse_results = company_page.get_parse(show=False)
-        query_results = company_page.get_query(show=False)
+        # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
+        try:
+            company_page = wptools.page(self.company_name, silent=True)
+        except:
+            return {
+                'code': 404,
+                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
+                    'Name Inc, Name Corp, Name Corporation,].',
+                'errorType': 'LookupError',
+                'module': my_class + '-> ' + my_function
+            }
+
+        
+        try:
+            parse_results = company_page.get_parse(show=False)
+        except:
+            return {
+                'code': 404,
+                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
+                    'Name Inc, Name Corp, Name Corporation].',
+                'errorType': 'LookupError',
+                'module': my_class + '-> ' + my_function
+            }
         company_info = parse_results.data['infobox']
-        page_data = company_page.get_wikidata()
-        # pprint.pprint(page_data.data['wikidata'])
 
-        # ['industry (P452)'] <-- May not always exist
-        # ['official website (P856)']
-        # ['official name (P1448)']
-        # ['country (P17)']
-        # ['official website (P856)']
-        # ['headquarters location (P159)']
-        # ['Central Index Key (P5531)'] <-- Exists if this is a public company
+        try:
+            query_results = company_page.get_query(show=False)
+        except:
+            return {
+                'code': 404,
+                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
+                    'Name Inc, Name Corp, Name Corporation].',
+                'errorType': 'LookupError',
+                'module': my_class + '-> ' + my_function
+            }
+        
+        try:
+            page_data = company_page.get_wikidata(show=False)
+        except:
+            return {
+                'code': 404,
+                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
+                    'Name Inc, Name Corp, Name Corporation].',
+                'errorType': 'LookupError',
+                'module': my_class + '-> ' + my_function
+            }
 
+        
+        
+        
+        # Debugging output
+        if DEBUG == 1: pprint.pprint(page_data.data['wikidata'])
+        elif DEBUG == 2: pprint.pprint(company_info)
 
         # Set the description
         firmographics['description'] = query_results.data['extext'].replace('\n', ' ').replace('**', '')
@@ -82,51 +160,64 @@ class WikipediaQueries:
         # Wikipedia page URL
         firmographics['wikipediaURL'] = query_results.data['url']
 
-        # Get additional detail
-        # company_info = parse_results.data['infobox']['traded_as']
-        # pprint.pprint(company_info)
-
         # Company type
         # [[Public company|Public]] This is the format if a public company, but others are different
         firmographics['type'] = company_info['type'].strip(r'[\[\]]') if 'type' in company_info else 'Private Company'
-        firmographics['type'] = firmographics['type'].split('|')[0] if re.search(r'\|', firmographics['type']) else firmographics['type']
+        firmographics['type'] = firmographics['type'].split('|')[0].strip() if re.search(r'\|', firmographics['type']) else firmographics['type']
+        firmographics['type'] = firmographics['type'].split('(')[0].strip() if re.search(r'\(', firmographics['type']) else firmographics['type']
 
-        # Industry TODO You are here and need to perform a standard and fallback operation
-        # firmographics['industry'] = company_info['industry'].strip(r'[\[\]]') if 'industry' in company_info else UKN
-        # firmographics['industry']= firmographics['industry'].replace('|', ', ')
-        # firmographics['industry'] = page_data.data['wikidata']['industry (P452)']
+        # Industry ['industry (P452)'] <-- may contain more than one industry making this a list
+        firmographics['industry'] = page_data.data['wikidata']['industry (P452)'] if 'industry (P452)' in page_data.data['wikidata'] else UKN
+        # In the case this isn't a list clean off the last bit of string data: <Industry Name> (123...N) <-- this last part should be removed
+        if not type(firmographics['industry']) is list: 
+            firmographics['industry'] = [re.sub(r'\s*\(\S+\)$', '', firmographics['industry'])]
+        else:
+            firmographics['industry'] = [re.sub(r'\s*\(\S+\)$', '', industry) for industry in firmographics['industry']]
 
         # Formal company name
         firmographics['name'] = company_info['name'] if 'name' in company_info else UKN
 
-        # Location
-        # TODO there appear to be many variations including, location, location_city + location_country, 
-        # hq_location_* some grace is needed here
+        # Country ['country (P17)'] with a fallback to what is in company_info, the wikidata version is cleaner
         firmographics['country'] = page_data.data['wikidata']['country (P17)'] if 'country (P17)' in page_data.data['wikidata'] else self._get_item(company_info, ['location_country', 'hq_location_country'], r'[\[\]]', 0)
         firmographics['country'] = re.sub(r'\s*\(\S+\)$', '', firmographics['country'])
 
-        # firmographics['city'] = self._get_item(company_info, ['location_city', 'hq_location_city'], r'[\[\]]', 0)
+        # City
+        firmographics['city'] = self._get_item(company_info, ['location_city', 'hq_location_city', 'location'], r'\[\[\]\]', 0)
+        firmographics['city'] = firmographics['city'].replace('[[', '').replace(']]', '') if re.search('(\[)|(\])', firmographics['city']) else firmographics['city']
+        firmographics['city'] = firmographics['city'].replace('<br>', ', ') if re.search('<br>', firmographics['city']) else firmographics['city']
 
-        # Website
+
+        # Website ['official website (P856)'] <-- This could be an array of multiple websites we will return all of them
         firmographics['website'] = page_data.data['wikidata']['official website (P856)'] if 'official website (P856)' in page_data.data['wikidata'] else self._get_item(company_info, ['website', 'homepage', 'url'], r'[\{\}]', 1)
+        firmographics['website'] = [firmographics['website']] if type(firmographics['website']) is not list else firmographics['website']
 
         # ISIN which is International Securities Identification Number
         firmographics['isin'] = company_info['ISIN'] if 'ISIN' in company_info else UKN
 
         # CIK Central Index Key for Public companies
+        # ['Central Index Key (P5531)'] <-- Exists if this is a public company in the US
         firmographics['cik'] = page_data.data['wikidata']['Central Index Key (P5531)'] if 'Central Index Key (P5531)' in page_data.data['wikidata'] else UKN
 
-        # # Stock information if available
+        # Stock information if available
         # [firmographics['exchanges'], firmographics['tickers']] = self._transform_stock_ticker(company_info['traded_as'])
+        
+        # Stock exchange ['stock exchange (P414)'] <-- potentially an array if the company is listed on multiple exchanges
+        firmographics['exchanges'] = page_data.data['wikidata']['stock exchange (P414)'] if 'stock exchange (P414)' in page_data.data['wikidata'] else UKN
+        # In the case this isn't a list clean off the last bit of string data: <Exchange Name> (123...N) <-- this last part should be removed
+        if not type(firmographics['exchanges']) is list: 
+            firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', firmographics['exchanges'])]
+        else:
+            firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', exchange) for exchange in firmographics['exchanges']]
 
-        # # Temporarily store for development
-        # firmographics['all'] = company_info
+        # if 'traded_as' in company_info: self._transform_stock_ticker(company_info['traded_as'])
 
         return firmographics   
 
 
 if __name__ == '__main__':
-    company_name = sys.argv[1]
-    query = WikipediaQueries(company_name)
+    query = WikipediaQueries()
+    cli_args = query.get_cli_args()
+    query.company_name = cli_args.company_name
+    DEBUG = cli_args.debug
     firmographics = query.get_firmographics()
-    pprint.pprint(firmographics)
+    if not DEBUG: pprint.pprint(firmographics)
