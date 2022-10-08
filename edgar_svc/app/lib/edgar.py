@@ -332,8 +332,8 @@ class EdgarQueries:
         firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + self.company_or_cik
 
         # Cleanup stock information
-        firmographics['exchanges'] = firmographics['exchanges'][0]
-        firmographics['tickers'] = firmographics['tickers'][0]
+        firmographics['exchanges'] = [firmographics['exchanges'][0]]
+        firmographics['tickers'] = [firmographics['tickers'][0]]
 
         # Flatten the address information
         firmographics['city'] = firmographics['addresses']['mailing']['city']
