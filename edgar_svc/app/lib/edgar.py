@@ -1,6 +1,9 @@
+#!/usr/local/bin/python3
 import sqlite3
 import re
 import requests
+import argparse
+import pprint
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2022, Mediumroast, Inc. All rights reserved."
@@ -13,6 +16,9 @@ __date__ = '2022-October-4'
 #### Globals ####
 # Used for setting attributes consistently when unknown
 UKN = "Unknown"
+
+# Determine how we output when executed as a CLI
+DEBUG = None
 
 # Fields from the SQL Select results
 COMPANY = 1
@@ -51,7 +57,13 @@ class EdgarQueries:
         get_firmographics(cik) - Using the CIK get firmographic details for a specific company
     """
 
-    def __init__(self, db_file='./edgar_cache.db', agent='Mediumroast, Inc. help@mediumroast.io'):
+    def __init__(
+        self, 
+        db_file='./edgar_cache.db', 
+        agent='Mediumroast, Inc. help@mediumroast.io', 
+        name='edgar', 
+        description='A module and simple CLI too to search for company data in EDGAR.'):
+
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
         self.ec = self.e_conn.cursor()
@@ -61,10 +73,55 @@ class EdgarQueries:
             'User-Agent': agent,
             'Accept-Encoding': 'gzip, deflate'
         }
+
+        # Command line naming helpers
+        self.NAME = name
+        self.DESC = description
+
+        # What we are are to query
+        self.company_or_cik = None
+
+        # Define the form type we're after
+        self.form_type = '10-'
         
+    def get_cli_args(self):
+        """Parse common CLI arguments including system configs and behavior switches.
+        """
+        # Set up the argument parser
+        parser = argparse.ArgumentParser(prog=self.NAME, description=self.DESC)
 
+        # Setup the command line switches
+        parser.add_argument(
+            '--company_or_cik',
+            help="Company name to search for in EDGAR or the EDGAR data cache.",
+            type=str,
+            dest='company_or_cik',
+            required=True
+        )
+        parser.add_argument(
+            "--debug",
+            help="Turn on debugging",
+            dest="debug",
+            type=int,
+            default=0,
+        )
+        parser.add_argument(
+            '--operation',
+            help="Company name to search for in Wikipedia.",
+            type=str,
+            dest='operation',
+            choices=['ciks', 'details', 'summaries', 'firmographics'],
+            default='ciks',
+            required=True
+        )
 
-    def get_all_ciks(self, query_string):
+        # Parse the CLI
+        cli_args = parser.parse_args()
+
+        # Return parsed arguments
+        return cli_args
+
+    def get_all_ciks(self):
         """Using a query string find and return a dictionary containing all formal company names and their associated CIKs. 
 
         A CIK lookup tool enabling a user to specify a query string and obtain a dictionary containing a key value pair including
@@ -79,9 +136,6 @@ class EdgarQueries:
             'totalCompanies': 1
         }
 
-        Args:
-            query_string (string): A full or partial company name used to search for CIKs 
-
         Returns:
             final_companies (dict): An object containing a list of all company CIK pairs and the total number of company objects processed
         """
@@ -90,18 +144,14 @@ class EdgarQueries:
             'totalCompanies': 0
         }
         tmp_companies = {}
-        
-        # Establish the white list to filter in only 10-K, 10-K/A and 10-Q
-        white_list = re.compile('10-')
 
         # Select all companies from the table that match the query string  
         for row in self.ec.execute(
             "SELECT * FROM companies WHERE name LIKE '%" + 
-            query_string + 
+            self.company_or_cik + 
+            "%' AND form LIKE '" + 
+            self.form_type +
             "%'"):
-
-            # Skip it if we're not on the white list
-            if not white_list.findall(row[FORM]): continue # punt on everything but 10K & 10-Q filings
 
             # Company name
             company_name = str(row[COMPANY])
@@ -125,7 +175,7 @@ class EdgarQueries:
         return final_companies
 
     
-    def get_all_details (self, query_string, firmographics=True):
+    def get_all_details (self, firmographics=True):
         """Using a supplied query string retrieve all matching company data including from the cache DB and EDGAR.
 
         This method synthesizes stored cache data from the cache database, which is largely about filed forms, and
@@ -145,12 +195,12 @@ class EdgarQueries:
         }
         tmp_companies = {}
 
-        # Establish the white list of filing types to get
-        white_list = re.compile('10-')  
-
-        for row in self.ec.execute("SELECT * FROM companies WHERE name LIKE '%" + query_string + "%'"):
-            # punt on everything but 10K/10Q filings
-            if not white_list.match(row[FORM]): continue 
+        for row in self.ec.execute(
+            "SELECT * FROM companies WHERE name LIKE '%" + 
+            self.company_or_cik + 
+            "%' AND form LIKE '" + 
+            self.form_type +
+            "%'"):
             
             # Directory Listing for the filing
             filing_dir = str(row[CIK]) + '/' + row[ACCESSION].replace('-', '')
@@ -228,9 +278,12 @@ class EdgarQueries:
             firmographics (dict): An object containing an individual company's firmographic details
 
         """
+        # Pick which CIK, not we will prefer the CIK that is supplied as an argument
+        my_cik = cik if cik else self.company_or_cik
+
         # Define the CIK and the CIK file name
-        cik_padding_needed = 10 - len(cik)
-        cik_with_padding = '0' * cik_padding_needed + cik
+        cik_padding_needed = 10 - len(my_cik)
+        cik_with_padding = '0' * cik_padding_needed + my_cik
 
         cik_file = 'CIK' + cik_with_padding + '.json'
 
@@ -274,9 +327,9 @@ class EdgarQueries:
         # Enrich with some additional URLs to better access EDGAR data
         firmographics['companyFactsURL'] = fact_url
         firmographics['firmographicsURL'] = my_url
-        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ cik + EDGARSEARCH
-        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + cik
-        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + cik
+        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ self.company_or_cik + EDGARSEARCH
+        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + self.company_or_cik
+        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + self.company_or_cik
 
         # Cleanup stock information
         firmographics['exchanges'] = firmographics['exchanges'][0]
@@ -294,10 +347,23 @@ class EdgarQueries:
         # Return the company details
         return firmographics
 
-# TODO in the next version transform this into a CLI which should include:
-#   CLI options for all methods and the location of the cache DB
-#   The ability to execute the code from the command line
-#   uses argparse to enable the command line switches
+if __name__ == '__main__':
+    query = EdgarQueries(db_file='../edgar_cache.db')
+    cli_args = query.get_cli_args()
+    query.company_or_cik = cli_args.company_or_cik
+    DEBUG = cli_args.debug
+    
+    results = dict()
+    if cli_args.operation == 'ciks':
+        results = query.get_all_ciks()
+    elif cli_args.operation == 'details':
+        results = query.get_all_details(firmographics=True)
+    elif cli_args.operation == 'summaries':
+        results = query.get_all_details(firmographics=False)
+    elif cli_args.operation == 'firmographics':
+        results = query.get_firmographics()
+    
+    if not DEBUG: pprint.pprint(results)
 
 
 
