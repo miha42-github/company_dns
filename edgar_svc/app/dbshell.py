@@ -17,9 +17,11 @@ the License.
 import cmd
 import lib.edgar as edgar
 from pprint import pprint as printer
-# from .lib import edgar
-# from .lib import firmographics
-# from .lib import wikipedia
+import sys
+import time
+
+print('NOTICE: this utility has been deprecated and will be removed in a future release.\nUse at your own risk!')
+time.sleep(2)
 
 class FalshCmd(cmd.Cmd):
  

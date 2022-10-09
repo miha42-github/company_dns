@@ -14,90 +14,139 @@ the License.
 """Core RESTful service to retrieve EDGAR information about companies."""
 from flask import Flask, jsonify, abort, make_response
 from flask_restful import Api, Resource, reqparse
-from .lib.edgar import EdgarUtilities as EU
 from flask_cors import CORS
+import lib.firmographics as firmographics
 
+#### Globals ####
 # Setup the application name and basic operations
 app = Flask(__name__)
 api = Api(app)
 CORS(app)
 VERSION="2.0"
+DB = './edgar_cache.db'
 
 class edgarDetailAPI(Resource):
 
     def __init__(self):
-        self.e = EU()
+        self.f = firmographics.Query(DB)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
-            'query', 
+            'companyName', 
             required=True, 
-            help="No company name provided",
+            help="No company name or search string provided to query EDGAR for firmographics detail data.",
             location="json"
         )
         super(edgarDetailAPI, self).__init__()
         
-    def get(self, query):
-        filings = self.e.getAll(query)
-        if len(filings) == 0:
+    def get(self, companyName):
+        self.f.company_or_cik = companyName
+        results = self.f.get_all_details()
+        if len(results) == 0:
             abort(404)
-        return filings, 200
+        return results, 200
 
 class edgarSummaryAPI(Resource):
 
     def __init__(self):
-        self.e = EU()
+        self.f = firmographics.Query(DB)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
-            'query', 
+            'companyName', 
             required=True, 
-            help="No company name provided",
+            help="No company name or search string provided to query EDGAR for firmographics summary data.",
             location="json"
         )
         super(edgarSummaryAPI, self).__init__()
         
-    def get(self, query):
-        filings = self.e.getAllSummary(query)
+    def get(self, companyName):
+        self.f.company_or_cik = companyName
+        filings = self.f.get_all_summaries()
         if len(filings) == 0:
             abort(404)
         return filings, 200
-
-class edgarCompanyAPI(Resource):
-
-    def __init__(self):
-        self.e = EU()
-        self.reqparse = reqparse.RequestParser()
-        self.reqparse.add_argument(
-            'cik', 
-            required=True, 
-            help="No CIK provided",
-            location="json"
-        )
-        super(edgarCompanyAPI, self).__init__()
-        
-    def get(self, cik):
-        details = self.e.getCompanyDetails(cik)
-        if len(details) == 0:
-            abort(404)
-        return details, 200
 
 class edgarCIKAPI(Resource):
 
     def __init__(self):
-        self.e = EU()
+        self.f = firmographics.Query(DB)
         self.reqparse = reqparse.RequestParser()
         self.reqparse.add_argument(
-            'query', 
+            'companyName', 
             required=True, 
-            help="No company name provided",
+            help="No company name or search string provided to query EDGAR for name to CIK mapping data.",
             location="json"
         )
         super(edgarCIKAPI, self).__init__()
         
-    def get(self, query):
-        filings = self.e.getAllCIKs(query)
+    def get(self, companyName):
+        self.f.company_or_cik = companyName
+        filings = self.f.get_all_ciks()
         if len(filings) == 0:
             abort(404)
         return filings, 200
+
+class edgarFirmographicAPI(Resource):
+
+    def __init__(self):
+        self.f = firmographics.Query(DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'cik', 
+            required=True, 
+            help="No CIK string provided to query EDGAR for the company associated to the CIK.",
+            location="json"
+        )
+        super(edgarFirmographicAPI, self).__init__()
+        
+    def get(self, cik):
+        self.f.company_or_cik = cik
+        filings = self.f.get_firmographics_edgar()
+        if len(filings) == 0:
+            abort(404)
+        return filings, 200
+
+class wikipediaFirmographicAPI(Resource):
+
+    def __init__(self):
+        self.f = firmographics.Query(DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'companyName', 
+            required=True, 
+            help="No company name or search string provided to query Wikipedia to gather firmographic details.",
+            location="json"
+        )
+        super(wikipediaFirmographicAPI, self).__init__()
+        
+    def get(self, companyName):
+        self.f.company_or_cik = companyName
+        filings = self.f.get_firmographics_wikipedia()
+        if len(filings) == 0:
+            abort(404)
+        return filings, 200
+
+class mergedFirmographicAPI(Resource):
+
+    def __init__(self):
+        self.f = firmographics.Query(DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'companyName', 
+            required=True, 
+            help="No company name or search string provided to query both Wikipedia and EDGAR to gather firmographic details.",
+            location="json"
+        )
+        super(mergedFirmographicAPI, self).__init__()
+        
+    def get(self, companyName):
+        self.f.company_or_cik = companyName
+        wiki_data = self.f.get_firmographics_wikipedia()
+        filings = self.f.merge_data(wiki_data, wiki_data['cik'])
+        if len(filings) == 0:
+            abort(404)
+        return filings, 200
+
+
 
 class helpAPI(Resource):
 
@@ -109,18 +158,22 @@ class helpAPI(Resource):
         help_string = {
                 'API Version': VERSION,
                 'Description': "RESTful endpoints that gathers company firmographics from SEC EDGAR and Wikipedia.",
-                'Search details': "/" + VERSION+ "/company_dns/companies/detail/<string:query>",
-                'Search summaries': "/" + VERSION+ "/company_dns/companies/summary/<string:query>",
-                'Search companies and return CIKs': "/" + VERSION+ "company_dns/companies/ciks/<string:query>",
-                'Return the details for a single company': "/" + VERSION+ "company_dns/company/details/<string:cik>"
+                'Search EDGAR details': "/" + VERSION + "/company_dns/companies/edgar/detail/<string:query>",
+                'Search EDGAR summaries': "/" + VERSION + "/company_dns/companies/summary/<string:query>",
+                'Search companies and return CIKs from EDGAR': "/" + VERSION + "/company_dns/companies/ciks/<string:query>",
+                'Return the details for a single company': "/" + VERSION + "/company_dns/company/details/<string:cik>"
                 }
         return help_string, 200
 
-# TODO need to think about how to pass company names, look up stock ticker and then get the CIK maybe ISIN
-api.add_resource(edgarDetailAPI, '/V2.0/company_dns/companies/detail/<string:query>')
-api.add_resource(edgarSummaryAPI, '/V2.0/company_dns/companies/summary/<string:query>')
-api.add_resource(edgarCompanyAPI, '/V2.0/company_dns/company/details/<string:cik>')
-api.add_resource(edgarCIKAPI, '/V2.0/edgar/company_dns/ciks/<string:query>')
+
+api.add_resource(edgarDetailAPI, '/V2.0/companies/edgar/detail/<string:companyName>')
+api.add_resource(edgarSummaryAPI, '/V2.0/companies/edgar/summary/<string:companyName>')
+api.add_resource(edgarCIKAPI, '/V2.0/companies/edgar/ciks/<string:companyName>')
+api.add_resource(edgarFirmographicAPI, '/V2.0/company/edgar/firmographics/<string:cik>')
+api.add_resource(wikipediaFirmographicAPI, '/V2.0/company/wikipedia/firmographics/<string:companyName>')
+api.add_resource(mergedFirmographicAPI, '/V2.0/company/merged/firmographics/<string:companyName>')
+# api.add_resource(edgarCompanyAPI, '/V2.0/company_dns/company/details/<string:cik>')
+
 api.add_resource(helpAPI, '/V2.0/help')
 
 if __name__ == '__main__':

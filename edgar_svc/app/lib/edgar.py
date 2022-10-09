@@ -121,6 +121,7 @@ class EdgarQueries:
         # Return parsed arguments
         return cli_args
 
+    # TODO align return to be consistent to merged
     def get_all_ciks(self):
         """Using a query string find and return a dictionary containing all formal company names and their associated CIKs. 
 
@@ -174,8 +175,8 @@ class EdgarQueries:
         # Return
         return final_companies
 
-    
-    def get_all_details (self, firmographics=True):
+    # TODO align return to be consistent to merged
+    def get_all_details (self, firmographics=True, cik_query=False):
         """Using a supplied query string retrieve all matching company data including from the cache DB and EDGAR.
 
         This method synthesizes stored cache data from the cache database, which is largely about filed forms, and
@@ -189,18 +190,28 @@ class EdgarQueries:
         Returns:
             final_companies (dict): An object containing a list of all companies' details from the cache and EDGAR
         """
+
+        # Set up the final data structure
         final_companies = {
             'companies': [],
             'totalCompanies': 0
         }
         tmp_companies = {}
 
-        for row in self.ec.execute(
-            "SELECT * FROM companies WHERE name LIKE '%" + 
-            self.company_or_cik + 
-            "%' AND form LIKE '" + 
-            self.form_type +
-            "%'"):
+        # Define the type of SQL query to use
+        sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
+            self.company_or_cik + \
+            "%' AND form LIKE '" + \
+            self.form_type + \
+            "%'" \
+        if not cik_query \
+        else "SELECT * FROM companies WHERE cik = " + \
+            self.company_or_cik + \
+            " AND form LIKE '" + \
+            self.form_type + \
+            "%'"
+
+        for row in self.ec.execute(sql_query):
             
             # Directory Listing for the filing
             filing_dir = str(row[CIK]) + '/' + row[ACCESSION].replace('-', '')
@@ -264,6 +275,7 @@ class EdgarQueries:
             final[firmographic] = raw[firmographic] if raw[firmographic] else UKN
         return final
 
+    # TODO align return to be consistent to merged
     def get_firmographics(self, cik):
         """Create firmographics details, using the supplied cik argument, and return the.
 
