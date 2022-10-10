@@ -21,6 +21,8 @@ import os
 import argparse
 import sys
 import csv
+import gzip
+import shutil
 from pyedgar.utilities.indices import IndexMaker
 from os import path
 
@@ -96,6 +98,10 @@ def build_idx(file_name):
     header_re = re.compile('^cik', re.IGNORECASE)  # Detect the headers for the idx
     idx = list()
     num = 0
+    with gzip.open(file_name + '.gz', 'rb') as f_in:
+        with open(file_name, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
     with open(file_name, newline='') as content:
         csv_reader = csv.reader(content, delimiter='\t')
         for entry in csv_reader:

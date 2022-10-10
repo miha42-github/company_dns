@@ -1,0 +1,5 @@
+*.gz
+*.db
+.db_exists
+__pycache__
+.DS_Store

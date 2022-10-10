@@ -1,28 +1,23 @@
 version: '3'
 services:
   nginx:
-    image: nginx
+    image: nginx:stable-alpine
     ports:
-      - "8082:80"
+      - "6868:6868"
     volumes:
       - ./nginx:/etc/nginx/conf.d
     networks:
       - api_nw
     depends_on:
-      - edgar_svc
+      - company_dns
 
   company_dns:
     build: company_dns
-    ports:
-      - "4200:80"
+    container_name: company_dns
+    image: company_dns
+    restart: always
     networks:
       - api_nw
-    volumes:
-      - dbvol:/var/lib/sqlite/data
-
-volumes:
-  dbvol:
-    driver: local
 
 networks:
   api_nw:
