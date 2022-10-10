@@ -172,9 +172,7 @@ api.add_resource(edgarCIKAPI, '/V2.0/companies/edgar/ciks/<string:companyName>')
 api.add_resource(edgarFirmographicAPI, '/V2.0/company/edgar/firmographics/<string:cik>')
 api.add_resource(wikipediaFirmographicAPI, '/V2.0/company/wikipedia/firmographics/<string:companyName>')
 api.add_resource(mergedFirmographicAPI, '/V2.0/company/merged/firmographics/<string:companyName>')
-# api.add_resource(edgarCompanyAPI, '/V2.0/company_dns/company/details/<string:cik>')
-
 api.add_resource(helpAPI, '/V2.0/help')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', debug=True, port=6868)
