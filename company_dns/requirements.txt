@@ -3,7 +3,6 @@ flask-restful
 pyedgar
 requests
 pandas
-bs4
 flask-cors
 geopy
-wikipedia-api
+wptools

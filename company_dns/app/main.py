@@ -141,7 +141,10 @@ class mergedFirmographicAPI(Resource):
     def get(self, companyName):
         self.f.company_or_cik = companyName
         wiki_data = self.f.get_firmographics_wikipedia()
-        filings = self.f.merge_data(wiki_data, wiki_data['cik'])
+        if wiki_data['code'] != 200:
+            abort(404, wiki_data)
+
+        filings = self.f.merge_data(wiki_data['data'], wiki_data['data']['cik'])
         if len(filings) == 0:
             abort(404)
         return filings, 200
@@ -155,14 +158,25 @@ class helpAPI(Resource):
         super(helpAPI, self).__init__()
     
     def get(self):
-        help_string = {
-                'API Version': VERSION,
-                'Description': "RESTful endpoints that gathers company firmographics from SEC EDGAR and Wikipedia.",
-                'Search EDGAR details': "/" + VERSION + "/company_dns/companies/edgar/detail/<string:query>",
-                'Search EDGAR summaries': "/" + VERSION + "/company_dns/companies/summary/<string:query>",
-                'Search companies and return CIKs from EDGAR': "/" + VERSION + "/company_dns/companies/ciks/<string:query>",
-                'Return the details for a single company': "/" + VERSION + "/company_dns/company/details/<string:cik>"
-                }
+        help_string = """
+            <H1>Embedded help for the company_dns</H1>
+            This help is meant to be callable directly as a quick reference to the endpoints
+            the service provides.  Overall this service is meant to enable users of the API
+            to combine a series of data sources, Wikipedia and the US SEC EDGAR data to start,
+            such that a set of company firmographics data generated on demand.  In this way it 
+            is rather like a DNS for global companies.  Over time this simple embedded help
+            will evolve.
+            <H2>Available endpoints</H2>
+            <ul>
+                <li>/V2.0/companies/edgar/detail/<string:companyName></li>
+                <li>/V2.0/companies/edgar/summary/<string:companyName></li>
+                <li>/V2.0/companies/edgar/ciks/<string:companyName></li>
+                <li>/V2.0/company/edgar/firmographics/<string:cik></li>
+                <li>/V2.0/company/wikipedia/firmographics/<string:companyName></li>
+                <li>/V2.0/company/merged/firmographics/<string:companyName></li>
+            </ul>
+        """
+                
         return help_string, 200
 
 
