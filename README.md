@@ -11,7 +11,7 @@ As the tool was being built the following thinking was progressed.  The authors 
 - The emphasis of the present tool is on 10K and related reports for the listing of reports in the response.  While the DB cache includes other SEC filing metadata, like 8K, the wrapping API presently excludes it.
 
 # License
-Since this code falls under a liberal ASF 2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.
+Since this code falls under a liberal Apache-V2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.
 
 # Notice
 A significant update for the code has been pursued and completed making it ready for usage beyond the maintainers.  We will likely be continuing to progress a bit over time including taking care of some of the items listed below in Future Work.  If we're in the mood for an adventure we might look at the UK and apparently the Japanese government might have some data/structure similar to the SEC's EDGAR. 

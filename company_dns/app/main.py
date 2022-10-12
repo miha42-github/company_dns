@@ -12,7 +12,7 @@ the License.
 """
 
 """Core RESTful service to retrieve EDGAR information about companies."""
-from flask import Flask, jsonify, abort, make_response
+from flask import Flask, jsonify, abort, make_response, render_template
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 import lib.firmographics as firmographics
@@ -154,30 +154,11 @@ class mergedFirmographicAPI(Resource):
 class helpAPI(Resource):
 
     def __init__(self):
-        self.reqparse = reqparse.RequestParser()
-        super(helpAPI, self).__init__()
+        pass
     
     def get(self):
-        help_string = """
-            <H1>Embedded help for the company_dns</H1>
-            This help is meant to be callable directly as a quick reference to the endpoints
-            the service provides.  Overall this service is meant to enable users of the API
-            to combine a series of data sources, Wikipedia and the US SEC EDGAR data to start,
-            such that a set of company firmographics data generated on demand.  In this way it 
-            is rather like a DNS for global companies.  Over time this simple embedded help
-            will evolve.
-            <H2>Available endpoints</H2>
-            <ul>
-                <li>/V2.0/companies/edgar/detail/<string:companyName></li>
-                <li>/V2.0/companies/edgar/summary/<string:companyName></li>
-                <li>/V2.0/companies/edgar/ciks/<string:companyName></li>
-                <li>/V2.0/company/edgar/firmographics/<string:cik></li>
-                <li>/V2.0/company/wikipedia/firmographics/<string:companyName></li>
-                <li>/V2.0/company/merged/firmographics/<string:companyName></li>
-            </ul>
-        """
-                
-        return help_string, 200
+        headers = {'Content-Type': 'text/html'}
+        return make_response(render_template('help.html'), 200)
 
 
 api.add_resource(edgarDetailAPI, '/V2.0/companies/edgar/detail/<string:companyName>')
