@@ -1,4 +1,4 @@
-# Introduction to edgar_svc
+# Introduction to the company_dns
 To enable a more automated approach to gathering information about companies, a utility (dbcontrol.py) and a RESTful service (company_dns/app/main.py) have been created.  This release enables the sysnthesis of data from the [SEC EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html) and [Wikipedia](https://wikipedia.org).
 
 # License
