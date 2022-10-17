@@ -15,47 +15,48 @@ the License.
 
 
 import cmd
+import lib.edgar as edgar
 from pprint import pprint as printer
-from .edgar import EdgarUtilities as EU
+import sys
+import time
+
+print('NOTICE: this utility has been deprecated and will be removed in a future release.\nUse at your own risk!')
+time.sleep(2)
 
 class FalshCmd(cmd.Cmd):
  
-    prompt = 'edgar> '
-    intro = 'A shell to retrieve company demographics from the SEC Edgar related to public companies'
+    prompt = 'company_dns> '
+    intro = 'A shell to retrieve company demographics from several source repositories including SEC EDGAR and Wikipedia'
     ruler = '_'
 
     def __init__(self):
-        self.authors = ['Michael Hay', 'John Goodman']
-        self.copyright = "Copyright 2020 and 2021 mediumroast.io. All rights reserved."
+        self.controller = edgar.EdgarQueries()
         super(FalshCmd, self).__init__()
 
     def do_getall (self, query):
-        e = EU()
-        all_companies = e.getAll(query)
+        e = edgar.EdgarQueries()
+        all_companies = e.get_all_details(query)
         printer (all_companies)
 
     def help_getall (self):
         print("\ngetall [company name OR string]\nQuery either a company name or partial name, \n and return full details.")
 
     def do_getsummary (self, query):
-        e = EU()
-        all_companies = e.getAllSummary(query)
+        all_companies = self.controller.get_all_details(query, firmographics=False)
         printer (all_companies)
 
     def help_getsummary (self):
         print("\ngetsummary [company name OR string]\nQuery either a company name or partial name, \n and return a summary.")
 
-    def do_getdetails (self, cik):
-        e = EU()
-        all_companies = e.getCompanyDetails(cik)
+    def do_getfirmographics (self, cik):
+        all_companies = self.controller.get_firmographics(cik)
         printer (all_companies)
 
-    def help_getdetails (self):
+    def help_getfirmographics (self):
         print("\ngetdetails [company cik]\nQuery a company's CIK, \n and return demographic details about the company.")
 
-    def do_getciks (self, cik):
-        e = EU()
-        all_companies = e.getAllCIKs(cik)
+    def do_getciks (self, query):
+        all_companies = self.controller.get_all_ciks(query)
         printer (all_companies)
 
     def help_getciks(self):
