@@ -4,18 +4,14 @@ To enable a more automated approach to gathering information about companies, a 
 # License
 Since this code falls under a liberal Apache-V2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.
 
-# Notice
-A significant update for the code has been pursued and completed making it ready for usage beyond the maintainers.  We will likely be continuing to progress a bit over time including taking care of some of the items listed below in Future Work.  If we're in the mood for an adventure we might look at the UK and apparently the Japanese government might have some data/structure similar to the SEC's EDGAR. 
-
 # Key Dependencies
 - [PyEdgar](https://github.com/gaulinmp/pyedgar) - used to interface with the SEC's EDGAR repository
-- [SQLite](https://www.sqlite.org/index.html) - helps all utilities and the RESTful service quickly and expressively
-respond to interactions with the other elements to find appropriate company data
+- [SQLite](https://www.sqlite.org/index.html) - helps all utilities and the RESTful service quickly and expressively respond to interactions with the other elements to find appropriate company data
 - [Flask](https://www.palletsprojects.com/p/flask/) and associated utilities - used to realize the RESTful service
 - [nginx](http://nginx.org) - enables hosting of the RESTful service
 - Docker & Docker Compose - Container and server framework
-- GeoPy with ArcGIS - Enables proper address formatting and reporting of lat-long pairs
-- BeautifulSoup - Used for light parsing of EDGAR data served by the SEC
+- [GeoPy with ArcGIS](https://github.com/geopy/geopy) - Enables proper address formatting and reporting of lat-long pairs for companies
+- [wptools](https://github.com/siznax/wptools/) - provides access to MediaWiki data for company search
 
 # Utilities
 - dbcontrol.py - through PyEdgar interacts withe SEC EDGAR repository, and generates a SQLite database cache file which can be used by other utilities
@@ -128,15 +124,27 @@ endpoints, and provides and example query to the service.  A screenshot of the h
 
 ![Screen Shot 2022-10-16 at 8 18 57 PM](https://user-images.githubusercontent.com/10818650/196084425-6fd9d724-1f59-4eed-9548-c553168bf387.png)
 
-# The Lagniappe 
-If you would like to run this on a RasberryPi I'll be adding a couple of configuration files and appropriate instructions later, but until then I suggest you check out [Matt's](https://www.raspberrypi-spy.co.uk/author/matt/) guide to [getting Nginx, UWSGI and Flask running on a Pi](https://www.raspberrypi-spy.co.uk/2018/12/running-flask-under-nginx-raspberry-pi/).  At some point if someone would like to create a docker image for these elements running on the Pi that would be great.
+# How can I contribute?
 
-# Future work/Todos
+## Bugs
+If you encounter a problem with the company_dns please first review existing open [issues](https://github.com/miha42-github/company_dns/issues), and if you find a match then please add a comment with any detail you might deem relevant.  If you're unable to find an issue that matches the behavior you're seeing please open a new issue. 
+
+## Improvements
+We try to keep high level Todos and Improvements in a list contained in a section below, and as we begin to work on things we will create a corresponding issue, link to it, progress and close it.  However, if there is a change in design, major improvement, and so on something may fall off the list below.  If something isn't on the list then please create a new issue and we will evaluate.  We'll let you know if we pick up your request and progress to working on it.
+
+### Future work/Todos
 Here are the things that are likely to be worked but without any strict deadline:
-1. Create a simple wrapping script to operationalize various service behaviors
+1. Create a simple wrapping script to operationalize service behaviors, [see issue #4](https://github.com/miha42-github/company_dns/issues/4)
 2. Incrementally refactor the repository and the code
-3. Enable TLS on nginx
+3. Enable TLS on nginx or provide instructions to do so, [see issue #10](https://github.com/miha42-github/company_dns/issues/10)
 4. Determine if feasible to talk to the companies house API for gathering data from the UK
 5. Research other pools of public data which can serve to enrich 
 6. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House
-7. Clean up stale EDGAR URLs and add news, patent, etc. URLs
+7. ~~Clean up stale EDGAR URLs~~
+8. Provide instructions/details for running on a Pi or Arm based system, see Lagniappe below
+9. ~~Update README.md with the appropriate language, etc.~~, [see issue #9](https://github.com/miha42-github/company_dns/issues/9)
+10. Add additional URLs for news, stock, patents, etc. to the merged response, [see issue #11](https://github.com/miha42-github/company_dns/issues/11)
+11. Add ticker information from Wikipedia into the response, [see issue #7](https://github.com/miha42-github/company_dns/issues/7)
+
+### The Lagniappe 
+If you would like to run this on a RasberryPi I'll be adding a couple of configuration files and appropriate instructions later, but until then I suggest you check out [Matt's](https://www.raspberrypi-spy.co.uk/author/matt/) guide to [getting Nginx, UWSGI and Flask running on a Pi](https://www.raspberrypi-spy.co.uk/2018/12/running-flask-under-nginx-raspberry-pi/).  At some point if someone would like to create a docker image for these elements running on the Pi that would be great.
