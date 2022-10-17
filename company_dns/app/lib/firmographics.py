@@ -116,7 +116,8 @@ class Query:
         # If there isn't a cik that is know we need to return with wiki_data
         wiki_return = {
                 'code': 200, 
-                'message': 'Only Wikipedia data has been detected for the company [' + wiki_data['name'] + '].',
+                'message': 'Only Wikipedia data has been detected for the company [' + 
+                 wiki_data['name'] + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': wiki_data
         }
@@ -149,18 +150,27 @@ class Query:
         # Phase 1 - Using edgar_data add in wiki_data for fields that are Unknown in edgar_data
         my_company  = list(edgar_data['companies'].keys())[0]
         for data in edgar_data['companies'][my_company]:
-            final_company[data] = wiki_data[data] if edgar_data['companies'][my_company][data] == UKN else edgar_data['companies'][my_company][data]
+            if edgar_data['companies'][my_company][data] == UKN and data in wiki_data:
+                final_company[data] = wiki_data[data]  
+            else: 
+                final_company[data] = edgar_data['companies'][my_company][data]
+            # final_company[data] = wiki_data[data] if edgar_data['companies'][my_company][data] == UKN else edgar_data['companies'][my_company][data]
             
         # Phase 2 - Using wiki_data add enrich edgar_data
         for data in wiki_data:
              if data not in final_company: final_company[data] = wiki_data[data]
 
         # Phase 3 - Add lat long data
-        my_address = ", ".join([final_company['address'], final_company['city'], final_company['stateProvince'], final_company['zipPostal'], final_company['country'],])
-        (longitude, latitude, address) = self.locate(my_address)
-        final_company['longitude'] = longitude
-        final_company['latitude'] = latitude
-        final_company['address'] = address
+        if 'address' in final_company:
+            my_address = ", ".join([final_company['address'], final_company['city'], final_company['stateProvince'], final_company['zipPostal'], final_company['country'],])
+            (longitude, latitude, address) = self.locate(my_address)
+            final_company['longitude'] = longitude
+            final_company['latitude'] = latitude
+            final_company['address'] = address
+        else:
+            final_company['longitude'] = UKN
+            final_company['latitude'] = UKN
+            final_company['address'] = UKN
 
         # Return the merged result
         return {
@@ -191,6 +201,7 @@ if __name__ == '__main__':
         results = query.get_firmographics_edgar()
     elif cli_args.operation == 'merge':
         wiki_data = query.get_firmographics_wikipedia()
+        if wiki_data['code'] != 200: results = wiki_data
         results = query.merge_data(wiki_data, wiki_data['cik'])
     
     if not DEBUG: pprint.pprint(results)

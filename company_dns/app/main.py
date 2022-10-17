@@ -12,7 +12,7 @@ the License.
 """
 
 """Core RESTful service to retrieve EDGAR information about companies."""
-from flask import Flask, jsonify, abort, make_response
+from flask import Flask, jsonify, abort, make_response, render_template
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 import lib.firmographics as firmographics
@@ -141,7 +141,10 @@ class mergedFirmographicAPI(Resource):
     def get(self, companyName):
         self.f.company_or_cik = companyName
         wiki_data = self.f.get_firmographics_wikipedia()
-        filings = self.f.merge_data(wiki_data, wiki_data['cik'])
+        if wiki_data['code'] != 200:
+            abort(404, wiki_data)
+
+        filings = self.f.merge_data(wiki_data['data'], wiki_data['data']['cik'])
         if len(filings) == 0:
             abort(404)
         return filings, 200
@@ -151,19 +154,11 @@ class mergedFirmographicAPI(Resource):
 class helpAPI(Resource):
 
     def __init__(self):
-        self.reqparse = reqparse.RequestParser()
-        super(helpAPI, self).__init__()
+        pass
     
     def get(self):
-        help_string = {
-                'API Version': VERSION,
-                'Description': "RESTful endpoints that gathers company firmographics from SEC EDGAR and Wikipedia.",
-                'Search EDGAR details': "/" + VERSION + "/company_dns/companies/edgar/detail/<string:query>",
-                'Search EDGAR summaries': "/" + VERSION + "/company_dns/companies/summary/<string:query>",
-                'Search companies and return CIKs from EDGAR': "/" + VERSION + "/company_dns/companies/ciks/<string:query>",
-                'Return the details for a single company': "/" + VERSION + "/company_dns/company/details/<string:cik>"
-                }
-        return help_string, 200
+        headers = {'Content-Type': 'text/html'}
+        return make_response(render_template('help.html'), 200)
 
 
 api.add_resource(edgarDetailAPI, '/V2.0/companies/edgar/detail/<string:companyName>')

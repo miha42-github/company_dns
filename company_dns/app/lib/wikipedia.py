@@ -100,11 +100,8 @@ class WikipediaQueries:
         # Store data here for return to the caller
         firmographics = dict()
 
-        # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
-        try:
-            company_page = wptools.page(self.company_name, silent=True)
-        except:
-            return {
+        # Define the common lookup_error
+        lookup_error = {
                 'code': 404,
                 'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
                     'Name Inc, Name Corp, Name Corporation,].',
@@ -112,43 +109,32 @@ class WikipediaQueries:
                 'module': my_class + '-> ' + my_function
             }
 
-        
+        # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
+        try:
+            company_page = wptools.page(self.company_name, silent=True)
+        except:
+            return lookup_error
+
+        # Prepare to get the infoblox for the company
         try:
             parse_results = company_page.get_parse(show=False)
         except:
-            return {
-                'code': 404,
-                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
-                    'Name Inc, Name Corp, Name Corporation].',
-                'errorType': 'LookupError',
-                'module': my_class + '-> ' + my_function
-            }
+            return lookup_error
+        
         company_info = parse_results.data['infobox']
+        if not company_info: return lookup_error
 
+        # Obtain the query results
         try:
             query_results = company_page.get_query(show=False)
         except:
-            return {
-                'code': 404,
-                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
-                    'Name Inc, Name Corp, Name Corporation].',
-                'errorType': 'LookupError',
-                'module': my_class + '-> ' + my_function
-            }
+            return lookup_error
         
+        # Try to get the wikidata for the company
         try:
             page_data = company_page.get_wikidata(show=False)
         except:
-            return {
-                'code': 404,
-                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
-                    'Name Inc, Name Corp, Name Corporation].',
-                'errorType': 'LookupError',
-                'module': my_class + '-> ' + my_function
-            }
-
-        
-        
+            return lookup_error
         
         # Debugging output
         if DEBUG == 1: pprint.pprint(page_data.data['wikidata'])
@@ -162,7 +148,7 @@ class WikipediaQueries:
 
         # Company type
         # [[Public company|Public]] This is the format if a public company, but others are different
-        firmographics['type'] = company_info['type'].strip(r'[\[\]]') if 'type' in company_info else 'Private Company'
+        firmographics['type'] = company_info['type'].strip(r'[\[\]]') if 'type' in company_info else 'Private Company (Assumed)'
         firmographics['type'] = firmographics['type'].split('|')[0].strip() if re.search(r'\|', firmographics['type']) else firmographics['type']
         firmographics['type'] = firmographics['type'].split('(')[0].strip() if re.search(r'\(', firmographics['type']) else firmographics['type']
 
@@ -211,7 +197,13 @@ class WikipediaQueries:
 
         # if 'traded_as' in company_info: self._transform_stock_ticker(company_info['traded_as'])
 
-        return firmographics   
+        return {
+                'code': 200,
+                'message': 'Discovered and returning wikipedia data for the company [' + self.company_name + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': firmographics
+        }
+           
 
 
 if __name__ == '__main__':

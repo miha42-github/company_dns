@@ -232,9 +232,6 @@ class EdgarQueries:
             # Central Index Key number
             cik_no = str(row[CIK])
 
-            # URL for the report
-            report_filing_url = EDGARURI + EDGARSERVER + '/' + EDGARARCHIVES + '/' + cik_no + '/' + accession_no + '-index.html'
-
             # Get all relevant company data either from EDGAR or just use what is in the cache DB
             company_info = {'cik': cik_no, 'companyName': company_name}
             if firmographics: company_info = self.get_firmographics(cik_no)
@@ -243,7 +240,6 @@ class EdgarQueries:
             form_type = str(row[FORM])
             form = {
                     'filingIndex': filing_idx_url,
-                    'url': str(report_filing_url),
                     'formType': form_type
             }
 
