@@ -126,7 +126,7 @@ If you need to stop the service you should run `docker-compose stop`.  This will
 Regardless of the approach you've taken to run the company_dns checking to see if it is operating is important.  Therefore you can point a browser to the server running the service.  If you're running on localhost then the following link should work [http://localhost:6868/V2.0/help](http://localhost:6868/V2.0/help) however if you're on another server then you'll need to change the server name to the one you're using.  If this is successful you will be able to see the embedded help which describes the available set of
 endpoints, and provides and example query to the service.  A screenshot of the help screen can be found below.
 
-INSERT_SCREENSHOT
+![Screen Shot 2022-10-16 at 8 18 57 PM](https://user-images.githubusercontent.com/10818650/196084425-6fd9d724-1f59-4eed-9548-c553168bf387.png)
 
 # The Lagniappe 
 If you would like to run this on a RasberryPi I'll be adding a couple of configuration files and appropriate instructions later, but until then I suggest you check out [Matt's](https://www.raspberrypi-spy.co.uk/author/matt/) guide to [getting Nginx, UWSGI and Flask running on a Pi](https://www.raspberrypi-spy.co.uk/2018/12/running-flask-under-nginx-raspberry-pi/).  At some point if someone would like to create a docker image for these elements running on the Pi that would be great.
