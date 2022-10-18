@@ -5,6 +5,7 @@ from . import wikipedia
 import argparse
 import pprint
 import sys
+import urllib.parse as url_parse
 from geopy.geocoders import ArcGIS
 
 __author__ = "Michael Hay"
@@ -121,7 +122,26 @@ class Query:
                 'module': my_class + '-> ' + my_function,
                 'data': wiki_data
         }
-        if cik == UKN: return wiki_return 
+        if cik == UKN:
+            # Add location data and associated google urls
+            my_location = " ".join([wiki_return['data']['city'], wiki_return['data']['country']])
+            (longitude, latitude, address) = self.locate(my_location)
+            wiki_return['data']['longitude'] = longitude
+            wiki_return['data']['latitude'] = latitude
+            wiki_return['data']['address'] = address
+            wiki_return['data']['googleMaps'] = 'https://www.google.com/maps/place/' + url_parse.quote(my_location)
+
+            # Add news and patent google urls
+            my_encoded_name = url_parse.quote(wiki_return['data']['name'])
+            wiki_return['data']['googleNews'] = 'https://news.google.com/search?q=' + my_encoded_name
+            wiki_return['data']['googlePatents'] = 'https://patents.google.com/?assignee=' + my_encoded_name
+
+            # Add Stock ticker google urls if available
+            if 'tickers' in wiki_return['data']:
+                my_encoded_exchange = url_parse.quote(wiki_return['data']['tickers'][0])
+                my_ticker = wiki_return['data']['tickers'][1]
+                wiki_return['data']['googleFinance'] = 'https://www.google.com/finance/quote/' + my_ticker + ':' + my_encoded_exchange
+            return wiki_return 
 
         # Obtain the edgar data for the cik in question
         my_query = edgar.EdgarQueries(db_file=self.database)
@@ -167,10 +187,22 @@ class Query:
             final_company['longitude'] = longitude
             final_company['latitude'] = latitude
             final_company['address'] = address
+            final_company['googleMaps'] = 'https://www.google.com/maps/place/' + url_parse.quote(address)
         else:
             final_company['longitude'] = UKN
             final_company['latitude'] = UKN
             final_company['address'] = UKN
+
+        # Phase 4 - Add google links for various services
+        my_encoded_name = url_parse.quote(final_company['name'])
+        final_company['googleNews'] = 'https://news.google.com/search?q=' + my_encoded_name
+        final_company['googlePatents'] = 'https://patents.google.com/?assignee=' + my_encoded_name
+
+        if 'tickers' in final_company:
+            my_encoded_exchange = url_parse.quote(final_company['tickers'][0])
+            my_ticker = final_company['tickers'][1]
+            final_company['googleFinance'] = 'https://www.google.com/finance/quote/' + my_ticker + ':' + my_encoded_exchange
+        
 
         # Return the merged result
         return {

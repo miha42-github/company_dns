@@ -76,21 +76,15 @@ class WikipediaQueries:
                       '   | [[S&P 100]] component'
                       '   | [[S&P 500]] component}} {{NASDAQ|TSLA}}' <-- Get this last part as it is consistent
         """
-        # print('Traded>>', traded_as.strip())
-        tmp_match = re.findall(r'{{\S+\|\S+}}|[^}]*', traded_as.strip())
-        tmp_match = list(filter(None, tmp_match))
-        # print('Match>>', tmp_match)
+        tmp_match = re.findall(r'\{\{.+?\|.+?\}\}', traded_as.strip())[-1]
 
-        # {{NASDAQ|TSLA
-        tmp_stock = tmp_match[0] if len(tmp_match) == 1 else tmp_match[-1]
-        # print('Stock>>', tmp_stock)
-        
-        # NASDAQ|TSLA
-        # tmp_stock = tmp_stock.strip(r'[\{\}]')
+        # {{{NASDAQ|TSLA}} -> NASDAQ|TSLA
+        tmp_match = tmp_match.strip(r'[\{\}]')
 
-        # [NASDAQ, TSLA]
-        
-        # return tmp_stock.split('|')
+        # NASDAQ|TSLA -> [NASDAQ, TSLA]
+        [exchange, ticker] = tmp_match.split('|')
+
+        return [exchange, ticker]
 
 
     def get_firmographics(self):
@@ -195,7 +189,7 @@ class WikipediaQueries:
         else:
             firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', exchange) for exchange in firmographics['exchanges']]
 
-        # if 'traded_as' in company_info: self._transform_stock_ticker(company_info['traded_as'])
+        if 'traded_as' in company_info: firmographics['tickers'] = self._transform_stock_ticker(company_info['traded_as'])
 
         return {
                 'code': 200,
