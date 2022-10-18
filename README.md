@@ -143,8 +143,8 @@ Here are the things that are likely to be worked but without any strict deadline
 7. ~~Clean up stale EDGAR URLs~~
 8. Provide instructions/details for running on a Pi or Arm based system, see Lagniappe below
 9. ~~Update README.md with the appropriate language, etc.~~, [see issue #9](https://github.com/miha42-github/company_dns/issues/9)
-10. Add additional URLs for news, stock, patents, etc. to the merged response, [see issue #11](https://github.com/miha42-github/company_dns/issues/11)
-11. Add ticker information from Wikipedia into the response, [see issue #7](https://github.com/miha42-github/company_dns/issues/7)
+10. ~~Add additional URLs for news, stock, patents, etc. to the merged response~~, [see issue #11](https://github.com/miha42-github/company_dns/issues/11)
+11. ~~Add ticker information from Wikipedia into the response~~, [see issue #7](https://github.com/miha42-github/company_dns/issues/7)
 
 ### The Lagniappe 
 If you would like to run this on a RasberryPi I'll be adding a couple of configuration files and appropriate instructions later, but until then I suggest you check out [Matt's](https://www.raspberrypi-spy.co.uk/author/matt/) guide to [getting Nginx, UWSGI and Flask running on a Pi](https://www.raspberrypi-spy.co.uk/2018/12/running-flask-under-nginx-raspberry-pi/).  At some point if someone would like to create a docker image for these elements running on the Pi that would be great.
