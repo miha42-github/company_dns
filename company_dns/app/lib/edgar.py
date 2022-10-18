@@ -341,7 +341,7 @@ class EdgarQueries:
 
         # Cleanup stock information
         firmographics['exchanges'] = [firmographics['exchanges'][0]]
-        firmographics['tickers'] = [firmographics['tickers'][0]]
+        firmographics['tickers'] = [firmographics['exchanges'][0], firmographics['tickers'][0]]
 
         # Flatten the address information
         firmographics['city'] = firmographics['addresses']['mailing']['city']
