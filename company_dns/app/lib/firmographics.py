@@ -30,7 +30,7 @@ class Query:
         name='wikpedia', 
         description='A module and simple CLI too to search for company data in Wikipedia, EDGAR, and also a merger of the two data sources.'):
         
-        # Construct the object to determin lat long pairs
+        # Construct the object to determine lat long pairs
         self.locator = ArcGIS (timeout=2)
 
         # Contains the company name or CIK

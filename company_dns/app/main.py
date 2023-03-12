@@ -149,6 +149,9 @@ class mergedFirmographicAPI(Resource):
             abort(404)
         return filings, 200
 
+class standardIndustryCodeAPI(Resource):
+    
+
 
 
 class helpAPI(Resource):
