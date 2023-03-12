@@ -105,8 +105,28 @@ class SICQueries:
         return cli_args
 
     def get_all_sic_by_no(self):
+        """Using a query string find and return a dictionary containing all SICs with additional metadata. 
+
+        A SIC lookup tool enabling a user to specify a query string and obtain a dictionary containing an object
+        keyed by the formal SIC code and includes a dictionary with additional information as the value.
+        
+        An example of the returned dictionary is below:
+        {
+            '4512': {'code': 'Air Transportation, Scheduled',
+                   'division': 'E',
+                   'industry_group': '451',
+                   'major_group': '45',
+                   'major_group_desc': 'Transportation By Air'} 
+            'total': 1
+        }
+
+        Returns:
+            final_sics (dict): An object containing all returned SICs and their associated metadata
         """
-        """
+        # Define the function and class name
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
+
         # Set up the final data structure
         final_sics = {
             'sics': {},
@@ -132,7 +152,7 @@ class SICQueries:
             # Should the company_name not already be stored in the dict then store it otherwise continue
             if tmp_sics.get(sic_code) == None:
                 tmp_sics[sic_code] = {
-                    'code': sic_desc,
+                    'description': sic_desc,
                     'division': division,
                     'major_group': major_group,
                     'industry_group': industry_group,
@@ -143,11 +163,37 @@ class SICQueries:
         
         final_sics['sics'] = tmp_sics
         final_sics['total'] = len(tmp_sics)
-        return final_sics
+        return {
+            'code': 200, 
+            'message': 'SIC data has been returned for query [' + self.query + '].',
+            'module': my_class + '-> ' + my_function,
+            'data': final_sics
+        }
 
     def get_all_sic_by_name(self):
+        """Using a query string find and return a dictionary containing all SIC descriptions with additional metadata. 
+
+        A SIC lookup tool enabling a user to specify a query string and obtain a dictionary containing an object
+        keyed by the formal SIC description and includes a dictionary with additional information as the value
+        
+        An example of the returned dictionary is below:
+        {
+            'sics': {'code': '2075',
+                                'division': 'D',
+                                'industry_group': '207',
+                                'major_group': '20',
+                                'major_group_desc': 'Food And Kindred '
+                                                    'Products'}, 
+            'total': 1
+        }
+
+        Returns:
+            final_sics (dict): An object containing all returned SICs and their associated metadata
         """
-        """
+        # Define the function and class name
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
+        
         # Set up the final data structure
         final_sics = {
             'sics': {},
@@ -184,7 +230,12 @@ class SICQueries:
         
         final_sics['sics'] = tmp_sics
         final_sics['total'] = len(tmp_sics)
-        return final_sics
+        return {
+            'code': 200, 
+            'message': 'SIC data has been returned for query [' + self.query + '].',
+            'module': my_class + '-> ' + my_function,
+            'data': final_sics
+        }
 
 
 if __name__ == '__main__':
