@@ -1,19 +1,5 @@
 #!/usr/bin/env python3
 
-"""
-Copyright 2021 mediumroast.io.  All rights reserved
-Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-in compliance with the License. You may obtain a copy of the License at
-
-http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software distributed under the License
-is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-or implied. See the License for the specific language governing permissions and limitations under
-the License.
-"""
-
-
 import re
 import sqlite3
 import logging
@@ -26,19 +12,37 @@ import shutil
 from pyedgar.utilities.indices import IndexMaker
 from os import path
 
+"""
+Copyright 2023 mediumroast.io.  All rights reserved
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
+in compliance with the License. You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License
+is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
+or implied. See the License for the specific language governing permissions and limitations under
+the License.
+"""
+
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2021, mediumroast.io"
 __license__ = "ASF 2.0"
-__version__ = "1.5.0"
+__version__ = "2.1.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Prototype"
+__status__ = "Alpha"
 __id__ = "$Id$"
 
+# Globals
 PATH = "./"
 CACHE_CONTROL = '.cache_exists'
 DB_CONTROL = '.db_exists'
-DB_CACHE = 'edgar_cache.db'
+DB_CACHE = 'company_dns.db'
+DIVISIONS = 0
+MAJOR_GROUPS = 1
+INDUSTRY_GROUPS = 2
+SICS = 3
 
 
 def initialize(start_year=2019):
@@ -144,11 +148,8 @@ def create_db():
     return conn, c
 
 
-def create_companies(c, conn):
-    """
-    Create the company table in the DB
-
-    :param db_name:
+def create_companies_table(c, conn):
+    """Create the company table in the DB
     """
     logger.info('Creating table to store company data in the db cache file.')
     c.execute('CREATE TABLE companies (cik int, name text, year int, month int, day int, accession text, form text)')
@@ -156,15 +157,51 @@ def create_companies(c, conn):
 
 
 def load_companies(c, conn, companies):
-    """
-    Load the EDGAR company data into the DB cache file
-
+    """Load the EDGAR company data into the DB cache file
     """
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
     c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?,?)', companies)
     conn.commit()
     open(PATH + DB_CONTROL, 'w').close()  # Create the file that controls the reindexing
+    return num
+
+def create_sic_tables(c, conn):
+    """Create the SIC tables
+    """
+    logger.info('Creating table to store SIC data in the db cache file.')
+    c.execute('CREATE TABLE sic (division text, major_group text, industry_group text, sic text, description text)')
+    c.execute('CREATE TABLE industry_groups (division text, major_group text, industry_group text, description text)')
+    c.execute('CREATE TABLE major_groups (division text, major_group text, description text)')
+    c.execute('CREATE TABLE divisions (division text, description text, full_description text)')
+    conn.commit()
+
+def load_sic_file(file_name):
+    my_data = []
+    # Open the CSV file
+    with open(file_name) as csv_file:
+        # Create a CSV reader object
+        csv_reader = csv.reader(csv_file)
+
+        # Skip the header row
+        header = next(csv_reader)
+
+        # Loop through each row in the CSV file
+        for row in csv_reader:
+            # Append the row to the data list
+            my_data.append(row)
+    return my_data
+
+def load_sic_data(c, conn, divisions, major_groups, industry_groups, sics):
+    """Load the SIC data into the DB cache file
+    """
+    logger.info('Adding sic data to the companies db cache file.')
+    num = len(divisions) + len(major_groups) + len(industry_groups) + len(sics)
+    c.executemany('INSERT INTO divisions VALUES (?,?,?)', divisions)
+    c.executemany('INSERT INTO major_groups VALUES (?,?,?)', major_groups)
+    c.executemany('INSERT INTO industry_groups VALUES (?,?,?,?)', industry_groups)
+    c.executemany('INSERT INTO sic VALUES (?,?,?,?,?)', sics)
+    conn.commit()
     return num
 
 
@@ -178,7 +215,7 @@ def close_db(conn):
     conn.close()
 
 
-def build_db(file_name):
+def build_db(edgar_file_name, sic_dir, sic_files):
     """
     Perform all operations needed to build the DB cache file
 
@@ -193,10 +230,28 @@ def build_db(file_name):
         return True, "Not regenerating the data base cache as it already exists"
     else:
         logger.info('Initiating the db_cache build.')
+        # Connect to the database
         (my_conn, my_cursor) = create_db()
-        create_companies(my_cursor, my_conn)
-        (my_index, total) = build_idx(file_name)
+
+        ## Create all required tables
+        # Create the table for companies EDGAR data
+        create_companies_table(my_cursor, my_conn)
+        
+        # Create the tables for SIC data
+        create_sic_tables(my_cursor, my_conn)
+
+        ## Load data into the tables
+        # Build and load companies data
+        (my_index, total) = build_idx(edgar_file_name)
         total = load_companies(my_cursor, my_conn, my_index)
+
+        # Build and load the SIC data
+        divisions = load_sic_file(sic_dir + sic_files[DIVISIONS])
+        major_groups = load_sic_file(sic_dir + sic_files[MAJOR_GROUPS])
+        industry_groups = load_sic_file(sic_dir + sic_files[INDUSTRY_GROUPS])
+        sics = load_sic_file(sic_dir + sic_files[SICS])
+        total += load_sic_data(my_cursor, my_conn, divisions, major_groups, industry_groups, sics)
+
         close_db(my_conn)
         return True, "Created the database cache with " + str(total) + " entries stored in " + DB_CACHE
 
@@ -255,7 +310,16 @@ if __name__ == '__main__':
         clean_db()
         (status, msg) = initialize(start_year=args.year)
         print (msg)
-        (status, msg) = build_db('form_all.tab')
+        (status, msg) = build_db(
+            'form_all.tab', 
+            './sic4-list-2.1.0-company_dns/', 
+            [
+                'divisions.csv',
+                'major-groups.csv',
+                'industry-groups.csv',
+                'sic-codes.csv'
+            ]
+        )
         print (msg)
         clean_cache()
         sys.exit(0)
