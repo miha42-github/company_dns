@@ -16,6 +16,7 @@ from flask import Flask, jsonify, abort, make_response, render_template
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 import lib.firmographics as firmographics
+import lib.sic as sic
 
 #### Globals ####
 # Setup the application name and basic operations
@@ -23,7 +24,7 @@ app = Flask(__name__)
 api = Api(app)
 CORS(app)
 VERSION="2.0"
-DB = './edgar_cache.db'
+DB = './company_dns.db'
 
 class edgarDetailAPI(Resource):
 
@@ -149,8 +150,51 @@ class mergedFirmographicAPI(Resource):
             abort(404)
         return filings, 200
 
+class standardIndustryDescAPI(Resource):
+
+    def __init__(self):
+        self.s = sic.SICQueries(db_file=DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'sicDescription', 
+            required=True, 
+            help="No SIC description supplied to query the the database and return SIC information",
+            location="json"
+        )
+        super(standardIndustryDescAPI, self).__init__()
+
+    def get(self, sicDescription):
+        self.s.query = sicDescription
+        sic_data = self.s.get_all_sic_by_name()
+        if sic_data['code'] != 200:
+            abort(404, sic_data)
+
+        if len(sic_data) == 0:
+            abort(404)
+        return sic_data, 200
+
 class standardIndustryCodeAPI(Resource):
-    
+
+    def __init__(self):
+        self.s = sic.SICQueries(db_file=DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'sicCode', 
+            required=True, 
+            help="No SIC supplied to query the the database and return SIC information",
+            location="json"
+        )
+        super(standardIndustryCodeAPI, self).__init__()
+
+    def get(self, sicCode):
+        self.s.query = sicCode
+        sic_data = self.s.get_all_sic_by_no()
+        if sic_data['code'] != 200:
+            abort(404, sic_data)
+
+        if len(sic_data) == 0:
+            abort(404)
+        return sic_data, 200
 
 
 
@@ -170,6 +214,8 @@ api.add_resource(edgarCIKAPI, '/V2.0/companies/edgar/ciks/<string:companyName>')
 api.add_resource(edgarFirmographicAPI, '/V2.0/company/edgar/firmographics/<string:cik>')
 api.add_resource(wikipediaFirmographicAPI, '/V2.0/company/wikipedia/firmographics/<string:companyName>')
 api.add_resource(mergedFirmographicAPI, '/V2.0/company/merged/firmographics/<string:companyName>')
+api.add_resource(standardIndustryDescAPI, '/V2.0/sic/description/<string:sicDescription>')
+api.add_resource(standardIndustryCodeAPI, '/V2.0/sic/code/<string:sicCode>')
 api.add_resource(helpAPI, '/V2.0/help')
 
 if __name__ == '__main__':

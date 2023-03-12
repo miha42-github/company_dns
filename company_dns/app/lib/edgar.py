@@ -6,7 +6,7 @@ import argparse
 import pprint
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2022, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
 __version__ = "2.0.0"
 __maintainer__ = "Michael Hay"
@@ -59,7 +59,7 @@ class EdgarQueries:
 
     def __init__(
         self, 
-        db_file='./edgar_cache.db', 
+        db_file='./company_dns.db', 
         agent='Mediumroast, Inc. help@mediumroast.io', 
         name='edgar', 
         description='A module and simple CLI too to search for company data in EDGAR.'):
@@ -107,7 +107,7 @@ class EdgarQueries:
         )
         parser.add_argument(
             '--operation',
-            help="Company name to search for in Wikipedia.",
+            help="Type of details to search for .",
             type=str,
             dest='operation',
             choices=['ciks', 'details', 'summaries', 'firmographics'],
@@ -356,7 +356,7 @@ class EdgarQueries:
         return firmographics
 
 if __name__ == '__main__':
-    query = EdgarQueries(db_file='../edgar_cache.db')
+    query = EdgarQueries(db_file='../company_dns.db')
     cli_args = query.get_cli_args()
     query.company_or_cik = cli_args.company_or_cik
     DEBUG = cli_args.debug

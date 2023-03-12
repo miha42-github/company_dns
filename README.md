@@ -68,6 +68,7 @@ company_dns/
                             edgar.py
                             firmographics.py
                             wikipedia.py
+                            sic.py
                         templates/
                                   |
                                   help.html
