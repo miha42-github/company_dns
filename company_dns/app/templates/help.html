@@ -101,8 +101,17 @@
             <tr>
                 <td>/V2.0/company/merged/firmographics/</td>
                 <td>Accepts a string containing a company name of interest, all appropriate characters should be URL encoded, and returns a merged EDGAR and Wikipedia firmographics detail JSON document for that company.</td>
-
             </tr>
+
+            <tr>
+              <td>/V2.0/sic/description/</td>
+              <td>Accepts a string containing a SIC description of interest, all appropriate characters should be URL encoded, and returns a all SIC descriptions that matched the full or partial string.</td>
+            </tr>
+
+            <tr>
+              <td>/V2.0/sic/code/</td>
+              <td>Accepts a string containing a SIC of interest, all appropriate characters should be URL encoded, and returns a all SICs that matched the full or partial string.</td>
+          </tr>
         </table>
 
         <h2>Execute RESTful call with curl to get information on IBM</h2>
@@ -262,6 +271,180 @@
                 }
               }
             </pre>
+            <h2>Execute RESTful call with curl to get information on a SIC description string of 'oil'</h2>
+            To quickly understand what SIC descriptions include/match the query string 'oil' the following curl
+            statement can be issued on the command line.
+            <ul class="cmd-format">
+                curl http://service-host.domain:6868/V2.0/sic/description/oil
+            </ul>
+            This will return the following JSON document to the terminal application:
+            <pre class="json-format">
+              {
+                "code": 200,
+                "message": "SIC data has been returned for query [oil].",
+                "module": "SICQueries-> get_all_sic_by_name",
+                "data": {
+                  "sics": {
+                    "Broiler, Fryer, and Roaster Chickens": {
+                      "code": "0251",
+                      "division": "A",
+                      "major_group": "02",
+                      "industry_group": "025",
+                      "major_group_desc": "Agriculture production livestock and animal specialties"
+                    },
+                    "Soil Preparation Services": {
+                      "code": "0711",
+                      "division": "A",
+                      "major_group": "07",
+                      "industry_group": "071",
+                      "major_group_desc": "Agricultural Services"
+                    },
+                    "Drilling Oil and Gas Wells": {
+                      "code": "1381",
+                      "division": "B",
+                      "major_group": "13",
+                      "industry_group": "138",
+                      "major_group_desc": "Oil And Gas Extraction"
+                    },
+                    "Oil and Gas Field Exploration Services": {
+                      "code": "1382",
+                      "division": "B",
+                      "major_group": "13",
+                      "industry_group": "138",
+                      "major_group_desc": "Oil And Gas Extraction"
+                    },
+                    "Oil and Gas Field Services, Not Elsewhere Classified": {
+                      "code": "1389",
+                      "division": "B",
+                      "major_group": "13",
+                      "industry_group": "138",
+                      "major_group_desc": "Oil And Gas Extraction"
+                    },
+                    "Cottonseed Oil Mills": {
+                      "code": "2074",
+                      "division": "D",
+                      "major_group": "20",
+                      "industry_group": "207",
+                      "major_group_desc": "Food And Kindred Products"
+                    },
+                    "Soybean Oil Mills": {
+                      "code": "2075",
+                      "division": "D",
+                      "major_group": "20",
+                      "industry_group": "207",
+                      "major_group_desc": "Food And Kindred Products"
+                    },
+                    "Vegetable Oil Mills, Except Corn, Cottonseed, and Soybean": {
+                      "code": "2076",
+                      "division": "D",
+                      "major_group": "20",
+                      "industry_group": "207",
+                      "major_group_desc": "Food And Kindred Products"
+                    },
+                    "Animal and Marine Fats and Oils": {
+                      "code": "2077",
+                      "division": "D",
+                      "major_group": "20",
+                      "industry_group": "207",
+                      "major_group_desc": "Food And Kindred Products"
+                    },
+                    "Shortening, Table Oils, Margarine, and Other Edible Fats and Oils, Not Elsewhere Classified": {
+                      "code": "2079",
+                      "division": "D",
+                      "major_group": "20",
+                      "industry_group": "207",
+                      "major_group_desc": "Food And Kindred Products"
+                    },
+                    "Plastics, Foil, and Coated Paper Bags": {
+                      "code": "2673",
+                      "division": "D",
+                      "major_group": "26",
+                      "industry_group": "267",
+                      "major_group_desc": "Paper And Allied Products"
+                    },
+                    "Surface Active Agents, Finishing Agents, Sulfonated Oils, and Assistants": {
+                      "code": "2843",
+                      "division": "D",
+                      "major_group": "28",
+                      "industry_group": "284",
+                      "major_group_desc": "Chemicals And Allied Products"
+                    },
+                    "Perfumes, Cosmetics, and Other Toilet Preparations": {
+                      "code": "2844",
+                      "division": "D",
+                      "major_group": "28",
+                      "industry_group": "284",
+                      "major_group_desc": "Chemicals And Allied Products"
+                    },
+                    "Lubricating Oils and Greases": {
+                      "code": "2992",
+                      "division": "D",
+                      "major_group": "29",
+                      "industry_group": "299",
+                      "major_group_desc": "Petroleum Refining And Related Industries"
+                    },
+                    "Aluminum Sheet, Plate, and Foil": {
+                      "code": "3353",
+                      "division": "D",
+                      "major_group": "33",
+                      "industry_group": "335",
+                      "major_group_desc": "Primary Metal Industries"
+                    },
+                    "Fabricated Plate Work (Boiler Shops)": {
+                      "code": "3443",
+                      "division": "D",
+                      "major_group": "34",
+                      "industry_group": "344",
+                      "major_group_desc": "Fabricated Metal Products, Except Machinery And Transportation Equipment"
+                    },
+                    "Metal Foil and Leaf": {
+                      "code": "3497",
+                      "division": "D",
+                      "major_group": "34",
+                      "industry_group": "349",
+                      "major_group_desc": "Fabricated Metal Products, Except Machinery And Transportation Equipment"
+                    },
+                    "Mining Machinery and Equipment, Except Oil and Gas Field Machinery and Equipment": {
+                      "code": "3532",
+                      "division": "D",
+                      "major_group": "35",
+                      "industry_group": "353",
+                      "major_group_desc": "Industrial And Commercial Machinery And Computer Equipment"
+                    },
+                    "Oil and Gas Field Machinery and Equipment": {
+                      "code": "3533",
+                      "division": "D",
+                      "major_group": "35",
+                      "industry_group": "353",
+                      "major_group_desc": "Industrial And Commercial Machinery And Computer Equipment"
+                    },
+                    "Electronic Coils, Transformers, and Other Inductors": {
+                      "code": "3677",
+                      "division": "D",
+                      "major_group": "36",
+                      "industry_group": "367",
+                      "major_group_desc": "Electronic And Other Electrical Equipment And Components, Except Computer Equipment"
+                    },
+                    "Fuel Oil Dealers": {
+                      "code": "5983",
+                      "division": "G",
+                      "major_group": "59",
+                      "industry_group": "598",
+                      "major_group_desc": "Miscellaneous Retail "
+                    },
+                    "Oil Royalty Traders": {
+                      "code": "6792",
+                      "division": "H",
+                      "major_group": "67",
+                      "industry_group": "679",
+                      "major_group_desc": "Holding And Other Investment Offices"
+                    }
+                  },
+                  "total": 22
+                }
+              }
+            </pre>
+
         <h2>Helpful links for company_dns</h2>
         <ol>
             <li><a href="https://github.com/miha42-github/company_dns/issues" target="_">Issues on github</a></li>
@@ -269,6 +452,6 @@
             <li>Licensed under the <a href="http://www.apache.org/licenses/" target="_">Apache 2.0</a> open source license.  This software is provided as is and without warranty or guarantee of support.</li>
         </ol>
         <br/>
-        <p class="copyright">&copy; 2022 Mediumroast, Inc. All rights reserved.</p>
+        <p class="copyright">&copy; 2023 Mediumroast, Inc. All rights reserved.</p>
     </body>
 </html>
