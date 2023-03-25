@@ -105,13 +105,28 @@
 
             <tr>
               <td>/V2.0/sic/description/</td>
-              <td>Accepts a string containing a SIC description of interest, all appropriate characters should be URL encoded, and returns a all SIC descriptions that matched the full or partial string.</td>
+              <td>Accepts a string containing a SIC description of interest, all appropriate characters should be URL encoded, and returns all SIC descriptions that matched the full or partial string.</td>
             </tr>
 
             <tr>
               <td>/V2.0/sic/code/</td>
-              <td>Accepts a string containing a SIC of interest, all appropriate characters should be URL encoded, and returns a all SICs that matched the full or partial string.</td>
-          </tr>
+              <td>Accepts a string containing a SIC of interest, all appropriate characters should be URL encoded, and returns all SICs that matched the full or partial string.</td>
+            </tr>
+
+            <tr>
+              <td>/V2.0/sic/division/</td>
+              <td>Accepts a string containing a division id of interest, all appropriate characters should be URL encoded, and returns the SIC division description that matches the id.</td>
+            </tr>
+
+            <tr>
+              <td>/V2.0/sic/industry/</td>
+              <td>Accepts a string containing an industry group number of interest, all appropriate characters should be URL encoded, and returns the SIC industry group information that matches the number.</td>
+            </tr>
+
+            <tr>
+              <td>/V2.0/sic/major/</td>
+              <td>Accepts a string containing a major group number of interest, all appropriate characters should be URL encoded, and returns the SIC major group information that matches the number.</td>
+            </tr>
         </table>
 
         <h2>Execute RESTful call with curl to get information on IBM</h2>

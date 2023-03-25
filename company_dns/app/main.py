@@ -196,6 +196,75 @@ class standardIndustryCodeAPI(Resource):
             abort(404)
         return sic_data, 200
 
+class sicDivisionCodeAPI(Resource):
+
+    def __init__(self):
+        self.s = sic.SICQueries(db_file=DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'divisionId', 
+            required=True, 
+            help="No division id supplied to query the the database and return division information",
+            location="json"
+        )
+        super(sicDivisionCodeAPI, self).__init__()
+
+    def get(self, divisionId):
+        self.s.query = divisionId
+        division_data = self.s.get_division_desc_by_id()
+        if division_data['code'] != 200:
+            abort(404, sic_data)
+
+        if len(division_data) == 0:
+            abort(404)
+        return division_data, 200
+
+class sicIndustryCodeAPI(Resource):
+
+    def __init__(self):
+        self.s = sic.SICQueries(db_file=DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'industryNo', 
+            required=True, 
+            help="No industry number supplied to query the the database and return industry group information",
+            location="json"
+        )
+        super(sicIndustryCodeAPI, self).__init__()
+
+    def get(self, industryNo):
+        self.s.query = industryNo
+        industry_data = self.s.get_all_industry_group_by_no()
+        if industry_data['code'] != 200:
+            abort(404, industry_data)
+
+        if len(industry_data) == 0:
+            abort(404)
+        return industry_data, 200
+
+class sicMajorCodeAPI(Resource):
+
+    def __init__(self):
+        self.s = sic.SICQueries(db_file=DB)
+        self.reqparse = reqparse.RequestParser()
+        self.reqparse.add_argument(
+            'majorNo', 
+            required=True, 
+            help="No major group number supplied to query the the database and return major group information",
+            location="json"
+        )
+        super(sicMajorCodeAPI, self).__init__()
+
+    def get(self, majorNo):
+        self.s.query = majorNo
+        major_data = self.s.get_all_major_group_by_no()
+        if major_data['code'] != 200:
+            abort(404, major_data)
+
+        if len(major_data) == 0:
+            abort(404)
+        return major_data, 200
+
 
 
 class helpAPI(Resource):
@@ -216,6 +285,9 @@ api.add_resource(wikipediaFirmographicAPI, '/V2.0/company/wikipedia/firmographic
 api.add_resource(mergedFirmographicAPI, '/V2.0/company/merged/firmographics/<string:companyName>')
 api.add_resource(standardIndustryDescAPI, '/V2.0/sic/description/<string:sicDescription>')
 api.add_resource(standardIndustryCodeAPI, '/V2.0/sic/code/<string:sicCode>')
+api.add_resource(sicDivisionCodeAPI, '/V2.0/sic/division/<string:divisionId>')
+api.add_resource(sicIndustryCodeAPI, '/V2.0/sic/industry/<string:industryNo>')
+api.add_resource(sicMajorCodeAPI, '/V2.0/sic/major/<string:majorNo>')
 api.add_resource(helpAPI, '/V2.0/help')
 
 if __name__ == '__main__':
