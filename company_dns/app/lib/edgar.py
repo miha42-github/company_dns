@@ -4,6 +4,7 @@ import re
 import requests
 import argparse
 import pprint
+from . import sic
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
@@ -67,6 +68,7 @@ class EdgarQueries:
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
         self.ec = self.e_conn.cursor()
+        self.db_file = db_file
 
         # User agent to talk to EDGAR services
         self.headers = {
@@ -351,6 +353,54 @@ class EdgarQueries:
             if not firmographics['addresses']['mailing']['street2'] \
             else firmographics['addresses']['mailing']['street1'] + " " + firmographics['addresses']['mailing']['street2']
         del firmographics['addresses']
+
+        # Extend and normalize data related to the Standard Information code
+        sic_query = sic.SICQueries(db_file=self.db_file)
+        sic_query.query = firmographics['sic'] # Existing value, example: 3570
+        industry_group = firmographics['sic'][0:3] # Fallback value, example: 357
+        major_group = firmographics['sic'][0:2] # Fallback value, example: 35
+        division = None
+        sic_results = sic_query.get_all_sic_by_no()
+        
+        if sic_results['code'] == 200:
+            firmographics['sicDescription'] = sic_results['data']['sics'][firmographics['sic']]['description']
+
+            # Division
+            firmographics['division'] = sic_results['data']['sics'][firmographics['sic']]['division']
+            sic_query.query = firmographics['division']
+            division_results = sic_query.get_division_desc_by_id()
+            firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
+
+            # Major Group
+            firmographics['majorGroup'] = sic_results['data']['sics'][firmographics['sic']]['major_group']
+            firmographics['majorGroupDescription'] = sic_results['data']['sics'][firmographics['sic']]['major_group_desc']
+
+            # Industry Group
+            firmographics['industryGroup'] = sic_results['data']['sics'][firmographics['sic']]['industry_group']
+            sic_query.query = firmographics['industryGroup']
+            industry_results = sic_query.get_all_industry_group_by_no()
+            firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][firmographics['industryGroup']]['description']
+
+
+        else:
+            # Industry Group
+            firmographics['industryGroup'] = industry_group
+            sic_query.query = industry_group
+            industry_results = sic_query.get_all_industry_group_by_no()
+            firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][industry_group]['description']
+
+            # Major group
+            firmographics['majorGroup'] = major_group
+            sic_query.query = major_group
+            major_results = sic_query.get_all_major_group_by_no()
+            firmographics['majorGroupDescription'] = major_results['data']['major_groups'][major_group]['description']
+
+            # Division
+            firmographics['division'] = major_results['data']['major_groups'][major_group]['division']
+            sic_query.query = firmographics['division']
+            division_results = sic_query.get_division_desc_by_id()
+            firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
+        
 
         # Return the company details
         return firmographics
