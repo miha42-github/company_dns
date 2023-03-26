@@ -55,13 +55,14 @@ class SICQueries:
 
     def __init__(
         self, 
-        db_file='./edgar_cache.db', 
+        db_file='./company_dns.db', 
         name='sic', 
         description='A module and simple CLI too to lookup SIC data.'):
 
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
         self.ec = self.e_conn.cursor()
+        self.db_file = db_file
 
         # Command line naming helpers
         self.NAME = name
@@ -146,17 +147,29 @@ class SICQueries:
             sic_desc = str(row[SICS_DESC])
             division = str(row[DIVISIONS])
             major_group = str(row[MAJOR_GROUPS])
-            industry_group = str(row[INDUSTRY_GROUPS])
             major_group_desc = str(row[5])
+            industry_group = str(row[INDUSTRY_GROUPS])
+
+            # Obtain some additional data to make the results have sufficient data
+            local_sic = SICQueries()
+            local_sic.query = division
+            division_results = local_sic.get_division_desc_by_id()
+            division_desc = division_results['data']['division'][division]['description']
+            local_sic.query = industry_group
+            industry_results = local_sic.get_all_industry_group_by_no()
+            industry_desc = industry_results['data']['industry_groups'][industry_group]['description']
+
 
             # Should the company_name not already be stored in the dict then store it otherwise continue
             if tmp_sics.get(sic_code) == None:
                 tmp_sics[sic_code] = {
                     'description': sic_desc,
                     'division': division,
+                    'division_desc': division_desc,
                     'major_group': major_group,
+                    'major_group_desc': major_group_desc,
                     'industry_group': industry_group,
-                    'major_group_desc': major_group_desc
+                    'industry_group_desc': industry_desc
                 }
             else:
                 continue
@@ -221,17 +234,29 @@ class SICQueries:
             sic_desc = str(row[SICS_DESC])
             division = str(row[DIVISIONS])
             major_group = str(row[MAJOR_GROUPS])
-            industry_group = str(row[INDUSTRY_GROUPS])
             major_group_desc = str(row[5])
+            industry_group = str(row[INDUSTRY_GROUPS])
+
+
+            # Obtain some additional data to make the results have sufficient data
+            local_sic = SICQueries()
+            local_sic.query = division
+            division_results = local_sic.get_division_desc_by_id()
+            division_desc = division_results['data']['division'][division]['description']
+            local_sic.query = industry_group
+            industry_results = local_sic.get_all_industry_group_by_no()
+            industry_desc = industry_results['data']['industry_groups'][industry_group]['description']
 
             # Should the company_name not already be stored in the dict then store it otherwise continue
             if tmp_sics.get(sic_desc) == None:
                 tmp_sics[sic_desc] = {
                     'code': sic_code,
                     'division': division,
+                    'division_desc': division_desc,
                     'major_group': major_group,
+                    'major_group_desc': major_group_desc,
                     'industry_group': industry_group,
-                    'major_group_desc': major_group_desc
+                    'industry_group_desc': industry_desc
                 }
             else:
                 continue
