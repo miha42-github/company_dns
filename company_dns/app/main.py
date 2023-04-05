@@ -12,11 +12,12 @@ the License.
 """
 
 """Core RESTful service to retrieve EDGAR information about companies."""
-from flask import Flask, jsonify, abort, make_response, render_template
+from flask import Flask, jsonify, abort, make_response, render_template, send_from_directory
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 import lib.firmographics as firmographics
 import lib.sic as sic
+import pprint
 
 #### Globals ####
 # Setup the application name and basic operations
@@ -25,6 +26,14 @@ api = Api(app)
 CORS(app)
 VERSION="2.0"
 DB = './company_dns.db'
+
+# Serve embedded help when the user hits '/' or '/help'
+def serve_help(filename):
+    return send_from_directory('templates',filename)
+
+app.add_url_rule('/', 'root', serve_help, defaults={'filename': 'help.html'})
+app.add_url_rule('/help', 'root', serve_help, defaults={'filename': 'help.html'})
+
 
 class edgarDetailAPI(Resource):
 
@@ -42,7 +51,7 @@ class edgarDetailAPI(Resource):
     def get(self, companyName):
         self.f.company_or_cik = companyName
         results = self.f.get_all_details()
-        if len(results) == 0:
+        if results['code'] != 200:
             abort(404)
         return results, 200
 
@@ -61,10 +70,10 @@ class edgarSummaryAPI(Resource):
         
     def get(self, companyName):
         self.f.company_or_cik = companyName
-        filings = self.f.get_all_summaries()
-        if len(filings) == 0:
+        results = self.f.get_all_summaries()
+        if results['code'] != 200:
             abort(404)
-        return filings, 200
+        return results, 200
 
 class edgarCIKAPI(Resource):
 
@@ -81,10 +90,10 @@ class edgarCIKAPI(Resource):
         
     def get(self, companyName):
         self.f.company_or_cik = companyName
-        filings = self.f.get_all_ciks()
-        if len(filings) == 0:
+        results = self.f.get_all_ciks()
+        if results['code'] != 200:
             abort(404)
-        return filings, 200
+        return results, 200
 
 class edgarFirmographicAPI(Resource):
 
@@ -101,10 +110,10 @@ class edgarFirmographicAPI(Resource):
         
     def get(self, cik):
         self.f.company_or_cik = cik
-        filings = self.f.get_firmographics_edgar()
-        if len(filings) == 0:
+        results = self.f.get_firmographics_edgar()
+        if results['code'] != 200:
             abort(404)
-        return filings, 200
+        return results, 200
 
 class wikipediaFirmographicAPI(Resource):
 
@@ -145,7 +154,8 @@ class mergedFirmographicAPI(Resource):
         if wiki_data['code'] != 200:
             abort(404, wiki_data)
 
-        filings = self.f.merge_data(wiki_data['data'], wiki_data['data']['cik'])
+        # TODO pass in companyName
+        filings = self.f.merge_data(wiki_data['data'], wiki_data['data']['cik'], )
         if len(filings) == 0:
             abort(404)
         return filings, 200
@@ -288,7 +298,6 @@ api.add_resource(standardIndustryCodeAPI, '/V2.0/sic/code/<string:sicCode>')
 api.add_resource(sicDivisionCodeAPI, '/V2.0/sic/division/<string:divisionId>')
 api.add_resource(sicIndustryCodeAPI, '/V2.0/sic/industry/<string:industryNo>')
 api.add_resource(sicMajorCodeAPI, '/V2.0/sic/major/<string:majorNo>')
-api.add_resource(helpAPI, '/V2.0/help')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=6868)
