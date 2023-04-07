@@ -1,8 +1,8 @@
-flask
-flask-restful
+flask >= 2.2.2
+flask-restful >= 0.3.9
+flask-cors >= 3.0.10
 pyedgar
 requests
 pandas
-flask-cors
 geopy
 wptools

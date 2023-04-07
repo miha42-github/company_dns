@@ -12,7 +12,7 @@ the License.
 """
 
 """Core RESTful service to retrieve EDGAR information about companies."""
-from flask import Flask, jsonify, abort, make_response, render_template, send_from_directory
+from flask import Flask, jsonify, abort, make_response, render_template, send_from_directory, url_for
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 import lib.firmographics as firmographics
@@ -27,12 +27,10 @@ CORS(app)
 VERSION="2.0"
 DB = './company_dns.db'
 
-# Serve embedded help when the user hits '/' or '/help'
-def serve_help(filename):
-    return send_from_directory('templates',filename)
-
-app.add_url_rule('/', 'root', serve_help, defaults={'filename': 'help.html'})
-app.add_url_rule('/help', 'root', serve_help, defaults={'filename': 'help.html'})
+# Serve embedded help when the user hits '/help'
+@app.route('/help')
+def help():
+    return send_from_directory('templates', 'help.html')
 
 
 class edgarDetailAPI(Resource):
@@ -223,7 +221,7 @@ class sicDivisionCodeAPI(Resource):
         self.s.query = divisionId
         division_data = self.s.get_division_desc_by_id()
         if division_data['code'] != 200:
-            abort(404, sic_data)
+            abort(404, division_data)
 
         if len(division_data) == 0:
             abort(404)
