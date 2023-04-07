@@ -12,12 +12,11 @@ the License.
 """
 
 """Core RESTful service to retrieve EDGAR information about companies."""
-from flask import Flask, jsonify, abort, make_response, render_template, send_from_directory, url_for
+from flask import Flask, abort, send_from_directory
 from flask_restful import Api, Resource, reqparse
 from flask_cors import CORS
 import lib.firmographics as firmographics
 import lib.sic as sic
-import pprint
 
 #### Globals ####
 # Setup the application name and basic operations
@@ -272,17 +271,6 @@ class sicMajorCodeAPI(Resource):
         if len(major_data) == 0:
             abort(404)
         return major_data, 200
-
-
-
-class helpAPI(Resource):
-
-    def __init__(self):
-        pass
-    
-    def get(self):
-        headers = {'Content-Type': 'text/html'}
-        return make_response(render_template('help.html'), 200)
 
 
 api.add_resource(edgarDetailAPI, '/V2.0/companies/edgar/detail/<string:companyName>')
