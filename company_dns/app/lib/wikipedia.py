@@ -6,16 +6,26 @@ import sys
 import argparse
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2022, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Alpha"
-__date__ = '2022-October-4'
+__status__ = "Beta"
+__date__ = '2023-April-1'
+__contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
+# Used for setting attributes consistently when unknown
 UKN = 'Unknown'
+
+# Determine how we output when executed as a CLI
 DEBUG = None
+
+# Package and data dependencies
+DEPENDENCIES = {
+    'modules': {'wptools':'https://pypi.org/project/wptools/'},
+    'data': {'wikiData': 'https://www.wikidata.org/wiki/Wikidata:Data_access'}
+}
 
 class WikipediaQueries:
     def __init__(self, name='wikipedia', description='A module and simple CLI too to search for company data in wikipedia.'):
@@ -97,10 +107,10 @@ class WikipediaQueries:
         # Define the common lookup_error
         lookup_error = {
                 'code': 404,
-                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' +
-                    'Name Inc, Name Corp, Name Corporation,].',
+                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' + self.company_name + ' Inc.,' + self.company_name + ' Corp., or ' + self.company_name + ' Corporation].',
                 'errorType': 'LookupError',
-                'module': my_class + '-> ' + my_function
+                'module': my_class + '-> ' + my_function,
+                'dependencies': DEPENDENCIES
             }
 
         # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
@@ -141,10 +151,12 @@ class WikipediaQueries:
         firmographics['wikipediaURL'] = query_results.data['url']
 
         # Company type
-        # [[Public company|Public]] This is the format if a public company, but others are different
-        firmographics['type'] = company_info['type'].strip(r'[\[\]]') if 'type' in company_info else 'Private Company (Assumed)'
+        # [[Public company|Public]] This is the format if a public company, but others can be different
+        firmographics['type'] = re.sub(r'^\[\[|\]\]$', '', company_info['type']) if 'type' in company_info else 'Private Company (Assumed)'
+        # firmographics['type'] = company_info['type'].strip(r'[\[\]]') if 'type' in company_info else 'Private Company (Assumed)'
         firmographics['type'] = firmographics['type'].split('|')[0].strip() if re.search(r'\|', firmographics['type']) else firmographics['type']
         firmographics['type'] = firmographics['type'].split('(')[0].strip() if re.search(r'\(', firmographics['type']) else firmographics['type']
+        firmographics['type'] = firmographics['type'].strip('[[').strip(']]') if re.search(r'\]|\[', firmographics['type']) else firmographics['type']
 
         # Industry ['industry (P452)'] <-- may contain more than one industry making this a list
         firmographics['industry'] = page_data.data['wikidata']['industry (P452)'] if 'industry (P452)' in page_data.data['wikidata'] else UKN
@@ -195,7 +207,8 @@ class WikipediaQueries:
                 'code': 200,
                 'message': 'Discovered and returning wikipedia data for the company [' + self.company_name + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': firmographics
+                'data': firmographics,
+                'dependencies': DEPENDENCIES
         }
            
 

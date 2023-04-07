@@ -11,14 +11,24 @@ import urllib.parse as url_parse
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Alpha"
-__date__ = '2023-March-11'
+__status__ = "Beta"
+__date__ = '2023-April-1'
+__contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
 # Used for setting attributes consistently when unknown
 UKN = "Unknown"
+
+# Package and data dependencies
+DEPENDENCIES = {
+    'modules': {},
+    'data': {
+        'sicData': 'https://github.com/miha42-github/sic4-list',
+        'oshaSICQuery': 'https://www.osha.gov/data/sic-search'
+    }
+}
 
 # Determine how we output when executed as a CLI
 DEBUG = None
@@ -181,14 +191,16 @@ class SICQueries:
                 'code': 404, 
                 'message': 'No SIC found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_sics
+                'data': final_sics,
+                'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
                 'message': 'SIC data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_sics
+                'data': final_sics,
+                'dependencies': DEPENDENCIES
             }
 
     def get_all_sic_by_name(self):
@@ -268,14 +280,16 @@ class SICQueries:
                 'code': 404, 
                 'message': 'No SICs found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_sics
+                'data': final_sics,
+                'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
                 'message': 'SIC data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_sics
+                'data': final_sics,
+                'dependencies': DEPENDENCIES
             }
 
     def get_all_major_group_by_no(self):
@@ -333,14 +347,16 @@ class SICQueries:
                 'code': 404, 
                 'message': 'No Major Group found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_descs
+                'data': final_descs,
+                'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
                 'message': 'Major group data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_descs
+                'data': final_descs,
+                'dependencies': DEPENDENCIES
             }
 
     def get_all_industry_group_by_no(self):
@@ -400,14 +416,16 @@ class SICQueries:
                 'code': 404, 
                 'message': 'No Industry Group found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_descs
+                'data': final_descs,
+                'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
                 'message': 'Industry group data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_descs
+                'data': final_descs,
+                'dependencies': DEPENDENCIES
             }
 
     def get_division_desc_by_id(self):
@@ -465,14 +483,16 @@ class SICQueries:
                 'code': 404, 
                 'message': 'No Division found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_descs
+                'data': final_descs,
+                'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
                 'message': 'Division data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_descs
+                'data': final_descs,
+                'dependencies': DEPENDENCIES
             }
 
 

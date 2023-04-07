@@ -1,6 +1,7 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 import sqlite3
 import re
+import sys
 import requests
 import argparse
 import pprint
@@ -9,10 +10,11 @@ from . import sic
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Alpha"
-__date__ = '2022-October-4'
+__status__ = "Beta"
+__date__ = '2023-April-1'
+__contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
 # Used for setting attributes consistently when unknown
@@ -41,6 +43,21 @@ GETISSUER = "/cgi-bin/own-disp?action=getissuer&CIK="
 GETOWNER = "/cgi-bin/own-disp?action=getowner&CIK="
 EDGARSEARCH = "&action=getcompany"
 
+# Package and data dependencies
+DEPENDENCIES = {
+    'modules': {
+        'sic': 'https://github.com/miha42-github/company_dns',
+        'pyedgar': 'https://github.com/gaulinmp/pyedgar'
+    },
+    'data': {
+        'sicData': 'https://github.com/miha42-github/sic4-list',
+        'oshaSICQuery': 'https://www.osha.gov/data/sic-search',
+        'pyedgarRoot': 'https://www.sec.gov/Archives/edgar/data',
+        'edgarFacts': 'https://data.sec.gov/api/xbrl/companyfacts/',
+        'edgarSubmissions': 'https://data.sec.gov/submissions/'
+    }
+}
+
 class EdgarQueries:
     """A core set of methods designed to interact with both locally cached and remote SEC EDGAR data.
 
@@ -63,12 +80,14 @@ class EdgarQueries:
         db_file='./company_dns.db', 
         agent='Mediumroast, Inc. help@mediumroast.io', 
         name='edgar', 
+        flat_return=False,
         description='A module and simple CLI too to search for company data in EDGAR.'):
 
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
         self.ec = self.e_conn.cursor()
         self.db_file = db_file
+        self.flat_return = flat_return
 
         # User agent to talk to EDGAR services
         self.headers = {
@@ -142,6 +161,9 @@ class EdgarQueries:
         Returns:
             final_companies (dict): An object containing a list of all company CIK pairs and the total number of company objects processed
         """
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
+
         final_companies = {
             'companies': {},
             'totalCompanies': 0
@@ -173,11 +195,30 @@ class EdgarQueries:
         
         # Count the results
         final_companies['totalCompanies'] = len(tmp_companies)
+
+        if self.flat_return:
+            return final_companies
+        elif final_companies['totalCompanies'] == 0:
+            return {
+                'code': 404, 
+                'message': 'No company CIK found for query [' + self.company_or_cik + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': final_companies,
+                'dependencies': DEPENDENCIES
+            }
+        else:
+            return {
+                'code': 200, 
+                'message': 'Company CIK data has been returned for query [' + self.company_or_cik + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': final_companies,
+                'dependencies': DEPENDENCIES
+            }
         
         # Return
         return final_companies
 
-    # TODO align return to be consistent to merged
+
     def get_all_details (self, firmographics=True, cik_query=False):
         """Using a supplied query string retrieve all matching company data including from the cache DB and EDGAR.
 
@@ -192,6 +233,8 @@ class EdgarQueries:
         Returns:
             final_companies (dict): An object containing a list of all companies' details from the cache and EDGAR
         """
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
 
         # Set up the final data structure
         final_companies = {
@@ -201,19 +244,24 @@ class EdgarQueries:
         tmp_companies = {}
 
         # Define the type of SQL query to use
-        sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
+        sql_query = "SELECT DISTINCT * FROM companies WHERE name LIKE '%" + \
             self.company_or_cik + \
             "%' AND form LIKE '" + \
             self.form_type + \
             "%'" \
         if not cik_query \
-        else "SELECT * FROM companies WHERE cik = " + \
+        else "SELECT DISTINCT * FROM companies WHERE cik = " + \
             self.company_or_cik + \
             " AND form LIKE '" + \
             self.form_type + \
             "%'"
 
+        # Set up for capturing only unique CIKs
+        found_ciks = set()
         for row in self.ec.execute(sql_query):
+            # Check to see if this is a unique CIK and if so process it otherwise skip
+            if row[CIK] in found_ciks: continue
+            else: found_ciks.add(row[CIK])
             
             # Directory Listing for the filing
             filing_dir = str(row[CIK]) + '/' + row[ACCESSION].replace('-', '')
@@ -236,6 +284,7 @@ class EdgarQueries:
 
             # Get all relevant company data either from EDGAR or just use what is in the cache DB
             company_info = {'cik': cik_no, 'companyName': company_name}
+            
             if firmographics: company_info = self.get_firmographics(cik_no)
 
             # Pull in the form type and define the specific form object
@@ -256,8 +305,28 @@ class EdgarQueries:
         final_companies['companies'] = tmp_companies
         final_companies['totalCompanies'] = len(tmp_companies)
 
-        # Return to the caller
-        return final_companies
+        # If we only want the data internally then return without the wrapper
+        if self.flat_return:
+            return final_companies
+        # Return not found error if there weren't any companies
+        elif final_companies['totalCompanies'] == 0:
+            return {
+                'code': 404, 
+                'message': 'No company found for query [' + self.company_or_cik + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': final_companies,
+                'dependencies': DEPENDENCIES
+            }
+        # Return a successful query
+        else:
+            return {
+                'code': 200, 
+                'message': 'Company data has been returned for query [' + self.company_or_cik + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': final_companies,
+                'dependencies': DEPENDENCIES
+            }
+
 
     def _transform_raw_firmographics(self, final, raw):
         """An internal helper function for get_firmographics to select only what is needed and fill in blanks.
@@ -289,6 +358,9 @@ class EdgarQueries:
 
         """
         # Pick which CIK, not we will prefer the CIK that is supplied as an argument
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
+
         my_cik = cik if cik else self.company_or_cik
 
         # Define the CIK and the CIK file name
@@ -403,7 +475,16 @@ class EdgarQueries:
         
 
         # Return the company details
-        return firmographics
+        if self.flat_return:
+            return firmographics
+        else:
+            return {
+                    'code': 200, 
+                    'message': 'Company data has been returned for query [' + self.company_or_cik + '].',
+                    'module': my_class + '-> ' + my_function,
+                    'data': firmographics,
+                    'dependencies': DEPENDENCIES
+            }
 
 if __name__ == '__main__':
     query = EdgarQueries(db_file='../company_dns.db')
