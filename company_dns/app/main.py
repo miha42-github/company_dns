@@ -151,8 +151,7 @@ class mergedFirmographicAPI(Resource):
         if wiki_data['code'] != 200:
             abort(404, wiki_data)
 
-        # TODO pass in companyName
-        filings = self.f.merge_data(wiki_data['data'], wiki_data['data']['cik'], )
+        filings = self.f.merge_data(wiki_data['data'], wiki_data['data']['cik'])
         if len(filings) == 0:
             abort(404)
         return filings, 200

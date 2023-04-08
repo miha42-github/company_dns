@@ -76,6 +76,16 @@ class WikipediaQueries:
             else:
                 continue
         return UKN
+    
+    def _transform_isin(self, isin):
+        tmp_item = str()
+        if re.search('ISIN', isin):
+            tmp_item = re.findall(r'\{\{.+?\|.+?\}\}', isin.strip())[-1]
+            tmp_item = isin.strip(r'[\{\}]')
+            tmp_item = tmp_item.split('|')[-1] 
+        else:
+            tmp_item = isin.strip(r'[\{\}]')
+        return tmp_item
 
     def _transform_stock_ticker(self, traded_as):
         """Transformation of the traded_as into sufficient stock exchange and ticker
@@ -92,7 +102,12 @@ class WikipediaQueries:
         tmp_match = tmp_match.strip(r'[\{\}]')
 
         # NASDAQ|TSLA -> [NASDAQ, TSLA]
-        [exchange, ticker] = tmp_match.split('|')
+        exchange = None
+        ticker = None
+        try:
+            [exchange, ticker] = tmp_match.split('|')
+        except:
+            [exchange, ticker] = [UKN, UKN]
 
         return [exchange, ticker]
 
@@ -152,11 +167,11 @@ class WikipediaQueries:
 
         # Company type
         # [[Public company|Public]] This is the format if a public company, but others can be different
-        firmographics['type'] = re.sub(r'^\[\[|\]\]$', '', company_info['type']) if 'type' in company_info else 'Private Company (Assumed)'
-        # firmographics['type'] = company_info['type'].strip(r'[\[\]]') if 'type' in company_info else 'Private Company (Assumed)'
+        firmographics['type'] = re.sub(r'\[\[|\]\]', '', company_info['type']) if 'type' in company_info else 'Private Company (Assumed)'
         firmographics['type'] = firmographics['type'].split('|')[0].strip() if re.search(r'\|', firmographics['type']) else firmographics['type']
         firmographics['type'] = firmographics['type'].split('(')[0].strip() if re.search(r'\(', firmographics['type']) else firmographics['type']
-        firmographics['type'] = firmographics['type'].strip('[[').strip(']]') if re.search(r'\]|\[', firmographics['type']) else firmographics['type']
+        firmographics['type'] = firmographics['type'].strip(']') # if re.search(r'\]', firmographics['type']) else firmographics['type']
+        firmographics['type'] = firmographics['type'].strip('[') # if re.search(r'\[', firmographics['type']) else firmographics['type']
 
         # Industry ['industry (P452)'] <-- may contain more than one industry making this a list
         firmographics['industry'] = page_data.data['wikidata']['industry (P452)'] if 'industry (P452)' in page_data.data['wikidata'] else UKN
@@ -184,7 +199,7 @@ class WikipediaQueries:
         firmographics['website'] = [firmographics['website']] if type(firmographics['website']) is not list else firmographics['website']
 
         # ISIN which is International Securities Identification Number
-        firmographics['isin'] = company_info['ISIN'] if 'ISIN' in company_info else UKN
+        firmographics['isin'] = self._transform_isin(company_info['ISIN']) if 'ISIN' in company_info else UKN
 
         # CIK Central Index Key for Public companies
         # ['Central Index Key (P5531)'] <-- Exists if this is a public company in the US
