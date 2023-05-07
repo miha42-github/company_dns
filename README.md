@@ -137,7 +137,7 @@ We try to keep high level Todos and Improvements in a list contained in a sectio
 Here are the things that are likely to be worked but without any strict deadline:
 1. Create a simple wrapping script to operationalize service behaviors, [see issue #4](https://github.com/miha42-github/company_dns/issues/4)
 2. Incrementally refactor the repository and the code
-3. Enable TLS on nginx or provide instructions to do so, [see issue #10](https://github.com/miha42-github/company_dns/issues/10)
+3. ~~Enable TLS on nginx or provide instructions to do so~~, [see issue #10](https://github.com/miha42-github/company_dns/issues/10)
 4. Determine if feasible to talk to the companies house API for gathering data from the UK
 5. Research other pools of public data which can serve to enrich 
 6. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House

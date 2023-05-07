@@ -136,7 +136,7 @@ class Query:
         (longitude, latitude, address, raw_data) = self.locate(my_location)
         wiki_return['data']['longitude'] = longitude
         wiki_return['data']['latitude'] = latitude
-        wiki_return['data']['address'] = address
+        wiki_return['data']['address'] = wiki_return['data']['address'] if 'address' in wiki_return['data'] else UKN
         wiki_return['data']['googleMaps'] = MAPSURL + url_parse.quote(my_location)
 
         # Add news and patent google urls
@@ -146,7 +146,12 @@ class Query:
 
         # Add Stock ticker google urls if available
         if 'tickers' in wiki_return['data']:
-            my_encoded_exchange = url_parse.quote(wiki_return['data']['tickers'][0])
+            # For now we'll detect and change the indexes based upon trial and error.
+            raw_echange = wiki_return['data']['tickers'][0]
+            if raw_echange == 'Saudi Stock Exchange': raw_echange = 'TADAWUL'
+            elif raw_echange == 'NAG': raw_echange = 'TYO'
+
+            my_encoded_exchange = url_parse.quote(raw_echange)
             my_ticker = wiki_return['data']['tickers'][1]
             wiki_return['data']['googleFinance'] = FINANCEURL + my_ticker + ':' + my_encoded_exchange
 
@@ -173,7 +178,6 @@ class Query:
                 'data': wiki_data,
                 'dependencies': DEPENDENCIES
         }
-
         if cik == UKN and wiki_data['city'] == UKN and wiki_data['country'] and wiki_data['website'][0] == UKN:
             return {
                 'code': 404,
@@ -182,30 +186,7 @@ class Query:
                 'module': my_class + '-> ' + my_function,
                 'dependencies': DEPENDENCIES  
             }
-        elif cik == UKN or isinstance(cik, list):
-            # Add location data and associated google urls
-            my_location = " ".join([wiki_return['data']['city'], wiki_return['data']['country']])
-            (longitude, latitude, address, raw_data) = self.locate(my_location)
-            wiki_return['data']['longitude'] = longitude
-            wiki_return['data']['latitude'] = latitude
-            wiki_return['data']['address'] = address
-            wiki_return['data']['googleMaps'] = MAPSURL + url_parse.quote(my_location)
-
-            # Add news and patent google urls
-            my_encoded_name = url_parse.quote(wiki_return['data']['name'])
-            wiki_return['data']['googleNews'] = NEWSURL + my_encoded_name
-            wiki_return['data']['googlePatents'] = PATENTSURL + my_encoded_name
-            
-            # Handle the CIK oddity
-            if 'cik' in wiki_return['data']:
-                wiki_return['data']['cik'] = 'Multiple or incorrect Central Index Key(s) returned'
-
-            # Add Stock ticker google urls if available
-            if 'tickers' in wiki_return['data']:
-                my_encoded_exchange = url_parse.quote(wiki_return['data']['tickers'][0])
-                my_ticker = wiki_return['data']['tickers'][1]
-                wiki_return['data']['googleFinance'] = FINANCEURL + my_ticker + ':' + my_encoded_exchange
-            return wiki_return 
+        elif cik == UKN or isinstance(cik, list): return self._augment_wikidata(wiki_return)
 
         # Obtain the edgar data for the cik in question
         my_query = edgar.EdgarQueries(db_file=self.database, flat_return=True)
@@ -216,7 +197,7 @@ class Query:
         # Sanity check 1 - Return the wikidata if there are no results from edgar.
         # NOTE the location data is inconsistently formatted for now so we won't create a lat long pair yet
         # TODO when the wikipedia data is more consistent in format add in the lat long data
-        if edgar_data['totalCompanies'] < 1: return wiki_return
+        if edgar_data['totalCompanies'] < 1: return self._augment_wikidata(wiki_return)
         
         # Sanity check 2 - if there's more than one company we need to potentially bail out as this logic
         # should only work for a single company.
@@ -239,12 +220,10 @@ class Query:
         # Phase 1 - Using edgar_data add in wiki_data for fields that are Unknown in edgar_data
         my_company  = list(edgar_data['companies'].keys())[0]
         for data in edgar_data['companies'][my_company]:
-            # if data == 'data': continue
             if edgar_data['companies'][my_company][data] == UKN and data in wiki_data:
                 final_company[data] = wiki_data[data]
             else: 
                 final_company[data] = edgar_data['companies'][my_company][data]
-            # final_company[data] = wiki_data[data] if edgar_data['companies'][my_company][data] == UKN else edgar_data['companies'][my_company][data]
             
         # Phase 2 - Using wiki_data add enrich edgar_data
         for data in wiki_data:
@@ -253,11 +232,9 @@ class Query:
         # Phase 3 - Add lat long data
         if 'address' in final_company:
             my_address = ", ".join([final_company['address'], final_company['city'], final_company['stateProvince'], final_company['zipPostal'], final_company['country'],])
-            # TODO the address field here is maybe too comprehensive, we should keep it simple and use the origina 'address'
             (longitude, latitude, address, raw_data) = self.locate(my_address)
             final_company['longitude'] = longitude
             final_company['latitude'] = latitude
-            # final_company['address'] = address
             final_company['googleMaps'] = MAPSURL + url_parse.quote(address)
         else:
             final_company['longitude'] = UKN

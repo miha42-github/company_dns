@@ -244,24 +244,19 @@ class EdgarQueries:
         tmp_companies = {}
 
         # Define the type of SQL query to use
-        sql_query = "SELECT DISTINCT * FROM companies WHERE name LIKE '%" + \
+        sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
             self.company_or_cik + \
             "%' AND form LIKE '" + \
             self.form_type + \
             "%'" \
         if not cik_query \
-        else "SELECT DISTINCT * FROM companies WHERE cik = " + \
+        else "SELECT * FROM companies WHERE cik = " + \
             self.company_or_cik + \
             " AND form LIKE '" + \
             self.form_type + \
             "%'"
 
-        # Set up for capturing only unique CIKs
-        found_ciks = set()
         for row in self.ec.execute(sql_query):
-            # Check to see if this is a unique CIK and if so process it otherwise skip
-            if row[CIK] in found_ciks: continue
-            else: found_ciks.add(row[CIK])
             
             # Directory Listing for the filing
             filing_dir = str(row[CIK]) + '/' + row[ACCESSION].replace('-', '')
@@ -277,7 +272,14 @@ class EdgarQueries:
             accession_key = "-".join([str(row[YEAR]), str(row[MONTH]), str(row[DAY]), accession_no]) 
 
             # Formal company name
-            company_name = str(row[COMPANY])
+            # NOTE The case of APPLE INC and Apple Inc., which are the same company, caused this change.
+            #       It is likely that this change is weak as companies can potentially shift how they are
+            #       referring to their name at almost any time.  Therefore, a better approach is needed to
+            #       ensure uniqueness.  This would likely be using the CIK as the primary key in the dict().
+            #       However, this change is non-trivial for other modules that depend upon this module and 
+            #       method.  More study is required to resolve the matter completely.
+            company_name = str(row[COMPANY]).upper()
+            company_name = company_name.strip('.')
 
             # Central Index Key number
             cik_no = str(row[CIK])
@@ -295,7 +297,7 @@ class EdgarQueries:
             }
 
             # If we've seen this company before then add the form, otherwise include both firmographics and the initial form definition
-            if tmp_companies.get (company_name) == None:
+            if tmp_companies.get(company_name) == None:
                 tmp_companies[company_name] = company_info
                 tmp_companies[company_name]['forms'] = {accession_key: form}
             else:
