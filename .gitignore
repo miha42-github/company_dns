@@ -3,3 +3,6 @@
 .db_exists
 __pycache__
 .DS_Store
+test.py
+.cache_exists
+form_*

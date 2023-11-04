@@ -35,7 +35,7 @@ from os import path
 from datetime import datetime
 
 
-def initialize(start_year, path, config):
+def initialize(start_year, operating_path, config):
     """
     Using the appropriate method in PyEdgar download the file cache for that defines the relevant SEC filings for
     companies given the start_year variable. The method in this package then will format the content into tab
@@ -45,16 +45,16 @@ def initialize(start_year, path, config):
     ;param start_year: define the start year for the initialization of the cache
     """
 
-    if path.exists(path + config['db_control']['CACHE_EXISTS']):
+    if path.exists(operating_path + config['db_control']['CACHE_EXISTS']):
         return True, "Cache already exists, will not fetch cache files"
     else:
         i = IndexMaker()
         i.extract_indexes(start_year=start_year)  # Download and create the index
-        open(path  +  config['db_control']['CACHE_EXISTS'], 'w').close()  # Create the file that controls the reindexing
-        return True, "Downloaded cache files from the SEC"
+        open(operating_path  +  config['db_control']['CACHE_EXISTS'], 'w').close()  # Create the file that controls the reindexing
+        return True, "Downloaded cache files from SEC EDGAR."
 
 
-def clean_cache(path, config):
+def clean_cache(operating_path, config):
     """
     Remove all cache file instances which include tab delimited files and gz files, and return the number of files
     removed.
@@ -62,21 +62,21 @@ def clean_cache(path, config):
     """
     logger.info('Cleaning up cache control file.')
     try:
-        os.remove(path + config['db_control']['CACHE_EXISTS'])
+        os.remove(operating_path + config['db_control']['CACHE_EXISTS'])
     except FileNotFoundError:
         logger.warning('The supplied file name, %s, for the db cache control was not found.', config['db_control']['CACHE_EXISTS'])
 
     logger.info('Cleaning up cached quarterly EDGAR instances from the filesystem.')
     num = 0
-    tab_type = re.compile('^form.*\.tab$')
+    tab_type = re.compile('^form.*$')
     gz_type = re.compile('^full_index_\d+.*\.gz$')
-    for subdir, dirs, files in os.walk(path):
+    for subdir, dirs, files in os.walk(operating_path):
         for fil in files:
             if tab_type.match(fil) or gz_type.match(fil):
-                logger.debug('Removing cache file: %s', path + fil)
+                logger.debug('Removing cache file: %s', operating_path + fil)
                 num += 1
                 try:
-                    os.remove(path + fil)
+                    os.remove(operating_path + fil)
                 except FileNotFoundError:
                     logger.warning('The supplied file name, %s, for the file cache was not found.', fil)
     return num
@@ -101,7 +101,7 @@ def build_idx(file_name):
         for entry in csv_reader:
             if header_re.match(entry[0]):
                 continue
-            logger.debug('Detected 10K form proceeding to process')
+            logger.debug('Detected 10K form proceeding to process.')
             my_cik = entry[0]
             my_company = entry[1]
             my_form = entry[2]
@@ -111,27 +111,27 @@ def build_idx(file_name):
     return idx, len(idx)
 
 
-def clean_db(path, config):
+def clean_db(operating_path, config):
     """
     Remove the DB Cache from the file system including the control file
 
     """
-    logger.info('Cleaning up the db cache instance, %s, from the filesystem.', path + config['db_control']['DB_NAME'])
+    logger.info('Cleaning up the db cache instance, %s, from the filesystem.', operating_path + config['db_control']['DB_NAME'])
     try:
-        os.remove(path + config['db_control']['DB_NAME'])
-        os.remove(path + config['db_control']['DB_EXISTS'])
+        os.remove(operating_path + config['db_control']['DB_NAME'])
+        os.remove(operating_path + config['db_control']['DB_EXISTS'])
     except FileNotFoundError:
         logger.warning('The supplied file names, %s and %s, for the db cache was not found.', config['db_control']['DB_NAME'], config['db_control']['DB_EXISTS'])
         return
 
 
-def create_db(path, config):
+def create_db(operating_path, config):
     """
     Create an empty database cache file and return the DB cursor
 
     :param db_name: name of the database cache file
     """
-    logger.info('Attaching to the database file %s.', path + config['db_control']['DB_NAME'])
+    logger.info('Attaching to the database file %s.', operating_path + config['db_control']['DB_NAME'])
     conn = sqlite3.connect(config['db_control']['DB_NAME'])
     c = conn.cursor()
     conn.commit()
@@ -146,14 +146,14 @@ def create_companies_table(c, conn):
     conn.commit()
 
 
-def load_companies(path, config, c, conn, companies):
+def load_companies(operating_path, config, c, conn, companies):
     """Load the EDGAR company data into the DB cache file
     """
     logger.info('Adding company data to the companies db cache file.')
     num = len(companies)
     c.executemany('INSERT INTO companies VALUES (?,?,?,?,?,?,?)', companies)
     conn.commit()
-    open(path + config['db_control']['DB_EXISTS'], 'w').close()  # Create the file that controls the reindexing
+    open(operating_path + config['db_control']['DB_EXISTS'], 'w').close()  # Create the file that controls the reindexing
     return num
 
 def create_sic_tables(c, conn):
@@ -205,7 +205,7 @@ def close_db(conn):
     conn.close()
 
 
-def build_db(path, config):
+def build_db(operating_path, config):
     """
     Perform all operations needed to build the DB cache file
 
@@ -213,12 +213,12 @@ def build_db(path, config):
 
     """
 
-    if path.exists(path + config['db_control']['DB_EXISTS']):
+    if path.exists(operating_path + config['db_control']['DB_EXISTS']):
         return True, "Not regenerating the data base cache as it already exists"
     else:
         logger.info('Initiating the db_cache build.')
         # Connect to the database
-        (my_conn, my_cursor) = create_db(config)
+        (my_conn, my_cursor) = create_db(operating_path, config)
 
         ## Create all required tables
         # Create the table for companies EDGAR data
@@ -230,7 +230,7 @@ def build_db(path, config):
         ## Load data into the tables
         # Build and load companies data
         (my_index, total) = build_idx(config['edgar_data']['ALL_FORMS'])
-        total = load_companies(path, my_cursor, my_conn, my_index)
+        total = load_companies(operating_path, config, my_cursor, my_conn, my_index)
 
         # Build and load the SIC data
         divisions = load_sic_file(config['sic_data']['SIC_DATA_DIR'] + '/' + config['sic_data']['DIVISIONS'])
@@ -243,15 +243,15 @@ def build_db(path, config):
         return True, "Created the database cache with " + str(total) + " entries stored in " + config['db_control']['DB_NAME']
 
 
-def clean_all(path, config):
+def clean_all(operating_path, config):
     """
     Clean up all cache files, control files and the DB cache.  The underlying functions will gracefully handle any
     errors like files not being found, etc.
 
     """
-    clean_db(path, config)
-    print('Cleaned up ' + path + config['db_control']['DB_NAME'])
-    num = clean_cache(path, config)
+    clean_db(operating_path, config)
+    print('Cleaned up ' + operating_path + config['db_control']['DB_NAME'] +'.')
+    num = clean_cache(operating_path, config)
     print('Cleaned up ' + str(num) + ' cache files from the filesystem.')
 
 
@@ -259,6 +259,7 @@ if __name__ == '__main__':
 
     # capture the command line options for when this is run as a separate utility
     par = argparse.ArgumentParser(description="A utility to create a db cache for select SEC edgar data.")
+    par.add_argument('--force', '-f', action="store_true", help="Force the creation of the db cache")
     par.add_argument('--cleanall', '-a', action="store_true", help="Clean up the cache files and db cache and exit.")
     par.add_argument('--cleandb', '-d', action="store_true", help="Clean up the db cache only and exit.")
     par.add_argument('--cleancache', '-c', action="store_true", help="Clean up the cache files only and exit.")
@@ -301,13 +302,19 @@ if __name__ == '__main__':
         clean_db(my_path, my_config)
         sys.exit(0)
     else:
+        logger.info('Checking to see if the database cache already exists.')
+        if path.exists(my_path + my_config['db_control']['DB_EXISTS']) and not args.force:
+            print('Database cache ' + my_config['db_control']['DB_NAME'] + ' exists, exiting.')
+            sys.exit(0)
+
         logger.info('Initiating the db_cache build, default start year is three years prior unless overridden.')
 
         # Clean up the previous cache
+        print('Cleaning up old database cache.')
         clean_db(my_path, my_config)
         
         # Download the EDGAR data
-        (status, msg) = initialize(start_year=args.year)
+        (status, msg) = initialize(args.year, my_path, my_config)
         print (msg)
 
         # Build the database
@@ -315,6 +322,7 @@ if __name__ == '__main__':
         print (msg)
 
         # Clean up the downloaded caches
+        print('Cleaning up cache files.')
         clean_cache(my_path, my_config)
 
         sys.exit(0)
