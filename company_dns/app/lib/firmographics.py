@@ -231,7 +231,13 @@ class Query:
 
         # Phase 3 - Add lat long data
         if 'address' in final_company:
-            my_address = ", ".join([final_company['address'], final_company['city'], final_company['stateProvince'], final_company['zipPostal'], final_company['country'],])
+            my_country = str()
+            if not type(final_company['country']) is list: 
+                my_country = final_company['country']
+            else:
+                my_country = final_company['country'][0]
+    
+            my_address = ", ".join([final_company['address'], final_company['city'], final_company['stateProvince'], final_company['zipPostal'], my_country,])
             (longitude, latitude, address, raw_data) = self.locate(my_address)
             final_company['longitude'] = longitude
             final_company['latitude'] = latitude
