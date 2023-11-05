@@ -186,7 +186,11 @@ class WikipediaQueries:
 
         # Country ['country (P17)'] with a fallback to what is in company_info, the wikidata version is cleaner
         firmographics['country'] = page_data.data['wikidata']['country (P17)'] if 'country (P17)' in page_data.data['wikidata'] else self._get_item(company_info, ['location_country', 'hq_location_country'], r'[\[\]]', 0)
-        firmographics['country'] = re.sub(r'\s*\(\S+\)$', '', firmographics['country'])
+        if not type(firmographics['country']) is list: 
+            firmographics['country'] = re.sub(r'\s*\(\S+\)$', '', firmographics['country'])
+        else:
+            firmographics['country'] = [re.sub(r'\s*\(\S+\)$', '', country) for country in firmographics['country']]
+
 
         # City
         firmographics['city'] = self._get_item(company_info, ['location_city', 'hq_location_city', 'location'], r'\[\[\]\]', 0)
