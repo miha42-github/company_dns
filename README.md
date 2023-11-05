@@ -57,9 +57,9 @@ Regardless of the approach you've taken to run the `company_dns` checking to see
 
 ## Checkout a live system
 We're hosting an instance of the `company_dns` on our website for our usage and your exploration.  Below are several example queries and access to embedded help to get you a better view of the system.
-- Embedded help - [https://www.mediumroast.io/company_dns/help](https://www.mediumroast.io/company_dns/help){:target="_blank"}
-- Company search for IBM - [https://www.mediumroast.io/company_dns/V2.0/company/merged/firmographics/IBM](https://www.mediumroast.io/company_dns/V2.0/company/merged/firmographics/IBM){:target="_blank"}
-- Standard industry code search for `Oil` - [https://www.mediumroast.io/company_dns/V2.0/sic/description/oil](https://www.mediumroast.io/company_dns/V2.0/sic/description/oil){:target="_blank"}
+- Embedded help - [https://www.mediumroast.io/company_dns/help](https://www.mediumroast.io/company_dns/help)
+- Company search for IBM - [https://www.mediumroast.io/company_dns/V2.0/company/merged/firmographics/IBM](https://www.mediumroast.io/company_dns/V2.0/company/merged/firmographics/IBM)
+- Standard industry code search for `Oil` - [https://www.mediumroast.io/company_dns/V2.0/sic/description/oil](https://www.mediumroast.io/company_dns/V2.0/sic/description/oil)
 
 # How can I contribute?
 
