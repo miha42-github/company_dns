@@ -1,8 +1,9 @@
 *.gz
 *.db
-.db_exists
+db.exists
 __pycache__
 .DS_Store
 test.py
-.cache_exists
+cache.exists
 form_*
+edgar_data
