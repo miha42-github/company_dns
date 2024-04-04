@@ -6,7 +6,8 @@ import argparse
 import pprint
 import sys
 import urllib.parse as url_parse
-from geopy.geocoders import ArcGIS
+import logging
+from geopy.geocoders import ArcGIS, Nominatim
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
@@ -45,15 +46,16 @@ PATENTSURL = 'https://patents.google.com/?assignee='
 NEWSURL = 'https://news.google.com/search?q='
 FINANCEURL = 'https://www.google.com/finance/quote/'
 
-class Query:
+class GeneralQueries:
     def __init__(
         self,
-        database,
-        name='wikpedia', 
+        database=None,
+        name='general', 
         description='A module and simple CLI too to search for company data in Wikipedia, EDGAR, and also a merger of the two data sources.'):
         
         # Construct the object to determine lat long pairs
-        self.locator = ArcGIS (timeout=2)
+        self.locator = Nominatim(timeout=2, user_agent="company_dns")
+        # self.locator = ArcGIS(timeout=2, user_agent="company_dns")
 
         # Contains the company name or CIK
         self.company_or_cik = None
@@ -63,7 +65,10 @@ class Query:
         self.DESC = description
 
         # Define the db_cache location
-        self.database = database
+        self.db_file='./company_dns.db' if database is None else database
+
+        # Set up the logging
+        self.logger = logging.getLogger(self.NAME)
 
     def get_cli_args(self):
         """Parse common CLI arguments including system configs and behavior switches.
@@ -112,22 +117,22 @@ class Query:
         return my_query.get_firmographics()
 
     def get_firmographics_edgar(self):
-        my_query = edgar.EdgarQueries(db_file=self.database)
+        my_query = edgar.EdgarQueries(db_file=self.db_file)
         my_query.company_or_cik = self.company_or_cik
         return my_query.get_firmographics(self.company_or_cik)
 
     def get_all_ciks(self):
-        my_query = edgar.EdgarQueries(db_file=self.database)
+        my_query = edgar.EdgarQueries(db_file=self.db_file)
         my_query.company_or_cik = self.company_or_cik
         return my_query.get_all_ciks()
 
     def get_all_summaries(self):
-        my_query = edgar.EdgarQueries(db_file=self.database)
+        my_query = edgar.EdgarQueries(db_file=self.db_file)
         my_query.company_or_cik = self.company_or_cik
         return my_query.get_all_details(firmographics=False)
 
     def get_all_details(self):
-        my_query = edgar.EdgarQueries(db_file=self.database)
+        my_query = edgar.EdgarQueries(db_file=self.db_file)
         my_query.company_or_cik = self.company_or_cik
         return my_query.get_all_details(firmographics=True)
 
@@ -189,10 +194,14 @@ class Query:
         elif cik == UKN or isinstance(cik, list): return self._augment_wikidata(wiki_return)
 
         # Obtain the edgar data for the cik in question
-        my_query = edgar.EdgarQueries(db_file=self.database, flat_return=True)
+        my_query = edgar.EdgarQueries(db_file=self.db_file, flat_return=True)
         edgar_data = {}
         my_query.company_or_cik = cik.lstrip('0')
+        # Log the start of the query including CIK
+        self.logger.info('Starting the EDGAR CIK query for CIK [' + my_query.company_or_cik + ']')
         edgar_data = my_query.get_all_details(firmographics=True, cik_query=True)
+        # Log the end of the query including CIK
+        self.logger.info('Completed the EDGAR CIK query for CIK [' + my_query.company_or_cik + ']')
 
         # Sanity check 1 - Return the wikidata if there are no results from edgar.
         # NOTE the location data is inconsistently formatted for now so we won't create a lat long pair yet
@@ -270,7 +279,7 @@ class Query:
 
 
 if __name__ == '__main__':
-    query = Query('../edgar_cache.db')
+    query = GeneralQueries('../company_dns.db')
     cli_args = query.get_cli_args()
     query.company_or_cik = cli_args.company_or_cik
     DEBUG = cli_args.debug

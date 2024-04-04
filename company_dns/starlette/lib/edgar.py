@@ -345,7 +345,7 @@ class EdgarQueries:
         return final
 
     # TODO align return to be consistent to merged
-    def get_firmographics(self, cik):
+    def get_firmographics(self, cik=None):
         """Create firmographics details, using the supplied cik argument, and return the.
 
         Using a RESTful call to the SEC's EDGAR database (example: for International Business Machines 
@@ -411,9 +411,9 @@ class EdgarQueries:
         # Enrich with some additional URLs to better access EDGAR data
         firmographics['companyFactsURL'] = fact_url
         firmographics['firmographicsURL'] = my_url
-        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ self.company_or_cik + EDGARSEARCH
-        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + self.company_or_cik
-        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + self.company_or_cik
+        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ my_cik + EDGARSEARCH
+        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + my_cik
+        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + my_cik
 
         # Cleanup stock information
         firmographics['exchanges'] = [firmographics['exchanges'][0]]
@@ -461,19 +461,32 @@ class EdgarQueries:
             firmographics['industryGroup'] = industry_group
             sic_query.query = industry_group
             industry_results = sic_query.get_all_industry_group_by_no()
-            firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][industry_group]['description']
+            if industry_results['code'] == 200:
+                firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][industry_group]['description']
+            else:
+                firmographics['industryGroupDescription'] = UKN
 
             # Major group
             firmographics['majorGroup'] = major_group
             sic_query.query = major_group
             major_results = sic_query.get_all_major_group_by_no()
-            firmographics['majorGroupDescription'] = major_results['data']['major_groups'][major_group]['description']
+            if major_results['code'] == 200:
+                firmographics['majorGroupDescription'] = major_results['data']['major_groups'][major_group]['description']
+            else:
+                firmographics['majorGroupDescription'] = UKN
 
             # Division
-            firmographics['division'] = major_results['data']['major_groups'][major_group]['division']
-            sic_query.query = firmographics['division']
-            division_results = sic_query.get_division_desc_by_id()
-            firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
+            if firmographics['majorGroupDescription'] != UKN:
+                firmographics['division'] = major_results['data']['major_groups'][major_group]['division']
+                sic_query.query = firmographics['division']
+                division_results = sic_query.get_division_desc_by_id()
+                if division_results['code'] == 200:
+                    firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
+                else:
+                    firmographics['divisionDescription'] = UKN
+            else:
+                firmographics['division'] = UKN
+                firmographics['divisionDescription'] = UKN
         
 
         # Return the company details
@@ -482,7 +495,7 @@ class EdgarQueries:
         else:
             return {
                     'code': 200, 
-                    'message': 'Company data has been returned for query [' + self.company_or_cik + '].',
+                    'message': 'Company data has been returned for query [' + my_cik + '].',
                     'module': my_class + '-> ' + my_function,
                     'data': firmographics,
                     'dependencies': DEPENDENCIES

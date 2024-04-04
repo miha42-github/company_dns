@@ -1,0 +1,7 @@
+starlette
+pyedgar
+requests
+pandas
+geopy
+wptools
+uvicorn

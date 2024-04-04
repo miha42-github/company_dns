@@ -4,6 +4,7 @@ import pprint
 import re
 import sys
 import argparse
+import logging
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
@@ -32,6 +33,9 @@ class WikipediaQueries:
         self.company_name = None
         self.NAME = name
         self.DESC = description
+        # Construct the logger
+        self.logger = logging.getLogger(self.NAME)
+
 
 
     def get_cli_args(self):
@@ -130,13 +134,21 @@ class WikipediaQueries:
 
         # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
         try:
+            # Log the start of this process including self.company_name
+            self.logger.info('Starting retrieval of firmographics for [' + self.company_name + '] via its wikipedia page.')
             company_page = wptools.page(self.company_name, silent=True)
+            # Log the completion of the page creation
+            self.logger.info('Completed firmographics retrieval [' + self.company_name + '] via its wikipedia page.')
         except:
             return lookup_error
 
         # Prepare to get the infoblox for the company
         try:
+            # Log the start of the process to get the infobox for the company
+            self.logger.info('Starting process to retrieve infobox for [' + self.company_name + '].')
             parse_results = company_page.get_parse(show=False)
+            # Log the completion of the infobox creation
+            self.logger.info('Completed infobox retrieval for [' + self.company_name + '].')
         except:
             return lookup_error
         
@@ -145,19 +157,30 @@ class WikipediaQueries:
 
         # Obtain the query results
         try:
+            # Log the start of the process to get the query results for the company
+            self.logger.info('Starting get query for [' + self.company_name + '].')
             query_results = company_page.get_query(show=False)
+            # Log the completion of the query results for the company
+            self.logger.info('Completed get query for [' + self.company_name + '].')
         except:
             return lookup_error
         
         # Try to get the wikidata for the company
         try:
+            # Log the start of the process to get the wikidata for the company
+            self.logger.info('Starting wikidata retrieval for [' + self.company_name + '].')
             page_data = company_page.get_wikidata(show=False)
+            # Log the completion of the wikidata for the company
+            self.logger.info('Completed wikidata retrieval for [' + self.company_name + '].')
         except:
             return lookup_error
         
         # Debugging output
         if DEBUG == 1: pprint.pprint(page_data.data['wikidata'])
         elif DEBUG == 2: pprint.pprint(company_info)
+
+        # Log the beginning of the firmographics data extraction
+        self.logger.info('Starting firmographics data extraction for [' + self.company_name + '].')
 
         # Set the description
         firmographics['description'] = query_results.data['extext'].replace('\n', ' ').replace('**', '')
@@ -221,6 +244,9 @@ class WikipediaQueries:
             firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', exchange) for exchange in firmographics['exchanges']]
 
         if 'traded_as' in company_info: firmographics['tickers'] = self._transform_stock_ticker(company_info['traded_as'])
+        
+        # Log the completion of the firmographics data extraction
+        self.logger.info('Completed firmographics data extraction for [' + self.company_name + '].')
 
         return {
                 'code': 200,

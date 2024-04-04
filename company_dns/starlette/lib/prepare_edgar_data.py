@@ -19,7 +19,7 @@ class ExtractEdgarData:
         self.company_data = self.data_dir + '/' + self.config['edgar_data']['ALL_FORMS']
         self.cache_exists = self.data_dir + '/' + self.config['edgar_data']['CACHE_EXISTS']
 
-    def _initialize(self, start_year=0):
+    def _initialize(self, start_year=None):
         """
         Using the appropriate method in PyEdgar download the file cache that defines the relevant SEC filings for
         companies given the start_year variable. The method in this package then will format the content into tab
@@ -30,7 +30,8 @@ class ExtractEdgarData:
         :param start_year: define the start year for the initialization of the cache
         """
         # set the start year to two years ago using the datetime module
-        start_year = datetime.datetime.now().year - 2
+        if start_year is None:
+            start_year = datetime.datetime.now().year - 2
 
         # Check to see if the cache file exists and if so return
         if path.exists(self.cache_exists):
