@@ -100,7 +100,7 @@ class EdgarQueries:
         self.DESC = description
 
         # What we are are to query
-        self.company_or_cik = None
+        self.query = None
 
         # Define the form type we're after
         self.form_type = '10-'
@@ -113,10 +113,10 @@ class EdgarQueries:
 
         # Setup the command line switches
         parser.add_argument(
-            '--company_or_cik',
+            '--query',
             help="Company name to search for in EDGAR or the EDGAR data cache.",
             type=str,
-            dest='company_or_cik',
+            dest='query',
             required=True
         )
         parser.add_argument(
@@ -173,7 +173,7 @@ class EdgarQueries:
         # Select all companies from the table that match the query string  
         for row in self.ec.execute(
             "SELECT * FROM companies WHERE name LIKE '%" + 
-            self.company_or_cik + 
+            self.query + 
             "%' AND form LIKE '" + 
             self.form_type +
             "%'"):
@@ -201,7 +201,7 @@ class EdgarQueries:
         elif final_companies['totalCompanies'] == 0:
             return {
                 'code': 404, 
-                'message': 'No company CIK found for query [' + self.company_or_cik + '].',
+                'message': 'No company CIK found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -209,7 +209,7 @@ class EdgarQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Company CIK data has been returned for query [' + self.company_or_cik + '].',
+                'message': 'Company CIK data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -245,13 +245,13 @@ class EdgarQueries:
 
         # Define the type of SQL query to use
         sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
-            self.company_or_cik + \
+            self.query + \
             "%' AND form LIKE '" + \
             self.form_type + \
             "%'" \
         if not cik_query \
         else "SELECT * FROM companies WHERE cik = " + \
-            self.company_or_cik + \
+            self.query + \
             " AND form LIKE '" + \
             self.form_type + \
             "%'"
@@ -314,7 +314,7 @@ class EdgarQueries:
         elif final_companies['totalCompanies'] == 0:
             return {
                 'code': 404, 
-                'message': 'No company found for query [' + self.company_or_cik + '].',
+                'message': 'No company found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -323,7 +323,7 @@ class EdgarQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Company data has been returned for query [' + self.company_or_cik + '].',
+                'message': 'Company data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -363,7 +363,7 @@ class EdgarQueries:
         my_function = sys._getframe(0).f_code.co_name
         my_class = self.__class__.__name__
 
-        my_cik = cik if cik else self.company_or_cik
+        my_cik = cik if cik else self.query
 
         # Define the CIK and the CIK file name
         cik_padding_needed = 10 - len(my_cik)
@@ -504,7 +504,7 @@ class EdgarQueries:
 if __name__ == '__main__':
     query = EdgarQueries(db_file='../company_dns.db')
     cli_args = query.get_cli_args()
-    query.company_or_cik = cli_args.company_or_cik
+    query.query = cli_args.query
     DEBUG = cli_args.debug
     
     results = dict()

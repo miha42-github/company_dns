@@ -14,39 +14,50 @@ from lib.firmographics import GeneralQueries
 # -------------------------------------------------------------- #
 # BEGIN: Standard Idustry Classification (SIC) database cache functions
 async def sic_description(request):
-    sq.query = request.path_params['sic_desc']
-    return JSONResponse(sq.get_all_sic_by_name())
+    return _handle_request(request, sq, sq.get_all_sic_by_name, 'sic_desc')
 
 async def sic_code(request):
-    sq.query = request.path_params['sic_code']
-    return JSONResponse(sq.get_all_sic_by_no())
+    return _handle_request(request, sq, sq.get_all_sic_by_no, 'sic_code')
 
 async def division_code(request):
-    sq.query = request.path_params['division_code']
-    return JSONResponse(sq.get_division_desc_by_id())
+    return _handle_request(request, sq, sq.get_division_desc_by_id, 'division_code')
 
 async def industry_code(request):
-    sq.query = request.path_params['industry_code']
-    return JSONResponse(sq.get_all_industry_group_by_no())
+    return _handle_request(request, sq, sq.get_all_industry_group_by_no, 'industry_code')
 
 async def major_code(request):
-    sq.query = request.path_params['major_code']
-    return JSONResponse(sq.get_all_major_group_by_no())
+    return _handle_request(request, sq, sq.get_all_major_group_by_no, 'major_code')
+
+# async def sic_code(request):
+#     sq.query = request.path_params['sic_code']
+#     return JSONResponse(sq.get_all_sic_by_no())
+
+# async def division_code(request):
+#     sq.query = request.path_params['division_code']
+#     return JSONResponse(sq.get_division_desc_by_id())
+
+# async def industry_code(request):
+#     sq.query = request.path_params['industry_code']
+#     return JSONResponse(sq.get_all_industry_group_by_no())
+
+# async def major_code(request):
+#     sq.query = request.path_params['major_code']
+#     return JSONResponse(sq.get_all_major_group_by_no())
 # END: Standard Idustry Classification (SIC) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: EDGAR dabase cache functions
 async def edgar_detail(request):
-    eq.company_or_cik = request.path_params['company_name']
+    eq.query = request.path_params['company_name']
     return JSONResponse(eq.get_all_details())
 
 async def edgar_summary(request):
-    eq.company_or_cik = request.path_params['company_name']
+    eq.query = request.path_params['company_name']
     return JSONResponse(eq.get_all_details(firmographics=False))
 
 async def edgar_ciks(request):
-    eq.company_or_cik = request.path_params['company_name']
+    eq.query = request.path_params['company_name']
     return JSONResponse(eq.get_all_ciks())
 
 async def edgar_firmographics(request):
@@ -57,7 +68,7 @@ async def edgar_firmographics(request):
 # -------------------------------------------------------------- #
 # BEGIN: Wikipedia functions
 async def wikipedia_firmographics(request):
-    wq.company_name = request.path_params['company_name']
+    wq.query = request.path_params['company_name']
     return JSONResponse(wq.get_firmographics())
 # END: Wikipedia functions
 # -------------------------------------------------------------- #
@@ -65,17 +76,45 @@ async def wikipedia_firmographics(request):
 # -------------------------------------------------------------- #
 # BEGIN: General query functions
 async def general_query(request):
-    gq.company_or_cik = request.path_params['company_name']
-    company_wiki_data = gq.get_firmographics_wikipedia()
-    general_company_data = gq.merge_data(company_wiki_data['data'], company_wiki_data['data']['cik'])
-    return JSONResponse(general_company_data)
+    try:
+        gq.query = request.path_params['company_name']
+        company_wiki_data = gq.get_firmographics_wikipedia()
+        general_company_data = gq.merge_data(company_wiki_data['data'], company_wiki_data['data']['cik'])
+        # Call check_status_and_return to check the status of the data and return the data or an error message
+        checked_data = _check_status_and_return(general_company_data, request.path_params['company_name'])
+        if 'error' in checked_data:
+            return JSONResponse(checked_data, status_code=checked_data['code'])
+        return JSONResponse(checked_data)
+    except Exception as e:
+        logger.error(f'Error: {e}')
+        general_company_data = {'error': 'A general or code error has occured', 'code': 500}
+        return JSONResponse(general_company_data, status_code=general_company_data['code'])
 # END: General query functions
 # -------------------------------------------------------------- #
 
+# -------------------------------------------------------------- #
+# BEGIN: Helper functions
+def _check_status_and_return(data, resource_name):
+    if data.get('code') != 200:
+        # Log the error message
+        logger.error(f'Data for resource {resource_name} not found')
+        # Return an error message that the data was not found using the resource name
+        return {'error': f'Data for resource {resource_name} not found', 'code': 404}
+    return data
 
-def _prepare_logging():
-    logging.basicConfig(format='%(levelname)s:     %(asctime)s [module: %(name)s] %(message)s', level=logging.INFO)
+def _prepare_logging(log_level=logging.DEBUG):
+    logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
     return logging.getLogger(__file__)
+
+def _handle_request(request, handler, func, path_param, *args, **kwargs):
+    handler.query = request.path_params.get(path_param)
+    data = func(*args, **kwargs)
+    checked_data = _check_status_and_return(data, path_param)
+    if 'error' in checked_data:
+        return JSONResponse(checked_data, status_code=checked_data['code'])
+    return JSONResponse(data)
+# END: Helper functions
+# -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Define query objects
@@ -154,6 +193,6 @@ app = Starlette(debug=True, routes=[
 
 if __name__ == "__main__": 
     try:
-        uvicorn.run(app, host='0.0.0.0', port=8000, log_level="info", lifespan='off')
+        uvicorn.run(app, host='0.0.0.0', port=8000, log_level="debug", lifespan='off')
     except KeyboardInterrupt:
         logger.info("Server was shut down by the user.")
