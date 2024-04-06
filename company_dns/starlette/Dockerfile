@@ -5,6 +5,7 @@ FROM python:3.11-slim-buster
 WORKDIR /app
 
 # Add the current directory contents into the container at /app
+# TODO: Is this in the right place?
 ADD . /app
 
 # Install any needed packages specified in requirements.txt

@@ -27,49 +27,29 @@ async def industry_code(request):
 
 async def major_code(request):
     return _handle_request(request, sq, sq.get_all_major_group_by_no, 'major_code')
-
-# async def sic_code(request):
-#     sq.query = request.path_params['sic_code']
-#     return JSONResponse(sq.get_all_sic_by_no())
-
-# async def division_code(request):
-#     sq.query = request.path_params['division_code']
-#     return JSONResponse(sq.get_division_desc_by_id())
-
-# async def industry_code(request):
-#     sq.query = request.path_params['industry_code']
-#     return JSONResponse(sq.get_all_industry_group_by_no())
-
-# async def major_code(request):
-#     sq.query = request.path_params['major_code']
-#     return JSONResponse(sq.get_all_major_group_by_no())
 # END: Standard Idustry Classification (SIC) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: EDGAR dabase cache functions
 async def edgar_detail(request):
-    eq.query = request.path_params['company_name']
-    return JSONResponse(eq.get_all_details())
+    return _handle_request(request, eq, eq.get_all_details, 'company_name')
 
 async def edgar_summary(request):
-    eq.query = request.path_params['company_name']
-    return JSONResponse(eq.get_all_details(firmographics=False))
+    return _handle_request(request, eq, eq.get_all_details, 'company_name', firmographics=False)
 
 async def edgar_ciks(request):
-    eq.query = request.path_params['company_name']
-    return JSONResponse(eq.get_all_ciks())
+    return _handle_request(request, eq, eq.get_all_ciks, 'company_name')
 
 async def edgar_firmographics(request):
-    return JSONResponse(eq.get_firmographics(request.path_params['cik_no']))
+    return _handle_request(request, eq, eq.get_firmographics, 'cik_no')
 # END: EDGAR dabase cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Wikipedia functions
 async def wikipedia_firmographics(request):
-    wq.query = request.path_params['company_name']
-    return JSONResponse(wq.get_firmographics())
+    return _handle_request(request, wq, wq.get_firmographics, 'company_name')
 # END: Wikipedia functions
 # -------------------------------------------------------------- #
 
@@ -78,6 +58,8 @@ async def wikipedia_firmographics(request):
 async def general_query(request):
     try:
         gq.query = request.path_params['company_name']
+        # Log the query request as a debug message
+        logger.debug(f'Querying for general data for {request.path_params["company_name"]}')
         company_wiki_data = gq.get_firmographics_wikipedia()
         general_company_data = gq.merge_data(company_wiki_data['data'], company_wiki_data['data']['cik'])
         # Call check_status_and_return to check the status of the data and return the data or an error message

@@ -44,6 +44,7 @@ class DbFunctions:
         logger.info('Cleaning up the db cache instance, %s, from the filesystem.', self.operating_path + self.config['db_control']['DB_NAME'])
         try:
             os.remove(self.operating_path + self.config['db_control']['DB_NAME'])
+            os.remove(self.operating_path + self.config['db_control']['DB_EXISTS'])
         except FileNotFoundError:
             logger.warning('The supplied file names, %s and %s, for the db cache was not found.', self.config['db_control']['DB_NAME'], self.config['db_control']['DB_EXISTS'])
         return

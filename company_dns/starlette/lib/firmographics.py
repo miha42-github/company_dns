@@ -116,7 +116,7 @@ class GeneralQueries:
 
     def get_firmographics_wikipedia(self):
         my_query = wikipedia.WikipediaQueries()
-        my_query.company_name = self.query
+        my_query.query = self.query
         return my_query.get_firmographics()
 
     def get_firmographics_edgar(self):

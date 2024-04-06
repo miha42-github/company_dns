@@ -3,26 +3,13 @@ from lib.db_functions import DbFunctions
 import logging
 import os
 import sys
+import configparser
 
-config = {
-                'edgar_data': {
-                            'EDGAR_DATA_DIR': './edgar_data',
-                            'ALL_FORMS': 'form_all.tab',
-                            'CACHE_EXISTS': 'cache.exists'
-                },
-                'sic_data': {
-                            'SIC_DATA_DIR': './sic_data',
-                            'DIVISIONS': 'divisions.csv',
-                            'MAJOR_GROUPS': 'major-groups.csv',
-                            'INDUSTRY_GROUPS': 'industry-groups.csv',
-                            'SIC_CODES': 'sic-codes.csv'
-                },
-                'db_control': {
-                            'DB_NAME': 'company_dns.db', 
-                            'DB_EXISTS': 'db.exists',
-                            'DB_PATH': './'
-                }
-        }
+# Create a ConfigParser object
+config = configparser.ConfigParser()
+
+# Read the configuration from the file
+config.read('company_dns.conf')
 
 # Set up the logging
 logging.basicConfig(format='%(asctime)s | %(levelname)s | %(name)s | %(message)s', level=logging.INFO)
