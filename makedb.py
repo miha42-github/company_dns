@@ -12,7 +12,7 @@ config = configparser.ConfigParser()
 config.read('company_dns.conf')
 
 # Set up the logging
-logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=logging.DEBUG)
+logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=logging.INFO)
 logger = logging.getLogger(__file__)
 
 #  Check to see if the database cache file exists and if so log the event and exit
