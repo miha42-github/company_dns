@@ -14,7 +14,9 @@
 # Service specific variables
 SERVICE_NAME="www.mediumroast.io"
 HELLO_EMAIL="hello@mediumroast.io"
-IMAGE_NAME="company_dns"
+IMAGE_NAME="company_dns:latest"
+MEMORY_LIMIT="1g"
+PORT="8080"
 
 # Colors
 NC='\033[0m'
@@ -48,7 +50,7 @@ function check_error () {
 
 function print_header () {
     HEADER="${1}"
-    echo "-----[ BEGIN: ${HEADER} ]-----"
+    echo -e ">>>> ${ORANGE}BEGIN:${NC} ${BLUE}${HEADER}${NC}"
 }
 
 function print_step () {
@@ -64,7 +66,7 @@ function print_detail () {
 
 function print_footer () {
     FOOTER="${1}"
-    echo "-----[ END: ${FOOTER} ]-----"
+    echo -e ">>>> ${ORANGE}END:${NC} ${BLUE}${FOOTER}${NC}"
 }
 		
 
@@ -72,9 +74,10 @@ function bring_down_server () {
     FUNC="Bring down service"
     STEP="bring_down_server"
     print_header "${FUNC}"
+    docker_image=`docker ps |grep " ${IMAGE_NAME} " |awk '{print $1}'`
 
-	print_step "Bring down ${SERVICE} and nginx"
-        docker-compose down
+	print_step "Bring down ${IMAGE_NAME}"
+        docker kill ${docker_image}
 
     print_footer $FUNC
 }
@@ -103,55 +106,43 @@ function stop_server () {
     FUNC="Stop ${SERVICE}"
     STEP="stop_server"
     print_header $FUNC
+    docker_image=`docker ps |grep " ${IMAGE_NAME} " |awk '{print $1}'`
 
-	print_step "Stop ${SERVICE}"
-        docker-compose stop
+	print_step "Stop $IMAGE_NAME"
+        docker stop ${docker_image}
 
     print_footer $FUNC
 }
 
 function start_server () {
-    FUNC="Start ${SERVICE}"
+    FUNC="Start ${SERVICE} in the background"
     STEP="start_server"
-    print_header $FUNC
-
-	print_step "Start ${SERVICE}"
-        docker-compose start
-
-    print_footer $FUNC
+    print_header "${FUNC}"
+    docker run -d -m ${MEMORY_LIMIT} -p ${PORT}:${PORT} ${SERVICE}
+    docker_image=`docker ps |grep " ${SERVICE} " |awk '{print $1}'`
 }
 
 function build_server () {
-    FUNC="Building ${SERVICE}"
-    STEP="build_server"
-    print_header $FUNC
-
-	print_step "Build ${SERVICE}"
-        docker-compose build
-
-    print_footer $FUNC
+    FUNC="Build ${SERVICE}"
+    print_header "${FUNC}"
+    docker build -t ${IMAGE_NAME} .  
+    print_footer "${FUNC}"
 }
 
 function run_foreground () {
-    FUNC="Running ${SERVICE} in the foreground"
-    STEP="run_foreground"
-    print_header $FUNC
-
-	print_step "Running ${SERVICE}"
-        docker-compose up
-
-    print_footer $FUNC
+    FUNC="Run $SERVICE in the foreground"
+    print_header "${FUNC}"
+    docker run -m ${MEMORY_LIMIT} -p 8000:8000 ${SERVICE}
+    print_footer "${FUNC}"
 }
 
 function tail_backend () {
-    FUNC="Tail the backend log file"
-    STEP="tail_backend"
-    print_header $FUNC
-
-    print_step "Tailing the docker image for ${SERVICE}\n"
-        docker_image=`docker ps |grep " ${SERVICE} " |awk '{print $1}'`
-        echo "'${docker_image}'"
-        docker logs -f ${docker_image}
+    FUNC="Tail logs for ${SERVICE}"
+    print_header "${FUNC}"
+    docker_image=`docker ps |grep " ${SERVICE} " |awk '{print $1}'`
+    echo "'${docker_image}'"
+    docker logs -f ${docker_image}
+    print_footer "${FUNC}"
 }
 
 ###################################
@@ -162,13 +153,7 @@ function tail_backend () {
 
 
 function create_db () {
-    cd ${SERVICE_DIR}${APP_DIR}
-    ./dbcontrol.py
-}
-
-function delete_db () {
-    cd ${SERVICE_DIR}${APP_DIR}
-    ./dbcontrol.py -a
+    python3 ./makedb.py
 }
 
 function print_help () {
@@ -188,7 +173,6 @@ function print_help () {
     echo "    start - start the service using docker-compose "
     echo "    stop - stop the docker service"
     echo "    create_db - create a new database cache for the ${SERVICE}"
-    echo "    delete_db - delete the database cache for the ${SERVICE}"
     echo "    build - build the docker images for the server"
     echo "    foreground - run the server in the foreground to watch for output"
     echo "    tail - tail the logs for a server running in the background"
@@ -212,10 +196,6 @@ elif [ $1 == "up" ]; then
 
 elif [ $1 == "down" ]; then
     bring_down_server
-    delete_db
-
-elif [ $1 == "clean_slate" ]; then
-    clean_slate
 
 elif [ $1 == "start" ]; then
     start_server
@@ -236,8 +216,6 @@ elif [ $1 == "tail" ]; then
 elif [ $1 == "create_db" ]; then
     create_db
 
-elif [ $1 == "delete_db" ]; then
-    delete_db
 fi
 
 exit 0
