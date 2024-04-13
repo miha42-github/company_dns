@@ -1,59 +1,20 @@
 <html>
     <head>
-        <style>
-            body { 
-                font-family: 'Avenir Next', 'Open Sans Light', 'Lato Medium'; 
-                scroll-behavior: smooth;
-                background-color: #0F0D0E;
-                color:#ca703f;
-                font-size: 11.5pt; 
-            }
-            h1, h2{ 
-                color: #924e29; 
-                font-weight: bold
-            }
-            a{
-                color: #1696c8;
-                text-decoration: none;
-            }
-
-            a:visited{
-                color: #41a6ce;
-                text-decoration: none;
-            }
-            a:hover, a.focus{
-                color: #82a7b6;
-                text-decoration: none;
-            }
-            table { 
-                border: 0.12rem solid rgb(104, 95, 88);
-                border-radius: 0.5rem; 
-                border-spacing: 0.3rem;
-                background-color: #0F0D0E;
-                font-size: 10pt; 
-            }
-
-            table td, 
-            table th {
-                border-bottom: 0.12rem solid rgb(104, 95, 88); 
-                margin: 0.3rem; 
-                padding: 0.1rem;
-            }
-
-            table tr:last-child > td {
-                border-bottom: none;
-            }
-
-            .json-format, 
-            .cmd-format,
-            .copyright {
-                font-size: 10.5pt; 
-                color: rgb(104, 95, 88);
-            }
-        </style>
+        <link rel="stylesheet" type="text/css" href="styles.css">
         <title>company_dns embedded help</title>
     </head>
     <body>
+      <script src="functions.js"></script>
+      <script>
+        // Call the function on page load with the event and tab name of the first tab
+        window.onload = function() {
+            // Get the first tablink
+            var firstTabLink = document.querySelector(".tablinks");
+
+            // Call the openTab function
+            openTab({ currentTarget: firstTabLink }, 'V2');
+        }
+      </script>
         <h1>Embedded help for the company_dns</h1>
         <p>This help is meant to be callable directly as a quick reference to the endpoints
         the service provides.  Overall this service enables users of the API
@@ -63,71 +24,94 @@
         will evolve.</p>
                     
         <h2>Available endpoints and descriptions</h2>
-        <table>
-            <tr>
-                <th>
-                    Endpoint
-                </th>
-                <th>
-                    Description
-                </th>
-            </tr>
-            <tr>
-                <td>/V2.0/companies/edgar/detail/</td>
-                <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing detailed EDGAR only firmographics data for one or more companies.</td>
-            </tr>
+        <div class="tab">
+          <button class="tablinks" onclick="openTab(event, 'V2')">V2.0</button>
+          <button class="tablinks" onclick="openTab(event, 'V3')">V3.0</button>
+        </div>
+        <div id="V2" class="tabcontent">
+          <table>
+              <tr>
+                  <th>
+                      Endpoint
+                  </th>
+                  <th>
+                      Description
+                  </th>
+              </tr>
+              <tr>
+                  <td>/V2.0/companies/edgar/detail/</td>
+                  <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing detailed EDGAR only firmographics data for one or more companies.</td>
+              </tr>
 
-            <tr>
-                <td>/V2.0/companies/edgar/summary/</td> 
-                <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing summary EDGAR only firmographics data for one or more companies.</td>
-            </tr>
-            
-            <tr>
-                <td>/V2.0/companies/edgar/ciks/</td>
-                <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing a pairing of company names to CIKs.</td>
+              <tr>
+                  <td>/V2.0/companies/edgar/summary/</td> 
+                  <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing summary EDGAR only firmographics data for one or more companies.</td>
+              </tr>
+              
+              <tr>
+                  <td>/V2.0/companies/edgar/ciks/</td>
+                  <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing a pairing of company names to CIKs.</td>
 
-            </tr>
+              </tr>
 
-            <tr>
-                <td>/V2.0/company/edgar/firmographics/</td> 
-                <td>Accepts a string containing a CIK (Central Index Key) for a specific company and returns an EDGAR only firmographics detail for that company in a JSON document.</td>
-            </tr>
+              <tr>
+                  <td>/V2.0/company/edgar/firmographics/</td> 
+                  <td>Accepts a string containing a CIK (Central Index Key) for a specific company and returns an EDGAR only firmographics detail for that company in a JSON document.</td>
+              </tr>
 
-            <tr>
-                <td>/V2.0/company/wikipedia/firmographics/</td>
-                <td>Accepts a string containing a company name of interest, all appropriate characters should be URL encoded, and returns a Wikipedia only firmographics detail for that company in a JSON document.</td>
-            </tr>
+              <tr>
+                  <td>/V2.0/company/wikipedia/firmographics/</td>
+                  <td>Accepts a string containing a company name of interest, all appropriate characters should be URL encoded, and returns a Wikipedia only firmographics detail for that company in a JSON document.</td>
+              </tr>
 
-            <tr>
-                <td>/V2.0/company/merged/firmographics/</td>
-                <td>Accepts a string containing a company name of interest, all appropriate characters should be URL encoded, and returns a merged EDGAR and Wikipedia firmographics detail JSON document for that company.</td>
-            </tr>
+              <tr>
+                  <td>/V2.0/company/merged/firmographics/</td>
+                  <td>Accepts a string containing a company name of interest, all appropriate characters should be URL encoded, and returns a merged EDGAR and Wikipedia firmographics detail JSON document for that company.</td>
+              </tr>
 
-            <tr>
-              <td>/V2.0/sic/description/</td>
-              <td>Accepts a string containing a SIC description of interest, all appropriate characters should be URL encoded, and returns all SIC descriptions that matched the full or partial string.</td>
-            </tr>
+              <tr>
+                <td>/V2.0/sic/description/</td>
+                <td>Accepts a string containing a SIC description of interest, all appropriate characters should be URL encoded, and returns all SIC descriptions that matched the full or partial string.</td>
+              </tr>
 
-            <tr>
-              <td>/V2.0/sic/code/</td>
-              <td>Accepts a string containing a SIC of interest, all appropriate characters should be URL encoded, and returns all SICs that matched the full or partial string.</td>
-            </tr>
+              <tr>
+                <td>/V2.0/sic/code/</td>
+                <td>Accepts a string containing a SIC of interest, all appropriate characters should be URL encoded, and returns all SICs that matched the full or partial string.</td>
+              </tr>
 
-            <tr>
-              <td>/V2.0/sic/division/</td>
-              <td>Accepts a string containing a division id of interest, all appropriate characters should be URL encoded, and returns the SIC division description that matches the id.</td>
-            </tr>
+              <tr>
+                <td>/V2.0/sic/division/</td>
+                <td>Accepts a string containing a division id of interest, all appropriate characters should be URL encoded, and returns the SIC division description that matches the id.</td>
+              </tr>
 
-            <tr>
-              <td>/V2.0/sic/industry/</td>
-              <td>Accepts a string containing an industry group number of interest, all appropriate characters should be URL encoded, and returns the SIC industry group information that matches the number.</td>
-            </tr>
+              <tr>
+                <td>/V2.0/sic/industry/</td>
+                <td>Accepts a string containing an industry group number of interest, all appropriate characters should be URL encoded, and returns the SIC industry group information that matches the number.</td>
+              </tr>
 
-            <tr>
-              <td>/V2.0/sic/major/</td>
-              <td>Accepts a string containing a major group number of interest, all appropriate characters should be URL encoded, and returns the SIC major group information that matches the number.</td>
-            </tr>
-        </table>
+              <tr>
+                <td>/V2.0/sic/major/</td>
+                <td>Accepts a string containing a major group number of interest, all appropriate characters should be URL encoded, and returns the SIC major group information that matches the number.</td>
+              </tr>
+          </table>
+        </div>
+
+        <div id="V3" class="tabcontent">
+          <table>
+              <tr>
+                  <th>
+                      Endpoint
+                  </th>
+                  <th>
+                      Description
+                  </th>
+              </tr>
+              <tr>
+                  <td>/V2.0/companies/edgar/detail/</td>
+                  <td>Accepts a company search string of interest, all appropriate characters should be URL encoded, and returns a JSON document containing detailed EDGAR only firmographics data for one or more companies.</td>
+              </tr>
+          </table>
+        </div>
 
         <h2>Execute RESTful call with curl to get information on IBM</h2>
         To gather information on IBM from both Wikipedia and EDGAR data sources, run the following curl command on your terminal application of choice.

@@ -1,8 +1,10 @@
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Route
 from starlette.routing import Mount
 from starlette.staticfiles import StaticFiles
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
 
@@ -117,10 +119,21 @@ gq = GeneralQueries()
 
 # -------------------------------------------------------------- #
 # BEGIN: Define the Starlette app
+class CatchAllMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if response.status_code == 404:
+            return RedirectResponse(url='/help')
+        return response
+
+middleware = [
+    Middleware(CatchAllMiddleware),
+]
+
 global logger
 logger = _prepare_logging()
 
-app = Starlette(debug=True, routes=[
+app = Starlette(debug=True, middleware=middleware, routes=[
     # -------------------------------------------------------------- #
     # SIC endpoints for V2.0
     Route('/V2.0/sic/description/{sic_desc}', sic_description),
@@ -142,33 +155,38 @@ app = Starlette(debug=True, routes=[
     Route('/V2.0/companies/edgar/detail/{company_name}', edgar_detail),
     Route('/V2.0/companies/edgar/summary/{company_name}', edgar_summary),
     Route('/V2.0/companies/edgar/ciks/{company_name}', edgar_ciks),
-    Route('/V2.0/companies/edgar/firmographics/{cik_no}', edgar_firmographics),
+    Route('/V2.0/company/edgar/firmographics/{cik_no}', edgar_firmographics),
 
     # EDGAR endpoints for V3.0
     Route('/V3.0/na/companies/edgar/detail/{company_name}', edgar_detail),
     Route('/V3.0/na/companies/edgar/summary/{company_name}', edgar_summary),
     Route('/V3.0/na/companies/edgar/ciks/{company_name}', edgar_ciks),
-    Route('/V3.0/na/companies/edgar/firmographics/{cik_no}', edgar_firmographics),
+    Route('/V3.0/na/company/edgar/firmographics/{cik_no}', edgar_firmographics),
     # -------------------------------------------------------------- #
 
     # -------------------------------------------------------------- #
     # Wikipedia endpoints for V2.0
-    Route('/V2.0/companies/wikipedia/firmographics/{company_name}', wikipedia_firmographics),
+    Route('/V2.0/company/wikipedia/firmographics/{company_name}', wikipedia_firmographics),
 
     # Wikipedia endpoints for V3.0
-    Route('/V3.0/global/companies/wikipedia/firmographics/{company_name}', wikipedia_firmographics),
+    Route('/V3.0/global/company/wikipedia/firmographics/{company_name}', wikipedia_firmographics),
     # -------------------------------------------------------------- #
 
     # -------------------------------------------------------------- #
     # General query endpoint for V2.0
-    Route('/V2.0/companies/merged/firmographics/{company_name}', general_query),
+    Route('/V2.0/company/merged/firmographics/{company_name}', general_query),
 
     # General query endpoint for V3.0
-    Route('/V3.0/global/companies/merged/firmographics/{company_name}', general_query),
+    Route('/V3.0/global/company/merged/firmographics/{company_name}', general_query),
     # -------------------------------------------------------------- #
+
+    # Serve the local directory ./html at the /help
+    Mount('/help', app=StaticFiles(directory='html', html=True)),
+
+    # Catch-all route which redirects to /help
+    # Route("/{path:path}", endpoint=lambda _: RedirectResponse(url='/help'), methods=["GET"]),
+
     
-    # Mount the local directory ./html to the /help
-    Mount('/help', app=StaticFiles(directory='html' , html=True)),
 ])
 # END: Define the Starlette app
 # -------------------------------------------------------------- #

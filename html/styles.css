@@ -1,0 +1,96 @@
+body {
+    font-family: 'Avenir Next', 'Open Sans Light', 'Lato Medium';
+    scroll-behavior: smooth;
+    background-color: #0F0D0E;
+    color: #ca703f;
+    font-size: 11.5pt;
+}
+
+h1,
+h2 {
+    color: #924e29;
+    font-weight: bold
+}
+
+a {
+    color: #1696c8;
+    text-decoration: none;
+}
+
+a:visited {
+    color: #41a6ce;
+    text-decoration: none;
+}
+
+a:hover,
+a.focus {
+    color: #82a7b6;
+    text-decoration: none;
+}
+
+table {
+    border: none;
+    background-color: #0F0D0E;
+    font-size: 10pt;
+}
+
+table td,
+table th {
+    border-bottom: 0.12rem solid rgb(104, 95, 88);
+    margin: 0.3rem;
+    padding: 0.1rem;
+}
+
+table tr:last-child>td {
+    border-bottom: none;
+}
+
+.json-format,
+.cmd-format,
+.copyright {
+    font-size: 10.5pt;
+    color: rgb(104, 95, 88);
+}
+
+/* Style the tabs */
+.tab {
+    overflow: hidden;
+    border: 1px solid #ccc;
+    background-color: #f1f1f1;
+}
+
+/* Style the buttons inside the tab */
+.tab button {
+    background-color: inherit;
+    float: left;
+    border: none;
+    outline: none;
+    cursor: pointer;
+    padding: 14px 16px;
+    transition: 0.3s;
+    font-size: 17px;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+    background-color: #ddd;
+}
+
+/* Create an active/current tablink class */
+.tab button.active {
+    background-color: #ccc;
+}
+
+/* Style the tab content */
+.tabcontent {
+    display: none;
+    padding: 6px 12px;
+    border-radius: 0.5rem;
+    border-spacing: 0.3rem;
+    border: 0.12rem solid rgb(104, 95, 88);
+    border-top: none;
+    height: 300px;
+    /* Adjust this to your desired height */
+    overflow-y: auto;
+    /* This will add a vertical scrollbar */
+}
