@@ -4,6 +4,7 @@ from starlette.routing import Route
 from starlette.routing import Mount
 from starlette.staticfiles import StaticFiles
 from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
@@ -128,6 +129,7 @@ class CatchAllMiddleware(BaseHTTPMiddleware):
 
 middleware = [
     Middleware(CatchAllMiddleware),
+    Middleware(CORSMiddleware, allow_origins=['*'])
 ]
 
 global logger
