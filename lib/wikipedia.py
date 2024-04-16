@@ -1,17 +1,14 @@
-#!/usr/local/bin/python3
 import wptools
 import pprint
 import re
 import sys
-import argparse
+import logging
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Beta"
-__date__ = '2023-April-1'
 __contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
@@ -29,38 +26,13 @@ DEPENDENCIES = {
 
 class WikipediaQueries:
     def __init__(self, name='wikipedia', description='A module and simple CLI too to search for company data in wikipedia.'):
-        self.company_name = None
+        self.query = None
         self.NAME = name
         self.DESC = description
-
-
-    def get_cli_args(self):
-        """Parse common CLI arguments including system configs and behavior switches.
-        """
-        # Set up the argument parser
-        parser = argparse.ArgumentParser(prog=self.NAME, description=self.DESC)
-
-        # Setup the command line switches
-        parser.add_argument(
-            '--company',
-            help="Company name to search for in Wikipedia.",
-            type=str,
-            dest='company_name',
-            required=True
-        )
-        parser.add_argument(
-            "--debug",
-            help="Turn on debugging",
-            dest="debug",
-            type=int,
-            default=0,
-        )
-
-        # Parse the CLI
-        cli_args = parser.parse_args()
-
-        # Return parsed arguments
-        return cli_args
+        # Construct the logger
+        self.logger = logging.getLogger(self.NAME)
+        # What we are are to query
+        self.query = None
 
     def _get_item(self, obj, variants, rules, idx):
         for variant in variants:
@@ -122,7 +94,7 @@ class WikipediaQueries:
         # Define the common lookup_error
         lookup_error = {
                 'code': 404,
-                'message': 'Unable to find a company by the name [' + self.company_name + ']. Maybe you should try an alternative structure like [' + self.company_name + ' Inc.,' + self.company_name + ' Corp., or ' + self.company_name + ' Corporation].',
+                'message': 'Unable to find a company by the name [' + self.query + ']. Maybe you should try an alternative structure like [' + self.query + ' Inc.,' + self.query + ' Corp., or ' + self.query + ' Corporation].',
                 'errorType': 'LookupError',
                 'module': my_class + '-> ' + my_function,
                 'dependencies': DEPENDENCIES
@@ -130,13 +102,21 @@ class WikipediaQueries:
 
         # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
         try:
-            company_page = wptools.page(self.company_name, silent=True)
+            # Log the start of this process including self.query
+            self.logger.info('Starting retrieval of firmographics for [' + self.query + '] via its wikipedia page.')
+            company_page = wptools.page(self.query, silent=True)
+            # Log the completion of the page creation
+            self.logger.info('Completed firmographics retrieval [' + self.query + '] via its wikipedia page.')
         except:
             return lookup_error
 
         # Prepare to get the infoblox for the company
         try:
+            # Log the start of the process to get the infobox for the company
+            self.logger.info('Starting process to retrieve infobox for [' + self.query + '].')
             parse_results = company_page.get_parse(show=False)
+            # Log the completion of the infobox creation
+            self.logger.info('Completed infobox retrieval for [' + self.query + '].')
         except:
             return lookup_error
         
@@ -145,19 +125,30 @@ class WikipediaQueries:
 
         # Obtain the query results
         try:
+            # Log the start of the process to get the query results for the company
+            self.logger.info('Starting get query for [' + self.query + '].')
             query_results = company_page.get_query(show=False)
+            # Log the completion of the query results for the company
+            self.logger.info('Completed get query for [' + self.query + '].')
         except:
             return lookup_error
         
         # Try to get the wikidata for the company
         try:
+            # Log the start of the process to get the wikidata for the company
+            self.logger.info('Starting wikidata retrieval for [' + self.query + '].')
             page_data = company_page.get_wikidata(show=False)
+            # Log the completion of the wikidata for the company
+            self.logger.info('Completed wikidata retrieval for [' + self.query + '].')
         except:
             return lookup_error
         
         # Debugging output
         if DEBUG == 1: pprint.pprint(page_data.data['wikidata'])
         elif DEBUG == 2: pprint.pprint(company_info)
+
+        # Log the beginning of the firmographics data extraction
+        self.logger.info('Starting firmographics data extraction for [' + self.query + '].')
 
         # Set the description
         firmographics['description'] = query_results.data['extext'].replace('\n', ' ').replace('**', '')
@@ -221,21 +212,14 @@ class WikipediaQueries:
             firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', exchange) for exchange in firmographics['exchanges']]
 
         if 'traded_as' in company_info: firmographics['tickers'] = self._transform_stock_ticker(company_info['traded_as'])
+        
+        # Log the completion of the firmographics data extraction
+        self.logger.info('Completed firmographics data extraction for [' + self.query + '].')
 
         return {
                 'code': 200,
-                'message': 'Discovered and returning wikipedia data for the company [' + self.company_name + '].',
+                'message': 'Discovered and returning wikipedia data for the company [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': firmographics,
                 'dependencies': DEPENDENCIES
         }
-           
-
-
-if __name__ == '__main__':
-    query = WikipediaQueries()
-    cli_args = query.get_cli_args()
-    query.company_name = cli_args.company_name
-    DEBUG = cli_args.debug
-    firmographics = query.get_firmographics()
-    if not DEBUG: pprint.pprint(firmographics)

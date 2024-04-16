@@ -1,19 +1,14 @@
 #!/usr/bin/env python3
 import sqlite3
-import re
 import sys
 import requests
-import argparse
-import pprint
 from . import sic
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Beta"
-__date__ = '2023-April-1'
 __contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
@@ -78,7 +73,7 @@ class EdgarQueries:
     def __init__(
         self, 
         db_file='./company_dns.db', 
-        agent='Mediumroast, Inc. help@mediumroast.io', 
+        agent='Mediumroast, Inc. hello@mediumroast.io', 
         name='edgar', 
         flat_return=False,
         description='A module and simple CLI too to search for company data in EDGAR.'):
@@ -100,47 +95,10 @@ class EdgarQueries:
         self.DESC = description
 
         # What we are are to query
-        self.company_or_cik = None
+        self.query = None
 
         # Define the form type we're after
         self.form_type = '10-'
-        
-    def get_cli_args(self):
-        """Parse common CLI arguments including system configs and behavior switches.
-        """
-        # Set up the argument parser
-        parser = argparse.ArgumentParser(prog=self.NAME, description=self.DESC)
-
-        # Setup the command line switches
-        parser.add_argument(
-            '--company_or_cik',
-            help="Company name to search for in EDGAR or the EDGAR data cache.",
-            type=str,
-            dest='company_or_cik',
-            required=True
-        )
-        parser.add_argument(
-            "--debug",
-            help="Turn on debugging",
-            dest="debug",
-            type=int,
-            default=0,
-        )
-        parser.add_argument(
-            '--operation',
-            help="Type of details to search for .",
-            type=str,
-            dest='operation',
-            choices=['ciks', 'details', 'summaries', 'firmographics'],
-            default='ciks',
-            required=True
-        )
-
-        # Parse the CLI
-        cli_args = parser.parse_args()
-
-        # Return parsed arguments
-        return cli_args
 
     # TODO align return to be consistent to merged
     def get_all_ciks(self):
@@ -173,7 +131,7 @@ class EdgarQueries:
         # Select all companies from the table that match the query string  
         for row in self.ec.execute(
             "SELECT * FROM companies WHERE name LIKE '%" + 
-            self.company_or_cik + 
+            self.query + 
             "%' AND form LIKE '" + 
             self.form_type +
             "%'"):
@@ -201,7 +159,7 @@ class EdgarQueries:
         elif final_companies['totalCompanies'] == 0:
             return {
                 'code': 404, 
-                'message': 'No company CIK found for query [' + self.company_or_cik + '].',
+                'message': 'No company CIK found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -209,7 +167,7 @@ class EdgarQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Company CIK data has been returned for query [' + self.company_or_cik + '].',
+                'message': 'Company CIK data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -245,13 +203,13 @@ class EdgarQueries:
 
         # Define the type of SQL query to use
         sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
-            self.company_or_cik + \
+            self.query + \
             "%' AND form LIKE '" + \
             self.form_type + \
             "%'" \
         if not cik_query \
         else "SELECT * FROM companies WHERE cik = " + \
-            self.company_or_cik + \
+            self.query + \
             " AND form LIKE '" + \
             self.form_type + \
             "%'"
@@ -314,7 +272,7 @@ class EdgarQueries:
         elif final_companies['totalCompanies'] == 0:
             return {
                 'code': 404, 
-                'message': 'No company found for query [' + self.company_or_cik + '].',
+                'message': 'No company found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -323,7 +281,7 @@ class EdgarQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Company data has been returned for query [' + self.company_or_cik + '].',
+                'message': 'Company data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -345,7 +303,7 @@ class EdgarQueries:
         return final
 
     # TODO align return to be consistent to merged
-    def get_firmographics(self, cik):
+    def get_firmographics(self, cik=None):
         """Create firmographics details, using the supplied cik argument, and return the.
 
         Using a RESTful call to the SEC's EDGAR database (example: for International Business Machines 
@@ -363,7 +321,7 @@ class EdgarQueries:
         my_function = sys._getframe(0).f_code.co_name
         my_class = self.__class__.__name__
 
-        my_cik = cik if cik else self.company_or_cik
+        my_cik = cik if cik else self.query
 
         # Define the CIK and the CIK file name
         cik_padding_needed = 10 - len(my_cik)
@@ -411,9 +369,9 @@ class EdgarQueries:
         # Enrich with some additional URLs to better access EDGAR data
         firmographics['companyFactsURL'] = fact_url
         firmographics['firmographicsURL'] = my_url
-        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ self.company_or_cik + EDGARSEARCH
-        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + self.company_or_cik
-        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + self.company_or_cik
+        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ my_cik + EDGARSEARCH
+        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + my_cik
+        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + my_cik
 
         # Cleanup stock information
         firmographics['exchanges'] = [firmographics['exchanges'][0]]
@@ -461,19 +419,32 @@ class EdgarQueries:
             firmographics['industryGroup'] = industry_group
             sic_query.query = industry_group
             industry_results = sic_query.get_all_industry_group_by_no()
-            firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][industry_group]['description']
+            if industry_results['code'] == 200:
+                firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][industry_group]['description']
+            else:
+                firmographics['industryGroupDescription'] = UKN
 
             # Major group
             firmographics['majorGroup'] = major_group
             sic_query.query = major_group
             major_results = sic_query.get_all_major_group_by_no()
-            firmographics['majorGroupDescription'] = major_results['data']['major_groups'][major_group]['description']
+            if major_results['code'] == 200:
+                firmographics['majorGroupDescription'] = major_results['data']['major_groups'][major_group]['description']
+            else:
+                firmographics['majorGroupDescription'] = UKN
 
             # Division
-            firmographics['division'] = major_results['data']['major_groups'][major_group]['division']
-            sic_query.query = firmographics['division']
-            division_results = sic_query.get_division_desc_by_id()
-            firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
+            if firmographics['majorGroupDescription'] != UKN:
+                firmographics['division'] = major_results['data']['major_groups'][major_group]['division']
+                sic_query.query = firmographics['division']
+                division_results = sic_query.get_division_desc_by_id()
+                if division_results['code'] == 200:
+                    firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
+                else:
+                    firmographics['divisionDescription'] = UKN
+            else:
+                firmographics['division'] = UKN
+                firmographics['divisionDescription'] = UKN
         
 
         # Return the company details
@@ -482,29 +453,11 @@ class EdgarQueries:
         else:
             return {
                     'code': 200, 
-                    'message': 'Company data has been returned for query [' + self.company_or_cik + '].',
+                    'message': 'Company data has been returned for query [' + my_cik + '].',
                     'module': my_class + '-> ' + my_function,
                     'data': firmographics,
                     'dependencies': DEPENDENCIES
             }
-
-if __name__ == '__main__':
-    query = EdgarQueries(db_file='../company_dns.db')
-    cli_args = query.get_cli_args()
-    query.company_or_cik = cli_args.company_or_cik
-    DEBUG = cli_args.debug
-    
-    results = dict()
-    if cli_args.operation == 'ciks':
-        results = query.get_all_ciks()
-    elif cli_args.operation == 'details':
-        results = query.get_all_details(firmographics=True)
-    elif cli_args.operation == 'summaries':
-        results = query.get_all_details(firmographics=False)
-    elif cli_args.operation == 'firmographics':
-        results = query.get_firmographics()
-    
-    if not DEBUG: pprint.pprint(results)
 
 
 

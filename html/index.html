@@ -1,0 +1,137 @@
+<html>
+
+<head>
+  <link rel="stylesheet" type="text/css" href="styles.css">
+  <title>company_dns embedded help and query console</title>
+</head>
+
+<body>
+  <div class="menu">
+    <button class="tabmenu" onclick="openTab(event, 'Help', 'pagecontent', 'tabmenu')">Help</button>
+    <button class="tabmenu" onclick="openTab(event, 'Query', 'pagecontent', 'tabmenu')">Query Console</button>
+  </div>
+  <div id="Help" class="pagecontent">
+    <h1>Welcome to the company_dns! </h1>
+    <p>
+      You're either running this as your own instance, perhaps in docker, or access the <a
+        href="https://company-dns.mediumroast.io"></a>Mediumroast, Inc. hosted instance of the company_dns</a>.
+    </p>
+
+    <p>The company_dns is meant to act like the domain naming service but for company information. Today data from
+      Wikipedia, EDGAR, and the USA Standard Industry Classification maintained by OSHA is combined to help users obtain
+      key firmographical information about companies.</p>
+
+    <h2>Available endpoints and descriptions by version</h2>
+    <p>Endpoints require that strings passed in are URL encoded. For example, a space should be encoded as %20. Should
+      the call succeed a JSON document is returned with a status code of 200. If the call fails a JSON document is
+      returned with a status code other than 200. The JSON document will contain a message field with a description of
+      the error.</p>
+
+    <h3>V3.0</h3>
+    <p>
+      Version 3.0 of the company_dns is the latest version and makes changes to the path structure for its endpoints.
+      Notably "na" is added signifying North America meaning that results will be scoped to data sources only from North America.  Additionally, "global" is added signfying that the related endpoint will respond with global results.  As additional regionally specific data sources are added to the company_dns, the path structure will be updated to reflect the new data sources.
+    </p>
+
+    <h3>V2.0</h3>
+    <p>
+      Version 2.0 of the company_dns is the previous version and is still available for use.  The path structure for endpoints in this version is different from V3.0.  The V2.0 endpoints are not scoped to any specific region and will return results from all available data sources. While V2.0 is still available, it is recommended to use V3.0 for new development.
+    </p>
+
+    <div class="tab">
+      <button class="tablinks" onclick="openTab(event, 'V3', 'tabcontent', 'tablinks')">V3.0</button>
+      <button class="tablinks" onclick="openTab(event, 'V2', 'tabcontent', 'tablinks')">V2.0</button>
+    </div>
+    <div id="V2" class="tabcontent"> </div>
+
+    <div id="V3" class="tabcontent"> </div>
+
+    <h2>Use curl to talk to the company_dns</h2>
+
+    Gather information on "IBM" from both Wikipedia and EDGAR data sources from a company_dns instance on localhost.
+    <ul class="cmd-format">
+      curl http://localhost:8000/V2.0/company/merged/firmographics/IBM
+    </ul>
+
+    Search for "oil" in the SIC descriptions from a company_dns instance on Mediumroast's company_dns.
+    <ul class="cmd-format">
+      curl https://company_dns.mediumroast.io/V3.0/na/sic/description/oil
+    </ul>
+
+    <h2>Helpful links for company_dns</h2>
+    <ol>
+      <li><a href="https://github.com/miha42-github/company_dns/issues" target="_">Issues on github</a></li>
+      <li><a href="https://github.com/miha42-github/company_dns" target="_">Source repository</a></li>
+      <li>Licensed under the <a href="http://www.apache.org/licenses/" target="_">Apache 2.0</a> open source license.
+        This software is provided as is and without warranty or guarantee of support.</li>
+    </ol>
+
+  </div>
+
+  <div id="Query" class="pagecontent">
+
+    <h2>Execute RESTful calls to either a locally hosted company_dns or one hosted by Mediumroast.</h2>
+
+    <form id="endpointForm">
+      <label for="hostSelect">Host:</label>
+      <select id="hostSelect">
+        <option value="localhost:8000">localhost:8000</option>
+        <option value="company-dns.mediumroast.io">company-dns.mediumroast.io</option>
+      </select>
+
+      <label for="endpointSelect">Endpoint:</label>
+      <select id="endpointSelect">
+        <!-- Options will be populated with JavaScript -->
+      </select>
+
+      <label for="queryInput">Query:</label>
+      <input class="dns-textfield" type="text" id="queryInput" name="queryInput" placeholder="Enter your query here" required>
+
+      <input class="dns-button" type="submit" value="Go">
+    </form>
+
+    <div id="queryConsole">
+      <div id="queryUrl" class="url">
+        <!-- URL will be populated with JavaScript -->
+      </div>
+      <div id="queryResults">
+        <!-- Results will be populated with JavaScript -->
+      </div>
+    </div>
+
+
+  </div>
+
+
+
+
+  <br />
+  <p class="copyright">&copy; 2024 Mediumroast, Inc. All rights reserved.</p>
+
+  <!-- Script execution -->
+  <script src="functions.js"></script>
+  <script src="query.js"></script>
+  <script>
+    // Call the function on page load with the event and tab name of the first tab
+    window.onload = function () {
+      // Get the first tablink
+      var firstMenuLink = document.querySelector(".tabmenu");
+      var firstTabLink = document.querySelector(".tablinks");
+
+      // Call the openTab function
+      openTab({ currentTarget: firstMenuLink }, 'Help', 'pagecontent', 'tabmenu');
+      openTab({ currentTarget: firstTabLink }, 'V3', 'tabcontent', 'tablinks');
+
+      // Populate the endpoint select dropdown
+      populateEndpoints();
+    }
+
+    // Generate the tables
+    const tableV3 = generateTable(endpointsData, 'V3.0');
+    const tableV2 = generateTable(endpointsData, 'V2.0');
+    document.querySelector('#V3').innerHTML += tableV3; // Add the V3.0 table to the page
+    document.querySelector('#V2').innerHTML += tableV2; // Add the V2.0 table to the page
+  </script>
+</body>
+
+</html>

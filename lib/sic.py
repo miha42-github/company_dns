@@ -78,6 +78,9 @@ class SICQueries:
         self.NAME = name
         self.DESC = description
 
+        # Query object
+        self.query = None
+
     def get_cli_args(self):
         """Parse common CLI arguments including system configs and behavior switches.
         """
