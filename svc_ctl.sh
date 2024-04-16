@@ -82,26 +82,6 @@ function bring_down_server () {
     print_footer $FUNC
 }
 
-function bring_up_server () {
-    FUNC="Bring up service"
-    STEP="bring_up_server"
-    print_header $FUNC
-
-        print_step "Create cache db"
-        create_db
-
-        print_step "Build docker images"
-        docker-compose build
-
-    	print_step "Pull docker images"
-        docker-compose pull
-
-	    print_step "Bring up ${SERVICE}"
-        docker-compose up -d
-
-    print_footer $FUNC
-}
-
 function stop_server () {
     FUNC="Stop ${SERVICE}"
     STEP="stop_server"
@@ -152,10 +132,6 @@ function tail_backend () {
 ###################################
 
 
-function create_db () {
-    python3 ./makedb.py
-}
-
 function print_help () {
     clear
     echo "NAME:"
@@ -165,14 +141,11 @@ function print_help () {
     echo "    Control functions to run the ${SERVICE}"
     echo ""
     echo "COMMANDS:"
-    echo "    help up down start stop create_db build delete_db foreground tail"
+    echo "    help start stop build foreground tail"
     echo ""
     echo "    help - call up this help text"
-    echo "    up - bring up the service including building and pulling the docker image"
-    echo "    down - bring down the service and remove the docker image"
     echo "    start - start the service using docker-compose "
     echo "    stop - stop the docker service"
-    echo "    create_db - create a new database cache for the ${SERVICE}"
     echo "    build - build the docker images for the server"
     echo "    foreground - run the server in the foreground to watch for output"
     echo "    tail - tail the logs for a server running in the background"
@@ -190,13 +163,6 @@ function print_help () {
 if [ ! $1 ] || [ $1 == "help" ]; then
     print_help
 
-elif [ $1 == "up" ]; then
-    create_db
-    bring_up_server
-
-elif [ $1 == "down" ]; then
-    bring_down_server
-
 elif [ $1 == "start" ]; then
     start_server
 
@@ -204,7 +170,6 @@ elif [ $1 == "stop" ]; then
     stop_server
 
 elif [ $1 == "build" ]; then
-    create_db
     build_server
 
 elif [ $1 == "foreground" ]; then
@@ -212,9 +177,6 @@ elif [ $1 == "foreground" ]; then
 
 elif [ $1 == "tail" ]; then
     tail_backend
-
-elif [ $1 == "create_db" ]; then
-    create_db
 
 fi
 
