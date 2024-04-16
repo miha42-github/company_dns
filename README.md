@@ -11,37 +11,36 @@ We were motivated to make these changes to the service making it easier to impro
 
 
 # Installation & Setup
-The install and setup process is either for users or developers.  Steps for both are provided below.
+The install and setup process is either for users or developers.  Instructions for both are provided below.
 
 ## For users via docker
-New from `V3.0.0` are automated Docker builds providing a fresh image on a monthly basis.  There are two reasons for this:
+New from `V3.0.0` are automated docker builds providing a fresh image on a monthly basis.  There are three reasons for this:
 
 1. Gets the latest information from EDGAR such that when the service is queried the user can access the latest quarterly and yearly filings.
 2. As the code progresses, and is checked into main, users will automatically get the latest improvements and fixes.
+3. Creates images for both x86 and ARM architectures.
 
-Additionally, the Docker build automates the creation of the EDGAR and SIC data caches eliminating these extra steps from a build process. The image can be pulled using `docker pull ghcr.io/miha42-github/company_dns/company_dns:latest`.  With the image pulled you can run it using `docker run -m 1G -p 8000:8000 company_dns:latest` which will run the image in the foreground, and running the image in the background `docker run -d -m 1G -p 8000:8000 company_dns:latest`.
+The image can be pulled using `docker pull ghcr.io/miha42-github/company_dns/company_dns:latest`.  With the image pulled you can run it using `docker run -m 1G -p 8000:8000 company_dns:latest` which will run the image in the foreground, and running the image in the background `docker run -d -m 1G -p 8000:8000 company_dns:latest`.  GitHub's container registry is used to store the images, and more information on this package can be found at [company_dns/company_dns](https://github.com/miha42-github/company_dns/pkgs/container/company_dns%2Fcompany_dns).
 
-## For developers via GitHub
-Assming you have setup access to GitHub, you'll need to clone the repository. Here we assume you're on a Linux box of some kind and will follow the steps below.
+## For developers via GitHub with docker and without docker
+Assuming you have setup access to GitHub and a Linux or MacOS system of some kind, you'll need to get the repository.
 
-1. If you're performing development create a directory that will contain the code: `mkdir ~/dev`
+1. Create a directory that will contain the code: `mkdir ~/dev`
 2. Enter the directory: `cd ~/dev/`
 3. Clone the repository: `git clone git@github.com:miha42-github/company_dns.git`
 
-## Pre-execution
-Before you get started it is important to install all prequisites and then create the cache database.
+### With docker
+Since the docker build process takes care of data cache creation, Python requirements installation and other items getting company_dns running is relatively straight forward.  To simplify the process further the `svc_ctl.sh` script is provided.
 
-1. Enter the directory with the service bits (assuming you're using ~/dev): `cd ~/dev/company_dns/company_dns`
-2. Install all prerequsites: `pip3 install -r ./requirements.txt`
+#### Service Control Script
+`svc_ctl.sh` automates build, run, and log observations for company_dns removing many manual steps.  To start the system follow these steps:
+1. Assuming you've cloned the code into `~/dev/company_dns` run `cd ~/dev/company_dns`
+2. `./svc_ctl.sh build` to build the image
+3. `./svc_ctl.sh foreground` to run the image in the foreground or `svc_ctl.sh start` to run the image in the background
+   
+If the service is running in the background you can run `./svc_ctl.sh tail` to watch the image logs.  Finally, stopping the image when it is running the background can be achieved with `./svc_ctl.sh stop`.
 
-## Service Control Script
-A service control script, `svc_ctl.sh` is provided to wrap build, run, and log tailing functions as of V2.3.0.  Compared to past versions this script significantly simplifies working with the `company_dns` removing many manual steps to getting it running. As a result there is only one step needed to get the service running `cd ~dev/company_dns;svc_ctl.sh up`.  This script will:
-1. Clean up any past instances of the cache database
-2. Create the cache database by running `dbcontrol.py`
-3. Build the docker image that includes Python, Flask and Nginix
-4. Start the service in a container detached from the console
-Should you need to debug the service the `svc_ctl.sh` script contains a sub-command to tail the log file of the correct container.  By running `svc_ctl.sh tail` the user can see what's happening inside the container as work is processed.
-### Service control usage
+##### Service control usage information
 Usage for the service control script follows:
 ```
 NAME:
@@ -61,15 +60,35 @@ COMMANDS:
     tail - tail the logs for a server running in the background
 ```
 
+### Without docker
+Depending upon the intention for getting the code it could be running in a Python virtual environment or in a vanilla file system.  Regardless the steps below can be followed to get the service up and running.
+
+#### Pre-execution
+Before you get started it is important to install all prequisites and then create the cache database.
+
+1. Enter the directory with the service bits (assuming you're using ~/dev): `cd ~/dev/company_dns/company_dns`
+2. Install all prerequsites: `pip3 install -r ./requirements.txt`
+3. Create the database cache `python3 ./makedb.py`
+
+#### Execution
+If everything above completed successfully then running company_dns can be performed via `python3 ./company_dns.py` this will run the service in the foreground.
+
 ## Verify that the service is working
-Regardless of the approach you've taken to run the `company_dns` checking to see if it is operating is important.  Therefore you can point a browser to the server running the service.  If you're running on localhost then the following link should work [http://localhost:6868/V2.0/help](http://localhost:6868/V2.0/help) however if you're on another server then you'll need to change the server name to the one you're using.  If this is successful you will be able to see the embedded help which describes the available set of endpoints, and provides and example query to the service.  A screenshot of the help screen can be found below.
+Regardless of the approach taken to run the company_dns checking to see if it is operating is important.  A quick way to check on service availability when running on localhost is to follow this link: [http://localhost:8000/help](http://localhost:8000/help). If this is successful the embedded help will display (see screenshot below) describing available endpoints, examples with `curl`, and some helpful links to the company_dns GitHub repository.  Additionally, new in V3.0.0 is the query console which can be used to test key functions of the system.
 
+### Screenshot of the embedded help
 
-## Checkout a live system
-We're hosting an instance of the `company_dns` on our website for our usage and your exploration.  Below are several example queries and access to embedded help to get you a better view of the system.
-- Embedded help - [https://www.mediumroast.io/company_dns/help](https://www.mediumroast.io/company_dns/help)
-- Company search for IBM - [https://www.mediumroast.io/company_dns/V2.0/company/merged/firmographics/IBM](https://www.mediumroast.io/company_dns/V2.0/company/merged/firmographics/IBM)
-- Standard industry code search for `Oil` - [https://www.mediumroast.io/company_dns/V2.0/sic/description/oil](https://www.mediumroast.io/company_dns/V2.0/sic/description/oil)
+<img width="1242" alt="company_dns - embedded_help" src="https://github.com/miha42-github/company_dns/assets/10818650/1f789771-bb55-47da-b21b-cea421921090">
+
+### Screenshot of the query console
+
+<img width="1242" alt="company_dns - query_console" src="https://github.com/miha42-github/company_dns/assets/10818650/6f880d10-1143-4889-998f-9adae8d9717e">
+
+# Checkout a live system
+A live system is available for Mediuroast efforts and for anyone to try out, relevant links are below.
+- Embedded help and query console - [https://company-dns.mediumroast.io/help](https://company-dns.mediumroast.io/help)
+- Company search for IBM - [https://company-dns.mediumroast.io/V3.0/global/company/merged/firmographics/IBM](https://company-dns.mediumroast.io/V3.0/global/company/merged/firmographics/IBM)
+- Standard industry code search for `Oil` - [https://www.mediumroast.io/company_dns/V3.0/na/sic/description/oil](https://www.mediumroast.io/company_dns/V2.0/sic/description/oil)
 
 # How can I contribute?
 
