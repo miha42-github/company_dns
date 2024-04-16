@@ -1,9 +1,8 @@
 name: Monthly company_dns build
 
 on:
-  push:
-    branches:
-      - main
+  schedule:
+    - cron: '0 12 1 * *'
 
 jobs:
   build:
@@ -32,3 +31,4 @@ jobs:
             context: .
             push: true
             tags: ghcr.io/${{ github.repository }}/company_dns:latest
+            platforms: linux/amd64,linux/arm64
