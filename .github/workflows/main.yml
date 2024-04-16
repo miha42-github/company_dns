@@ -3,11 +3,11 @@ name: Monthly company_dns build
 on:
   schedule:
     - cron: '0 12 1 * *'
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    workflow_dispatch:
 
     steps:
         - name: Checkout code
