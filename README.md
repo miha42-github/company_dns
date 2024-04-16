@@ -1,18 +1,27 @@
-# Introduction to the company_dns
+# Motivation for the company_dns
 To enable a more automated approach to gathering information about companies `company_dns` was created.  This release enables the synthesis of data from the [SEC EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html) and [Wikipedia](https://wikipedia.org).  A [Medium](https://medium.com) article entitled "[A case for API based open company firmographics](https://medium.com/@michaelhay_90395/a-case-for-api-based-open-company-firmographics-145e4baf121b)" is available discussing the process and motivation behind the creation of this service.
 
 # Introducing V3.0.0
 The V3.0.0 release of the `company_dns` is a significant update to the service.  The primary changes are:
-1. Shift from Flask to Starlette with Uvicorn
-2. Automated monthly container builds, from the main branch of the repository, using GitHub Actions
-3. Simplification of all aspects of the service including code structure, shift towards simpler Docker, and a more streamlined service control script
-4. Vastly improved embedded help with a query console to test queries
+1. Shift from Flask to Starlette with Uvicorn.
+2. Automated monthly container builds, from the main branch of the repository, using GitHub Actions.
+3. Simplification of all aspects of the service including code structure, shift towards simpler Docker, and a more streamlined service control script.
+4. Vastly improved embedded help with a query console to test queries.
 We were motivated to make these changes to the service making it easier to improve, maintain and use.
 
 
 # Installation & Setup
-The follwing basic steps are provided for the purposes of getting the tool running.
-## For developers Get the code
+The install and setup process is either for users or developers.  Steps for both are provided below.
+
+## For users via docker
+New from `V3.0.0` are automated Docker builds providing a fresh image on a monthly basis.  There are two reasons for this:
+
+1. Gets the latest information from EDGAR such that when the service is queried the user can access the latest quarterly and yearly filings.
+2. As the code progresses, and is checked into main, users will automatically get the latest improvements and fixes.
+
+Additionally, the Docker build automates the creation of the EDGAR and SIC data caches eliminating these extra steps from a build process. The image can be pulled using `docker pull ghcr.io/miha42-github/company_dns/company_dns:latest`.  With the image pulled you can run it using `docker run -m 1G -p 8000:8000 company_dns:latest` which will run the image in the foreground, and running the image in the background `docker run -d -m 1G -p 8000:8000 company_dns:latest`.
+
+## For developers via GitHub
 Assming you have setup access to GitHub, you'll need to clone the repository. Here we assume you're on a Linux box of some kind and will follow the steps below.
 
 1. If you're performing development create a directory that will contain the code: `mkdir ~/dev`
