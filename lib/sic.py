@@ -1,20 +1,13 @@
-#!/usr/bin/env python3
-
-import argparse
-import pprint
 import sys
-import pprint
 import sqlite3
-import re
-import urllib.parse as url_parse
+import logging
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Beta"
-__date__ = '2023-April-1'
+__status__ = "Production"
 __contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
@@ -67,56 +60,22 @@ class SICQueries:
         self, 
         db_file='./company_dns.db', 
         name='sic', 
-        description='A module and simple CLI too to lookup SIC data.'):
+        description='A module to lookup SIC data.'):
 
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
         self.ec = self.e_conn.cursor()
         self.db_file = db_file
 
-        # Command line naming helpers
+        # Naming helpers
         self.NAME = name
         self.DESC = description
 
         # Query object
         self.query = None
 
-    def get_cli_args(self):
-        """Parse common CLI arguments including system configs and behavior switches.
-        """
-        # Set up the argument parser
-        parser = argparse.ArgumentParser(prog=self.NAME, description=self.DESC)
-
-        # Setup the command line switches
-        parser.add_argument(
-            '--query',
-            help="Description of the SIC to search for in data cache.",
-            type=str,
-            dest='query',
-            required=True
-        )
-        parser.add_argument(
-            '--operation',
-            help="Type of details to search for.",
-            type=str,
-            dest='operation',
-            choices=['description', 'code'],
-            default='description',
-            required=True
-        )
-        parser.add_argument(
-            "--debug",
-            help="Turn on debugging",
-            dest="debug",
-            type=int,
-            default=0,
-        )
-
-        # Parse the CLI
-        cli_args = parser.parse_args()
-
-        # Return parsed arguments
-        return cli_args
+        # Set up the logging
+        self.logger = logging.getLogger(self.NAME)
 
     def get_all_sic_by_no(self):
         """Using a query string find and return a dictionary containing all SICs with additional metadata. 
@@ -237,12 +196,16 @@ class SICQueries:
         }
         tmp_sics = {}
 
+        self.logger.debug('Querying db cache for [' + self.query + ']')
+
         # Define the SQL Query
         sql_query = "SELECT sic.division, sic.major_group, sic.industry_group, sic.sic, sic.description, " + \
                     "major_groups.description a FROM sic INNER JOIN major_groups ON major_groups.major_group = sic.major_group WHERE sic.description LIKE '%" + self.query + "%' "
 
         # Issue the query
         for row in self.ec.execute(sql_query):
+
+            self.logger.debug('Processing row [' + row + ']')
 
             # Get the fields in a structure we can manipulate
             sic_code = str(row[SICS])
@@ -278,7 +241,11 @@ class SICQueries:
         
         final_sics['sics'] = tmp_sics
         final_sics['total'] = len(tmp_sics)
+
+        self.logger.info('Found a total of [' + str(final_sics['total']) + '] SICs returning data.')
+
         if final_sics['total'] == 0:
+            final_sics['sics'] = []
             return {
                 'code': 404, 
                 'message': 'No SICs found for query [' + self.query + '].',
@@ -497,20 +464,3 @@ class SICQueries:
                 'data': final_descs,
                 'dependencies': DEPENDENCIES
             }
-
-
-
-if __name__ == '__main__':
-    q = SICQueries(db_file='../company_dns.db')
-    cli_args = q.get_cli_args()
-    q.query = cli_args.query
-    DEBUG = cli_args.debug
-    
-    results = dict()
-    
-    if cli_args.operation == 'description':
-        results = q.get_all_sic_by_name()
-    elif cli_args.operation == 'code':
-        results = q.get_all_sic_by_no()
-    
-    if not DEBUG: pprint.pprint(results)
