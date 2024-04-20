@@ -64,6 +64,7 @@ async def general_query(request):
         # Log the query request as a debug message
         logger.debug(f'Performing general query for company name: [{request.path_params["company_name"]}]')
         company_wiki_data = gq.get_firmographics_wikipedia()
+        # logger.debug(f'Company wiki data: {company_wiki_data}')
         if company_wiki_data['code'] != 200:
             logger.error(f'There were [0] results for resource [company_name].')
             return JSONResponse(company_wiki_data)
@@ -96,7 +97,7 @@ def _check_status_and_return(result_data, resource_name):
     return result_data
 
 def _prepare_logging(log_level=logging.INFO):
-    logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=logging.DEBUG)
+    logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
     return logging.getLogger(__file__)
 
 def _handle_request(request, handler, func, path_param, *args, **kwargs):
@@ -191,12 +192,7 @@ app = Starlette(debug=True, middleware=middleware, routes=[
     # -------------------------------------------------------------- #
 
     # Serve the local directory ./html at the /help
-    Mount('/help', app=StaticFiles(directory='html', html=True)),
-
-    # Catch-all route which redirects to /help
-    # Route("/{path:path}", endpoint=lambda _: RedirectResponse(url='/help'), methods=["GET"]),
-
-    
+    Mount('/help', app=StaticFiles(directory='html', html=True)),    
 ])
 # END: Define the Starlette app
 # -------------------------------------------------------------- #

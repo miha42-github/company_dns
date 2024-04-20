@@ -205,7 +205,7 @@ class SICQueries:
         # Issue the query
         for row in self.ec.execute(sql_query):
 
-            self.logger.debug('Processing row [' + row + ']')
+            self.logger.debug(f'Processing row [{row}]')
 
             # Get the fields in a structure we can manipulate
             sic_code = str(row[SICS])
