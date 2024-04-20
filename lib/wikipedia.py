@@ -105,28 +105,30 @@ class WikipediaQueries:
             }
 
         # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
-        try:
-            # Log the start of this process including self.query
-            self.logger.info('Starting retrieval of firmographics for [' + self.query + '] via its wikipedia page.')
-            company_page = wptools.page(self.query, silent=True)
-            # Log the completion of the page creation
-            self.debug(f'Page results for [{self.query}]: {company_page}')
-        except:
+        # Log the start of this process including self.query
+        self.logger.info('Starting retrieval of firmographics for [' + self.query + '] via its wikipedia page.')
+        company_page = wptools.page(self.query, silent=True)
+        if not company_page:
             self.logger.error('A wikipedia page for [' + self.query + '] was not found.')
             return lookup_error
+        # Log the completion of the page creation
+        self.logger.debug(f'Page results for [{self.query}]: {company_page}')
 
         # Prepare to get the infoblox for the company
-        try:
-            # Log the start of the process to get the infobox for the company
-            self.logger.info('Starting process to retrieve infobox for [' + self.query + '].')
-            parse_results = company_page.get_parse(show=False)
-            # Log the completion of the infobox creation
-            self.logger.info('Completed infobox retrieval for [' + self.query + '].')
-        except:
+        # Log the start of the process to get the infobox for the company
+        self.logger.info('Starting process to retrieve infobox for [' + self.query + '].')
+        parse_results = company_page.get_parse(show=False)
+        if not parse_results.data['infobox']:
+            self.logger.error('An infobox for [' + self.query + '] was not found.')
             return lookup_error
+        # Log the completion of the infobox creation
+        self.logger.info('Completed infobox retrieval for [' + self.query + '].')
         
         company_info = parse_results.data['infobox']
-        if not company_info: return lookup_error
+        if not company_info: 
+            self.logger.error('An infobox for [' + self.query + '] was not found.')
+            return lookup_error
+        self.logger.info('Completed infobox parse for [' + self.query + '].')
 
         # Obtain the query results
         try:

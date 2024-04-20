@@ -100,15 +100,17 @@ We try to keep high level Todos and Improvements in a list contained in a sectio
 
 ### Future work/Todos
 Here are the things that are likely to be worked but without any strict deadline:
-4. Determine if feasible to talk to the companies house API for gathering data from the UK
-5. Research other pools of public data which can serve to enrich 
-6. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House
-8. Provide instructions/details for running on a Pi or Arm based system, see Lagniappe below
 
+1. Determine if feasible to talk to the companies house API for gathering data from the UK
+    1. Initial feasibility has been checked, but the value of the data is still being evaluated
+2. Research other pools of public data which can serve to enrich 
+    1. There are additional data pools including NAICS and UK SIC codes which could be added. Additional Industry Code data sources by country are likely a first target to add. The deeper question is how to merge these data sources for a kind of universal classification.
+3. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House
+4. Provide instructions/details for running on a Pi or Arm based system
+    1. Since one of the target docker images is for ARM, the next logical step is to provide instructions for running on a Pi.
 
 ### The Lagniappe 
 Run on a RasberryPi: To be reauthored
-
 
 # License
 Since this code falls under a liberal Apache-V2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.
