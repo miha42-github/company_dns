@@ -1,21 +1,16 @@
-#!/usr/local/bin/python3
-
 from . import edgar
 from . import wikipedia
-import argparse
-import pprint
 import sys
 import urllib.parse as url_parse
 import logging
 from geopy.geocoders import ArcGIS
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2023, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
 __version__ = "2.1.0"
 __maintainer__ = "Michael Hay"
-__status__ = "Alpha"
-__date__ = '2023-April-1'
+__status__ = "Production"
 __contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
@@ -51,7 +46,7 @@ class GeneralQueries:
         self,
         database=None,
         name='general', 
-        description='A module and simple CLI too to search for company data in Wikipedia, EDGAR, and also a merger of the two data sources.'):
+        description='A module to search for company data in Wikipedia, EDGAR, and also a merger of the two data sources.'):
         
         # Construct the object to determine lat long pairs
         self.locator = ArcGIS(timeout=2, user_agent="company_dns")
@@ -59,52 +54,15 @@ class GeneralQueries:
         # Contains the company name or CIK
         self.query = None
 
-        # Command line naming helpers
-        self.NAME = name
-        self.DESC = description
-
         # Define the db_cache location
         self.db_file='./company_dns.db' if database is None else database
 
+        # Naming helpers
+        self.NAME = name
+        self.DESC = description
+
         # Set up the logging
         self.logger = logging.getLogger(self.NAME)
-
-    def get_cli_args(self):
-        """Parse common CLI arguments including system configs and behavior switches.
-        """
-        # Set up the argument parser
-        parser = argparse.ArgumentParser(prog=self.NAME, description=self.DESC)
-
-        # Setup the command line switches
-        parser.add_argument(
-            '--query',
-            help="Company name to search for in Wikipedia or EDGAR",
-            type=str,
-            dest='query',
-            required=True
-        )
-        parser.add_argument(
-            "--debug",
-            help="Turn on debugging",
-            dest="debug",
-            type=int,
-            default=0,
-        )
-        parser.add_argument(
-            '--operation',
-            help="Company name to search for in Wikipedia.",
-            type=str,
-            dest='operation',
-            choices=['merge', 'ciks', 'details', 'summaries', 'firmographics_wiki', 'firmographics_edgar'],
-            default='merge',
-            required=True
-        )
-
-        # Parse the CLI
-        cli_args = parser.parse_args()
-
-        # Return parsed arguments
-        return cli_args
     
     def locate (self, place):
         # Log the place to locate via a debug message
@@ -278,29 +236,3 @@ class GeneralQueries:
             'data': final_company,
             'dependencies': DEPENDENCIES
         }
-
-
-
-if __name__ == '__main__':
-    query = GeneralQueries('../company_dns.db')
-    cli_args = query.get_cli_args()
-    query.query = cli_args.query
-    DEBUG = cli_args.debug
-    
-    results = dict()
-    if cli_args.operation == 'ciks':
-        results = query.get_all_ciks()
-    elif cli_args.operation == 'details':
-        results = query.get_all_details()
-    elif cli_args.operation == 'summaries':
-        results = query.get_all_summaries()
-    elif cli_args.operation == 'firmographics_wiki':
-        results = query.get_firmographics_wikipedia()
-    elif cli_args.operation == 'firmographics_edgar':
-        results = query.get_firmographics_edgar()
-    elif cli_args.operation == 'merge':
-        wiki_data = query.get_firmographics_wikipedia()
-        if wiki_data['code'] != 200: results = wiki_data
-        results = query.merge_data(wiki_data, wiki_data['cik'])
-    
-    if not DEBUG: pprint.pprint(results)

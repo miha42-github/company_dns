@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import sqlite3
 import sys
 import requests
@@ -90,12 +89,12 @@ class EdgarQueries:
             'Accept-Encoding': 'gzip, deflate'
         }
 
+        # What we are are to query
+        self.query = None
+
         # Command line naming helpers
         self.NAME = name
         self.DESC = description
-
-        # What we are are to query
-        self.query = None
 
         # Define the form type we're after
         self.form_type = '10-'

@@ -62,8 +62,12 @@ async def general_query(request):
     try:
         gq.query = request.path_params['company_name']
         # Log the query request as a debug message
-        logger.debug(f'Querying for general data for {request.path_params["company_name"]}')
+        logger.debug(f'Performing general query for company name: [{request.path_params["company_name"]}]')
         company_wiki_data = gq.get_firmographics_wikipedia()
+        if company_wiki_data['code'] != 200:
+            logger.error(f'There were [0] results for resource [company_name].')
+            return JSONResponse(company_wiki_data)
+        
         general_company_data = gq.merge_data(company_wiki_data['data'], company_wiki_data['data']['cik'])
         # Call check_status_and_return to check the status of the data and return the data or an error message
         checked_data = _check_status_and_return(general_company_data, request.path_params['company_name'])
@@ -79,16 +83,20 @@ async def general_query(request):
 
 # -------------------------------------------------------------- #
 # BEGIN: Helper functions
-def _check_status_and_return(data, resource_name):
-    if data.get('code') != 200:
+# TODO: This function may not be needed as it is and the code could be moved into _handle_request.  Essentially we're checking for a 200 status code and returning the data that includes the error message.  The change would likely be to log the error message and return the data as is.  This would mean this funtion would be removed.
+def _check_status_and_return(result_data, resource_name):
+    return_code = result_data.get('code')
+    result_count = result_data.get('total')
+    return_msg = result_data.get('message')
+    if return_code != 200:
         # Log the error message
-        logger.error(f'Data for resource {resource_name} not found')
+        logger.error(f'There were [{result_count}] results for resource [{resource_name}].')
         # Return an error message that the data was not found using the resource name
-        return {'error': f'Data for resource {resource_name} not found', 'code': 404}
-    return data
+        return {'message': return_msg, 'code': return_code, 'data': result_data}
+    return result_data
 
-def _prepare_logging(log_level=logging.DEBUG):
-    logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
+def _prepare_logging(log_level=logging.INFO):
+    logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=logging.DEBUG)
     return logging.getLogger(__file__)
 
 def _handle_request(request, handler, func, path_param, *args, **kwargs):
@@ -195,6 +203,6 @@ app = Starlette(debug=True, middleware=middleware, routes=[
 
 if __name__ == "__main__": 
     try:
-        uvicorn.run(app, host='0.0.0.0', port=8000, log_level="debug", lifespan='off')
+        uvicorn.run(app, host='0.0.0.0', port=8000, log_level='info', lifespan='off')
     except KeyboardInterrupt:
         logger.info("Server was shut down by the user.")

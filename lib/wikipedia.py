@@ -95,9 +95,13 @@ class WikipediaQueries:
         lookup_error = {
                 'code': 404,
                 'message': 'Unable to find a company by the name [' + self.query + ']. Maybe you should try an alternative structure like [' + self.query + ' Inc.,' + self.query + ' Corp., or ' + self.query + ' Corporation].',
-                'errorType': 'LookupError',
+                'error': 'LookupError',
                 'module': my_class + '-> ' + my_function,
-                'dependencies': DEPENDENCIES
+                'dependencies': DEPENDENCIES,
+                'data': {
+                    'total': 0,
+                    'results': []
+                }
             }
 
         # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
@@ -106,8 +110,9 @@ class WikipediaQueries:
             self.logger.info('Starting retrieval of firmographics for [' + self.query + '] via its wikipedia page.')
             company_page = wptools.page(self.query, silent=True)
             # Log the completion of the page creation
-            self.logger.info('Completed firmographics retrieval [' + self.query + '] via its wikipedia page.')
+            self.debug(f'Page results for [{self.query}]: {company_page}')
         except:
+            self.logger.error('A wikipedia page for [' + self.query + '] was not found.')
             return lookup_error
 
         # Prepare to get the infoblox for the company
@@ -185,7 +190,7 @@ class WikipediaQueries:
 
         # City
         firmographics['city'] = self._get_item(company_info, ['location_city', 'hq_location_city', 'location'], r'\[\[\]\]', 0)
-        firmographics['city'] = firmographics['city'].replace('[[', '').replace(']]', '') if re.search('(\[)|(\])', firmographics['city']) else firmographics['city']
+        firmographics['city'] = firmographics['city'].replace('[[', '').replace(']]', '') if re.search(r'(\[)|(\])', firmographics['city']) else firmographics['city']
         firmographics['city'] = firmographics['city'].replace('<br>', ', ') if re.search('<br>', firmographics['city']) else firmographics['city']
 
 
