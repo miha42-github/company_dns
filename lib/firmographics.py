@@ -1,6 +1,7 @@
 from . import edgar
 from . import wikipedia
 import sys
+import unicodedata
 import urllib.parse as url_parse
 import logging
 from geopy.geocoders import ArcGIS
@@ -92,8 +93,8 @@ class GeneralQueries:
         my_query.query = self.query
         return my_query.get_all_details(firmographics=False)
 
-    def get_all_details(self):
-        my_query = edgar.EdgarQueries(db_file=self.db_file)
+    def get_all_details(self, flat_return=False):
+        my_query = edgar.EdgarQueries(db_file=self.db_file, flat_return=flat_return)
         my_query.query = self.query
         return my_query.get_all_details(firmographics=True)
 
@@ -122,9 +123,31 @@ class GeneralQueries:
             wiki_return['data']['googleFinance'] = FINANCEURL + my_ticker + ':' + my_encoded_exchange
 
         return wiki_return
+    
+    def _set_location_data(self, final_company):
+        if 'address' in final_company:
+            my_address = ", ".join([final_company['address'], final_company['city'], final_company['stateProvince'], final_company['zipPostal']])
+            (longitude, latitude, address, raw_data) = self.locate(my_address)
+            final_company['longitude'] = longitude
+            final_company['latitude'] = latitude
+            final_company['googleMaps'] = MAPSURL + url_parse.quote(address)
+        else:
+            final_company['longitude'] = UKN
+            final_company['latitude'] = UKN
+            final_company['address'] = UKN
+        return final_company
+    
+    def _set_google_urls(self, final_company):
+        my_encoded_name = url_parse.quote(final_company['name'])
+        final_company['googleNews'] = NEWSURL + my_encoded_name
+        final_company['googlePatents'] = PATENTSURL + my_encoded_name
+        if 'tickers' in final_company:
+            my_encoded_exchange = url_parse.quote(final_company['tickers'][0])
+            my_ticker = final_company['tickers'][1]
+            final_company['googleFinance'] = FINANCEURL + my_ticker + ':' + my_encoded_exchange
+        return final_company
 
-
-    def merge_data(self, wiki_data, cik, company_name=None):
+    def merge_data(self, wiki_data=None):
         # TODO there are potential cases where there isn't a wikipedia page, but there is EDGAR data.
         #       Therefore we need to figure out how to handle this, perhaps we can do an OR? For sure
         #       it is better to return something instead of nothing.  In fact and in general if we 
@@ -134,6 +157,12 @@ class GeneralQueries:
         # Define the function and class name
         my_function = sys._getframe(0).f_code.co_name
         my_class = self.__class__.__name__
+
+        # Set the CIK to UKN
+        cik = UKN
+
+        # If wiki_data is not None and it exists then we need to set the CIK to wiki_data['cik']
+        if wiki_data is not None and wiki_data['cik']: cik = wiki_data['cik']
 
         # If there isn't a cik that is know we need to return with wiki_data
         wiki_return = {
@@ -217,22 +246,92 @@ class GeneralQueries:
             final_company['latitude'] = UKN
             final_company['address'] = UKN
 
-        # Phase 4 - Add google links for various services
-        my_encoded_name = url_parse.quote(final_company['name'])
-        final_company['googleNews'] = NEWSURL + my_encoded_name
-        final_company['googlePatents'] = PATENTSURL + my_encoded_name
-
-        if 'tickers' in final_company:
-            my_encoded_exchange = url_parse.quote(final_company['tickers'][0])
-            my_ticker = final_company['tickers'][1]
-            final_company['googleFinance'] = FINANCEURL + my_ticker + ':' + my_encoded_exchange
+        # Phase 4 - Add google urls
+        final_company = self._set_google_urls(final_company)
         
-
         # Return the merged result
         return {
             'code': 200, 
-            'message': 'Wikipedia data and EDGAR has been detected and merged for the company [' + wiki_data['name'] + '].',
+            'message': f'Wikipedia data and EDGAR has been detected and merged for the company [{wiki_data['name']}].',
             'module': my_class + '-> ' + my_function,
             'data': final_company,
             'dependencies': DEPENDENCIES
         }
+    
+    def get_firmographics(self):
+        """This function is the main entry point for the module used to gather company firmographics from a variety of data sources.  The basic flow of the function is as follows as of today:
+        
+        1. It will first query wikipedia for the firmographics based upon company name as defined in self.query.
+        2. If the wikipedia data is successfully returned and the company is public it will then query EDGAR for additional firmographics and merge the data with the wikipedia data.
+        3. If the wikipedia data is successfully returned and the company is not public it will return the wikipedia data.
+        4. If the wikipedia data is not successfully returned it will then query EDGAR for the firmographics and that is successful it will be reformatted and returned.
+        5. Finally if there isn't any data returned it will return an error message.
+
+        Returns:
+            dict: A dictionary with the following keys:
+                code (int): The HTTP status code of the response.
+                message (str): A message describing the result of the query.
+                module (str): The module and function that was executed.
+                data (dict): The firmographics data for the company.
+                dependencies (dict): A dictionary of the dependencies for the module.
+        """
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
+
+        lookup_err_prototype = {
+                'errorType': 'LookupError',
+                'module': my_class + '-> ' + my_function,
+                'dependencies': DEPENDENCIES  
+        }
+
+        company_firmographics = None
+
+        # Log the start of the query
+        self.logger.info(f'Attempting to gather firmographics company [{self.query}]')
+        
+        try:
+            self.logger.debug(f'Performing general query for company name: [{self.query}]')
+            wiki_response = self.get_firmographics_wikipedia()
+            if wiki_response['code'] == 200:
+                self.logger.info(f'Wikipedia results for [{self.query}] returned successfully.')
+                company_firmographics = self.merge_data(wiki_data=wiki_response['data'])
+        except Exception as e:
+            self.logger.error(f'Wikidata results for [{self.query}] returned [{e}].')
+            lookup_err_prototype['code'] = 542
+            lookup_err_prototype['message'] = f'Using general query nable to find a company by the name [{self.query}], encountered error: [{e}]. Maybe you should try an alternative structure like [{self.query} Inc., {self.query} Corp., or {self.query} Corporation].'
+            return lookup_err_prototype
+        if company_firmographics: return company_firmographics
+        
+        try:
+            self.logger.debug(f'Performing EDGAR query for company name: [{self.query}]')
+            company_firmographics = self.get_all_details(flat_return=True)
+        except Exception as e:
+            self.logger.error(f'Wikidata results for [{self.query}] returned [{e}].')
+            lookup_err_prototype['code'] = 542
+            lookup_err_prototype['message'] = f'Using EDGAR query nable to find a company by the name [{self.query}], encountered error: [{e}]. Maybe you should try an alternative structure like [{self.query} Inc., {self.query} Corp., or {self.query} Corporation].'
+            return lookup_err_prototype
+        
+        # If we have a company_firmographics object then we need to clean it up and 
+        # enrich it with urls and location data
+        if company_firmographics:
+            self.logger.info(f'EDGAR results for [{self.query}] returned successfully.')
+            # Get the first key company_firmographics['companies'] 
+            new_company_name = next(iter(company_firmographics['companies']), None)
+            company_firmographics = company_firmographics['companies'][new_company_name]
+            company_firmographics = self._set_location_data(company_firmographics)
+            company_firmographics = self._set_google_urls(company_firmographics)
+            # Remove all leading and trailing white space from the category
+            self.logger.debug(f'Extra characters in category [{ord(company_firmographics['category'][0])}]')
+            company_firmographics['category'] = company_firmographics['category'].lstrip('<br>').rstrip('</br>')
+            company_firmographics['type'] = 'Public company'           
+            return {
+                'code': 200, 
+                'message': f'Only EDGAR has been detected and returned for the company [{new_company_name}].',
+                'module': my_class + '-> ' + my_function,
+                'data': company_firmographics,
+                'dependencies': DEPENDENCIES
+            }
+        else:
+            lookup_err_prototype['code'] = 404
+            lookup_err_prototype['message'] = f'Unable to find a company by the name [{self.query}]. Maybe you should try an alternative structure like [{self.query} Inc., {self.query} Corp., or {self.query} Corporation].'
+            return lookup_err_prototype

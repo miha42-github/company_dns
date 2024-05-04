@@ -8,6 +8,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
+import sys
 
 from lib.sic import SICQueries
 from lib.edgar import EdgarQueries
@@ -58,27 +59,10 @@ async def wikipedia_firmographics(request):
 
 # -------------------------------------------------------------- #
 # BEGIN: General query functions
+# 
 async def general_query(request):
-    try:
-        gq.query = request.path_params['company_name']
-        # Log the query request as a debug message
-        logger.debug(f'Performing general query for company name: [{request.path_params["company_name"]}]')
-        company_wiki_data = gq.get_firmographics_wikipedia()
-        # logger.debug(f'Company wiki data: {company_wiki_data}')
-        if company_wiki_data['code'] != 200:
-            logger.error(f'There were [0] results for resource [company_name].')
-            return JSONResponse(company_wiki_data)
-        
-        general_company_data = gq.merge_data(company_wiki_data['data'], company_wiki_data['data']['cik'])
-        # Call check_status_and_return to check the status of the data and return the data or an error message
-        checked_data = _check_status_and_return(general_company_data, request.path_params['company_name'])
-        if 'error' in checked_data:
-            return JSONResponse(checked_data, status_code=checked_data['code'])
-        return JSONResponse(checked_data)
-    except Exception as e:
-        logger.error(f'Error: {e}')
-        general_company_data = {'error': 'A general or code error has occured', 'code': 500}
-        return JSONResponse(general_company_data, status_code=general_company_data['code'])
+    return _handle_request(request, gq, gq.get_firmographics, 'company_name')
+
 # END: General query functions
 # -------------------------------------------------------------- #
 
@@ -96,7 +80,7 @@ def _check_status_and_return(result_data, resource_name):
         return {'message': return_msg, 'code': return_code, 'data': result_data}
     return result_data
 
-def _prepare_logging(log_level=logging.INFO):
+def _prepare_logging(log_level=logging.DEBUG):
     logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
     return logging.getLogger(__file__)
 
@@ -199,6 +183,6 @@ app = Starlette(debug=True, middleware=middleware, routes=[
 
 if __name__ == "__main__": 
     try:
-        uvicorn.run(app, host='0.0.0.0', port=8000, log_level='info', lifespan='off')
+        uvicorn.run(app, host='0.0.0.0', port=8000, log_level='debug', lifespan='off')
     except KeyboardInterrupt:
         logger.info("Server was shut down by the user.")

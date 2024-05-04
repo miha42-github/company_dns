@@ -15,9 +15,6 @@ __contact__ = 'https://github.com/miha42-github/company_dns'
 # Used for setting attributes consistently when unknown
 UKN = 'Unknown'
 
-# Determine how we output when executed as a CLI
-DEBUG = None
-
 # Package and data dependencies
 DEPENDENCIES = {
     'modules': {'wptools':'https://pypi.org/project/wptools/'},
@@ -106,29 +103,45 @@ class WikipediaQueries:
 
         # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
         # Log the start of this process including self.query
-        self.logger.info('Starting retrieval of firmographics for [' + self.query + '] via its wikipedia page.')
-        company_page = wptools.page(self.query, silent=True)
-        if not company_page:
-            self.logger.error('A wikipedia page for [' + self.query + '] was not found.')
+        self.logger.info(f'Starting retrieval of firmographics for [{self.query}] via its wikipedia page.')
+        company_page = None
+        try:
+            company_page = wptools.page(self.query, silent=True)
+            if not company_page:
+                self.logger.error(f'A wikipedia page for [{self.query}] was not found.')
+                return lookup_error
+            # Log the completion of the page creation
+            self.logger.debug(f'Page results for [{self.query}]: {company_page}')
+        except Exception as e:
+            self.logger.error(f'A wikipedia page for [{self.query}] was not found due to [{e}].')
             return lookup_error
-        # Log the completion of the page creation
-        self.logger.debug(f'Page results for [{self.query}]: {company_page}')
 
         # Prepare to get the infoblox for the company
         # Log the start of the process to get the infobox for the company
-        self.logger.info('Starting process to retrieve infobox for [' + self.query + '].')
-        parse_results = company_page.get_parse(show=False)
-        if not parse_results.data['infobox']:
-            self.logger.error('An infobox for [' + self.query + '] was not found.')
+        self.logger.info(f'Starting process to retrieve infobox for [{self.query}].')
+        parse_results = None
+        try:
+            parse_results = company_page.get_parse(show=False)
+            if not parse_results.data['infobox']:
+                self.logger.error('An infobox for [' + self.query + '] was not found.')
+                return lookup_error
+            # Log the completion of the infobox creation
+            self.logger.info('Completed infobox retrieval for [' + self.query + '].')
+        except Exception as e:
+            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}].')
             return lookup_error
-        # Log the completion of the infobox creation
-        self.logger.info('Completed infobox retrieval for [' + self.query + '].')
         
-        company_info = parse_results.data['infobox']
-        if not company_info: 
-            self.logger.error('An infobox for [' + self.query + '] was not found.')
+        # Get the company info from the infobox
+        company_info = None
+        try:
+            company_info = parse_results.data['infobox']
+            if not company_info: 
+                self.logger.error('An infobox for [' + self.query + '] was not found.')
+                return lookup_error
+            self.logger.info('Completed infobox parse for [' + self.query + '].')
+        except Exception as e:
+            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}].')
             return lookup_error
-        self.logger.info('Completed infobox parse for [' + self.query + '].')
 
         # Obtain the query results
         try:
@@ -149,10 +162,6 @@ class WikipediaQueries:
             self.logger.info('Completed wikidata retrieval for [' + self.query + '].')
         except:
             return lookup_error
-        
-        # Debugging output
-        if DEBUG == 1: pprint.pprint(page_data.data['wikidata'])
-        elif DEBUG == 2: pprint.pprint(company_info)
 
         # Log the beginning of the firmographics data extraction
         self.logger.info('Starting firmographics data extraction for [' + self.query + '].')
