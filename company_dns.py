@@ -80,7 +80,7 @@ def _check_status_and_return(result_data, resource_name):
         return {'message': return_msg, 'code': return_code, 'data': result_data}
     return result_data
 
-def _prepare_logging(log_level=logging.DEBUG):
+def _prepare_logging(log_level=logging.INFO):
     logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
     return logging.getLogger(__file__)
 
@@ -183,6 +183,6 @@ app = Starlette(debug=True, middleware=middleware, routes=[
 
 if __name__ == "__main__": 
     try:
-        uvicorn.run(app, host='0.0.0.0', port=8000, log_level='debug', lifespan='off')
+        uvicorn.run(app, host='0.0.0.0', port=8000, log_level='info', lifespan='off')
     except KeyboardInterrupt:
         logger.info("Server was shut down by the user.")
