@@ -1,33 +1,3 @@
-const endpoints = {
-  "V3.0": {
-    "EDGAR Detail": "/na/companies/edgar/detail/",
-    "EDGAR Summary": "/na/companies/edgar/summary/",
-    "Company CIK Search": "/na/companies/edgar/ciks/",
-    "CIK Firmographics": "/na/company/edgar/firmographics/",
-    "Company Wikipedia": "/global/company/wikipedia/firmographics/",
-    "Merged Firmographics": "/global/company/merged/firmographics/",
-    "SIC Description": "/na/sic/description/",
-    "SIC Code": "/na/sic/code/",
-    "SIC Division": "/na/sic/division/",
-    "SIC Industry": "/na/sic/industry/",
-    "SIC Major": "/na/sic/major/"
-  },
-
-  "V2.0": {
-    "EDGAR Detail": "/companies/edgar/detail/",
-    "EDGAR Summary": " /companies/edgar/summary/",
-    "Company CIK Search": "/companies/edgar/ciks/",
-    "CIK Firmographics": "/company/edgar/firmographics/",
-    "Company Wikipedia": "/company/wikipedia/firmographics/",
-    "Merged Firmographics": "/company/merged/firmographics/",
-    "SIC Description": "/sic/description/",
-    "SIC Code": "/sic/code/",
-    "SIC Division": "/sic/division/",
-    "SIC Industry": "/sic/industry/",
-    "SIC Major": "/sic/major/"
-  }
-}
-
 const companyDnsServers = {
   "localhost:8000": "http://localhost:8000",
   "company-dns.mediumroast.io": "https://company-dns.mediumroast.io"
@@ -38,18 +8,22 @@ let url = null
 function populateEndpoints() {
   // Get the select element
   const endpointSelect = document.getElementById('endpointSelect');
+  
+  // Clear any existing options
+  endpointSelect.innerHTML = '';
 
   // Iterate over the endpoints object
   for (const version in endpoints) {
     if (endpoints.hasOwnProperty(version)) {
-      for (const endpoint in endpoints[version]) {
-        if (endpoints[version].hasOwnProperty(endpoint)) {
+      for (const friendlyName in endpoints[version]) {
+        if (endpoints[version].hasOwnProperty(friendlyName)) {
           // Create a new option element
           const option = document.createElement('option');
+          const endpoint = endpoints[version][friendlyName];
 
           // Set the value and text of the option
-          option.value = version + endpoints[version][endpoint];
-          option.text = version + ' - ' + endpoint;
+          option.value = version + endpoint;
+          option.text = version + ' - ' + friendlyName;
 
           // Add the option to the select element
           endpointSelect.appendChild(option);

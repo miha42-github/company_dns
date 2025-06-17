@@ -1,7 +1,8 @@
-starlette
-pyedgar
-requests
-pandas
-geopy
-wptools
-uvicorn
+starlette>=0.47.0
+pyedgar>=0.1.13
+requests>=2.32.3
+pandas>=2.3.0
+geopy>=2.4.1
+wptools>=0.4.17
+uvicorn>=0.34.3
+beautifulsoup4>=4.13.4

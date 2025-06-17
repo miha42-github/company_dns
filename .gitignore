@@ -1,9 +1,60 @@
+# Project-specific files
 *.gz
 *.db
 db.exists
-__pycache__
-.DS_Store
-test.py
 cache.exists
 form_*
 edgar_data
+uk_sic_data
+sic_data
+international_sic_data
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# IDE and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb
+
+# Logs
+*.log
+logs/
+
+# Local configuration
+*.local.yml
+*.local.yaml
+.env

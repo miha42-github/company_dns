@@ -8,12 +8,13 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
-import sys
 
 from lib.sic import SICQueries
 from lib.edgar import EdgarQueries
 from lib.wikipedia import WikipediaQueries
 from lib.firmographics import GeneralQueries
+from lib.uk_sic import UKSICQueries
+from lib.international_sic import InternationalSICQueries
     
 # -------------------------------------------------------------- #
 # BEGIN: Standard Idustry Classification (SIC) database cache functions
@@ -32,6 +33,35 @@ async def industry_code(request):
 async def major_code(request):
     return _handle_request(request, sq, sq.get_all_major_group_by_no, 'major_code')
 # END: Standard Idustry Classification (SIC) database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: UK Standard Industry Classification (SIC) database cache functions
+async def uk_sic_description(request):
+    return _handle_request(request, uksq, uksq.get_uk_sic_by_name, 'uk_sic_desc')
+
+async def uk_sic_code(request):
+    return _handle_request(request, uksq, uksq.get_uk_sic_by_code, 'uk_sic_code')
+# END: UK Standard Industry Classification (SIC) database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: International Standard Industry Classification (ISIC) database cache functions
+async def international_sic_section(request):
+    return _handle_request(request, isicsq, isicsq.get_section_by_code, 'section_code')
+
+async def international_sic_division(request):
+    return _handle_request(request, isicsq, isicsq.get_division_by_code, 'division_code')
+
+async def international_sic_group(request):
+    return _handle_request(request, isicsq, isicsq.get_group_by_code, 'group_code')
+
+async def international_sic_class(request):
+    return _handle_request(request, isicsq, isicsq.get_class_by_code, 'class_code')
+
+async def international_sic_class_description(request):
+    return _handle_request(request, isicsq, isicsq.get_class_by_description, 'class_desc')
+# END: International Standard Industry Classification (ISIC) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
@@ -107,6 +137,12 @@ wq = WikipediaQueries()
 
 global gq
 gq = GeneralQueries()
+
+global uksq
+uksq = UKSICQueries()
+
+global isicsq  # Changed from intsq to match handler function names
+isicsq = InternationalSICQueries()
 # END: Define query objects
 # -------------------------------------------------------------- #
 
@@ -175,11 +211,28 @@ app = Starlette(debug=True, middleware=middleware, routes=[
     Route('/V3.0/global/company/merged/firmographics/{company_name}', general_query),
     # -------------------------------------------------------------- #
 
+    # -------------------------------------------------------------- #
+    # UK SIC endpoints
+    Route('/V3.0/uk/sic/description/{uk_sic_desc}', uk_sic_description),
+    Route('/V3.0/uk/sic/code/{uk_sic_code}', uk_sic_code),
+    # -------------------------------------------------------------- #
+
+    # -------------------------------------------------------------- #
+    # International SIC endpoints
+    Route('/V3.0/international/sic/section/{section_code}', international_sic_section),
+    Route('/V3.0/international/sic/division/{division_code}', international_sic_division),
+    Route('/V3.0/international/sic/group/{group_code}', international_sic_group),
+    Route('/V3.0/international/sic/class/{class_code}', international_sic_class),
+    Route('/V3.0/international/sic/description/{class_desc}', international_sic_class_description),
+    # -------------------------------------------------------------- #
+
     # Serve the local directory ./html at the /help
     Mount('/help', app=StaticFiles(directory='html', html=True)),    
 ])
 # END: Define the Starlette app
 # -------------------------------------------------------------- #
+
+
 
 if __name__ == "__main__": 
     try:

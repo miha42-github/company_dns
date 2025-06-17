@@ -38,7 +38,7 @@ class ExtractEdgarData:
             return False, "Cache files already exist, returning."
         
         i = IndexMaker()
-        i.extract_indexes(start_year=start_year)  # Download and create the index
+        i.extract_indexes(start_date=start_year)  # Download and create the index
         # Create the cache.exists file as a zero byte file
         with open(self.cache_exists, 'w') as f:
             f.write('')

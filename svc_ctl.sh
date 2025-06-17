@@ -2,7 +2,7 @@
 
 #    Name: svc_ctl.sh
 #    Purpose: Service control for the mediumroast.io
-#    Copyright: Copyright 2021 and 2022 mediumroast.io. All rights reserved.
+#    Copyright: Copyright 2021-2025 mediumroast.io. All rights reserved.
 #    Author(s): Michael Hay, John Goodman
 
 ###################################
@@ -14,9 +14,11 @@
 # Service specific variables
 SERVICE_NAME="www.mediumroast.io"
 HELLO_EMAIL="hello@mediumroast.io"
-IMAGE_NAME="company_dns:latest"
+IMAGE_NAME="company_dns"
+IMAGE_TAG="latest"
+FULL_IMAGE_NAME="${IMAGE_NAME}:${IMAGE_TAG}"
 MEMORY_LIMIT="1g"
-PORT="8080"
+PORT="8000"
 
 # Colors
 NC='\033[0m'
@@ -54,7 +56,7 @@ function print_header () {
 }
 
 function print_step () {
-	MSG="${1}"
+    MSG="${1}"
     SEP=" ... "
     echo -n -e "${ORANGE}${MSG}${NC}${SEP}"
 }
@@ -68,60 +70,193 @@ function print_footer () {
     FOOTER="${1}"
     echo -e ">>>> ${ORANGE}END:${NC} ${BLUE}${FOOTER}${NC}"
 }
-		
+
+function get_container_id () {
+    docker ps -q --filter "ancestor=${FULL_IMAGE_NAME}"
+}
 
 function bring_down_server () {
     FUNC="Bring down service"
     STEP="bring_down_server"
     print_header "${FUNC}"
-    docker_image=`docker ps |grep " ${IMAGE_NAME} " |awk '{print $1}'`
+    docker_image=$(get_container_id)
 
-	print_step "Bring down ${IMAGE_NAME}"
-        docker kill ${docker_image}
+    if [ -z "$docker_image" ]; then
+        print_step "No running container found for ${FULL_IMAGE_NAME}"
+        echo -e "${ORANGE}skipped${NC}"
+    else
+        print_step "Bringing down ${FULL_IMAGE_NAME} (${docker_image})"
+        docker kill ${docker_image} > /dev/null 2>&1
+        check_error $? "docker kill"
+    fi
 
-    print_footer $FUNC
+    print_footer "${FUNC}"
 }
 
 function stop_server () {
     FUNC="Stop ${SERVICE}"
     STEP="stop_server"
-    print_header $FUNC
-    docker_image=`docker ps |grep " ${IMAGE_NAME} " |awk '{print $1}'`
+    print_header "${FUNC}"
+    docker_image=$(get_container_id)
 
-	print_step "Stop $IMAGE_NAME"
-        docker stop ${docker_image}
+    if [ -z "$docker_image" ]; then
+        print_step "No running container found for ${FULL_IMAGE_NAME}"
+        echo -e "${ORANGE}skipped${NC}"
+    else
+        print_step "Stopping ${FULL_IMAGE_NAME} (${docker_image})"
+        docker stop ${docker_image} > /dev/null 2>&1
+        check_error $? "docker stop"
+    fi
 
-    print_footer $FUNC
+    print_footer "${FUNC}"
 }
 
 function start_server () {
     FUNC="Start ${SERVICE} in the background"
     STEP="start_server"
     print_header "${FUNC}"
-    docker run -d -m ${MEMORY_LIMIT} -p ${PORT}:${PORT} ${SERVICE}
-    docker_image=`docker ps |grep " ${SERVICE} " |awk '{print $1}'`
+    
+    # Check if already running
+    docker_image=$(get_container_id)
+    if [ ! -z "$docker_image" ]; then
+        print_step "Container ${FULL_IMAGE_NAME} is already running as ${docker_image}"
+        echo -e "${ORANGE}skipped${NC}"
+    else
+        print_step "Starting ${FULL_IMAGE_NAME}"
+        docker run -d -m ${MEMORY_LIMIT} -p ${PORT}:8000 ${FULL_IMAGE_NAME} > /dev/null 2>&1
+        check_error $? "docker run"
+        
+        # Get the new container ID
+        docker_image=$(get_container_id)
+        print_detail "Container started as ${docker_image}"
+    fi
+    
+    print_footer "${FUNC}"
 }
 
 function build_server () {
     FUNC="Build ${SERVICE}"
     print_header "${FUNC}"
-    docker build -t ${IMAGE_NAME} .  
+    
+    print_step "Building Docker image ${FULL_IMAGE_NAME}"
+    docker build -t ${FULL_IMAGE_NAME} . > /dev/null 2>&1
+    check_error $? "docker build"
+    
+    print_footer "${FUNC}"
+}
+
+function rebuild_server () {
+    FUNC="Rebuild and restart ${SERVICE}"
+    print_header "${FUNC}"
+    
+    stop_server
+    build_server
+    start_server
+    
+    print_footer "${FUNC}"
+}
+
+function status_server () {
+    FUNC="Check status of ${SERVICE}"
+    print_header "${FUNC}"
+    
+    docker_image=$(get_container_id)
+    if [ -z "$docker_image" ]; then
+        print_detail "Status: ${RED}NOT RUNNING${NC}"
+    else
+        container_info=$(docker ps --filter "id=${docker_image}" --format "{{.Status}} - Created: {{.CreatedAt}}")
+        print_detail "Status: ${GREEN}RUNNING${NC}"
+        print_detail "Container ID: ${docker_image}"
+        print_detail "Container info: ${container_info}"
+        print_detail "Port mapping: ${PORT}:8000"
+    fi
+    
     print_footer "${FUNC}"
 }
 
 function run_foreground () {
     FUNC="Run $SERVICE in the foreground"
     print_header "${FUNC}"
-    docker run -m ${MEMORY_LIMIT} -p 8000:8000 ${SERVICE}
+    
+    print_step "Starting ${FULL_IMAGE_NAME} in foreground"
+    echo ""
+    docker run -m ${MEMORY_LIMIT} -p ${PORT}:8000 ${FULL_IMAGE_NAME}
+    
     print_footer "${FUNC}"
 }
 
 function tail_backend () {
     FUNC="Tail logs for ${SERVICE}"
     print_header "${FUNC}"
-    docker_image=`docker ps |grep " ${SERVICE} " |awk '{print $1}'`
-    echo "'${docker_image}'"
-    docker logs -f ${docker_image}
+    
+    docker_image=$(get_container_id)
+    if [ -z "$docker_image" ]; then
+        print_detail "${RED}Error:${NC} No running container found for ${FULL_IMAGE_NAME}"
+    else
+        print_detail "Tailing logs for container ${docker_image}"
+        echo ""
+        docker logs -f ${docker_image}
+    fi
+    
+    print_footer "${FUNC}"
+}
+
+function cleanup_server () {
+    FUNC="Clean up stale containers for ${SERVICE}"
+    print_header "${FUNC}"
+    
+    # Find all containers (including stopped ones) for this image
+    print_step "Finding all containers for ${FULL_IMAGE_NAME}"
+    all_containers=$(docker ps -a -q --filter "ancestor=${FULL_IMAGE_NAME}")
+    
+    if [ -z "$all_containers" ]; then
+        echo -e "${ORANGE}No containers found${NC}"
+    else
+        container_count=$(echo "$all_containers" | wc -l | tr -d ' ')
+        echo -e "${GREEN}found ${container_count}${NC}"
+        
+        # Get running containers
+        running_containers=$(get_container_id)
+        
+        # Remove stopped containers
+        print_step "Removing stopped containers"
+        removed_count=0
+        
+        for container in $all_containers; do
+            # Skip if the container is running
+            if [[ "$running_containers" == *"$container"* ]]; then
+                print_detail "Skipping running container: ${container}"
+                continue
+            fi
+            
+            print_detail "Removing container: ${container}"
+            docker rm $container > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                removed_count=$((removed_count+1))
+            fi
+        done
+        
+        if [ $removed_count -eq 0 ]; then
+            echo -e "${ORANGE}No containers removed${NC}"
+        else
+            echo -e "${GREEN}removed ${removed_count} containers${NC}"
+        fi
+    fi
+    
+    # Optional: Clean up dangling images
+    print_step "Cleaning up dangling images"
+    dangling_images=$(docker images -q -f "dangling=true")
+    if [ -z "$dangling_images" ]; then
+        echo -e "${ORANGE}No dangling images found${NC}"
+    else
+        docker rmi $(docker images -q -f "dangling=true") > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}cleaned up dangling images${NC}"
+        else
+            echo -e "${RED}failed to clean up images${NC}"
+        fi
+    fi
+    
     print_footer "${FUNC}"
 }
 
@@ -130,7 +265,6 @@ function tail_backend () {
 ### Service specific functions
 ###
 ###################################
-
 
 function print_help () {
     clear
@@ -141,16 +275,18 @@ function print_help () {
     echo "    Control functions to run the ${SERVICE}"
     echo ""
     echo "COMMANDS:"
-    echo "    help start stop build foreground tail"
+    echo "    help        - Display this help message"
+    echo "    start       - Start the service in the background"
+    echo "    stop        - Stop the running container gracefully"
+    echo "    kill        - Forcefully stop the running container"
+    echo "    build       - Build the Docker image"
+    echo "    rebuild     - Rebuild image and restart the service"
+    echo "    foreground  - Run the service in the foreground"
+    echo "    tail        - View logs of the running container"
+    echo "    status      - Check the status of the service"
+    echo "    cleanup     - Remove stopped containers and clean up resources"
     echo ""
-    echo "    help - call up this help text"
-    echo "    start - start the service using docker-compose "
-    echo "    stop - stop the docker service"
-    echo "    build - build the docker images for the server"
-    echo "    foreground - run the server in the foreground to watch for output"
-    echo "    tail - tail the logs for a server running in the background"
-    echo ""
-    exit -1
+    exit 0
 }
 
 ###################################
@@ -158,7 +294,6 @@ function print_help () {
 ### Main control shell logic
 ###
 ###################################
-
 
 if [ ! $1 ] || [ $1 == "help" ]; then
     print_help
@@ -169,14 +304,30 @@ elif [ $1 == "start" ]; then
 elif [ $1 == "stop" ]; then
     stop_server
 
+elif [ $1 == "kill" ]; then
+    bring_down_server
+
 elif [ $1 == "build" ]; then
     build_server
+
+elif [ $1 == "rebuild" ]; then
+    rebuild_server
 
 elif [ $1 == "foreground" ]; then
     run_foreground
 
 elif [ $1 == "tail" ]; then
     tail_backend
+
+elif [ $1 == "status" ]; then
+    status_server
+
+elif [ $1 == "cleanup" ]; then
+    cleanup_server
+
+else
+    echo "Unknown command: $1"
+    print_help
 
 fi
 
