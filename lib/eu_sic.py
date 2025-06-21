@@ -19,7 +19,7 @@ UKN = "Unknown"
 DEPENDENCIES = {
     'modules': {},
     'data': {
-        'isicData': 'https://unstats.un.org/unsd/classifications/Econ/isic'
+        'euSicData': 'https://showvoc.op.europa.eu/#/datasets'
     }
 }
 
@@ -42,15 +42,15 @@ CLASS_GROUP = 2
 CLASS_DIVISION = 3
 CLASS_SECTION = 4
 
-class InternationalSICQueries:
-    """A core set of methods designed to interact with a local instance of International SIC (ISIC) data.
+class EuSICQueries:
+    """A core set of methods designed to interact with a local instance of EU SIC (NACE) data.
 
-    The design point is to enable key data to be retrieved from a cache of ISIC data, as stored in SQLite,
+    The design point is to enable key data to be retrieved from a cache of NACE data, as stored in SQLite,
     and respond back to the calling user with appropriate data.
 
     Import and Construct the class:
-        import international_sic
-        controller = international_sic.InternationalSICQueries()
+        import eu_sic
+        controller = eu_sic.EuSICQueries()
 
     Methods:
         get_section_by_code(query_string) - Return section data for the given code
@@ -63,8 +63,8 @@ class InternationalSICQueries:
     def __init__(
         self, 
         db_file: str = './company_dns.db', 
-        name: str = 'international_sic', 
-        description: str = 'A module to lookup International SIC (ISIC) data.'):
+        name: str = 'eu_sic', 
+        description: str = 'A module to lookup EU SIC (NACE) data.'):
 
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
@@ -108,7 +108,7 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT section_code, description FROM isic_sections WHERE section_code LIKE ?"
+        sql_query = "SELECT section_code, description FROM eu_sic_sections WHERE section_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
@@ -124,7 +124,7 @@ class InternationalSICQueries:
         if final_sections['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No section found for query [' + query_str + '].',
+                'message': 'No EU SIC section found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sections,
                 'dependencies': DEPENDENCIES
@@ -132,7 +132,7 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Section data has been returned for query [' + query_str + '].',
+                'message': 'EU SIC section data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sections,
                 'dependencies': DEPENDENCIES
@@ -157,7 +157,7 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT division_code, description, section_code FROM isic_divisions WHERE division_code LIKE ?"
+        sql_query = "SELECT division_code, description, section_code FROM eu_sic_divisions WHERE division_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
@@ -175,7 +175,7 @@ class InternationalSICQueries:
         if final_divisions['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No division found for query [' + query_str + '].',
+                'message': 'No EU SIC division found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_divisions,
                 'dependencies': DEPENDENCIES
@@ -183,7 +183,7 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Division data has been returned for query [' + query_str + '].',
+                'message': 'EU SIC division data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_divisions,
                 'dependencies': DEPENDENCIES
@@ -207,8 +207,8 @@ class InternationalSICQueries:
         # Get safe query string
         query_str = self._safe_query()
         
-        # Define the SQL Query
-        sql_query = "SELECT group_code, description, division_code, section_code FROM isic_groups WHERE group_code LIKE ?"
+        # Define the SQL Query - handle the special EU SIC format with dots (25.9)
+        sql_query = "SELECT group_code, description, division_code, section_code FROM eu_sic_groups WHERE group_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
@@ -228,7 +228,7 @@ class InternationalSICQueries:
         if final_groups['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No group found for query [' + query_str + '].',
+                'message': 'No EU SIC group found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_groups,
                 'dependencies': DEPENDENCIES
@@ -236,7 +236,7 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Group data has been returned for query [' + query_str + '].',
+                'message': 'EU SIC group data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_groups,
                 'dependencies': DEPENDENCIES
@@ -260,8 +260,8 @@ class InternationalSICQueries:
         # Get safe query string
         query_str = self._safe_query()
         
-        # Define the SQL Query
-        sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM isic_classes WHERE class_code LIKE ?"
+        # Define the SQL Query - handle the special EU SIC format with dots (25.91)
+        sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM eu_sic_classes WHERE class_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
@@ -283,7 +283,7 @@ class InternationalSICQueries:
         if final_classes['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No class found for query [' + query_str + '].',
+                'message': 'No EU SIC class found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES
@@ -291,7 +291,7 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Class data has been returned for query [' + query_str + '].',
+                'message': 'EU SIC class data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES
@@ -316,7 +316,7 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM isic_classes WHERE description LIKE ?"
+        sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM eu_sic_classes WHERE description LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
@@ -338,7 +338,7 @@ class InternationalSICQueries:
         if final_classes['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No class found for description query [' + query_str + '].',
+                'message': 'No EU SIC class found for description query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES
@@ -346,7 +346,7 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Class data has been returned for description query [' + query_str + '].',
+                'message': 'EU SIC class data has been returned for description query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES

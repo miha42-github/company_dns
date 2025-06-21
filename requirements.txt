@@ -6,3 +6,4 @@ geopy>=2.4.1
 wptools>=0.4.17
 uvicorn>=0.34.3
 beautifulsoup4>=4.13.4
+openpyxl>=3.1.5

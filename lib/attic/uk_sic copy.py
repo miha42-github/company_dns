@@ -1,7 +1,6 @@
 import sys
 import sqlite3
 import logging
-from typing import Dict, Any, Optional, List, Union
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
@@ -13,10 +12,10 @@ __contact__ = 'https://github.com/miha42-github/company_dns'
 
 #### Globals ####
 # Used for setting attributes consistently when unknown
-UKN: str = "Unknown"
+UKN = "Unknown"
 
 # Package and data dependencies
-DEPENDENCIES: Dict[str, Dict[str, str]] = {
+DEPENDENCIES = {
     'modules': {},
     'data': {
         'ukSicData': 'https://www.gov.uk/government/publications/standard-industrial-classification-of-economic-activities-sic'
@@ -24,8 +23,8 @@ DEPENDENCIES: Dict[str, Dict[str, str]] = {
 }
 
 # Fields from the SQL Select results
-SIC_CODE: int = 0
-SIC_DESC: int = 1
+SIC_CODE = 0
+SIC_DESC = 1
 
 class UKSICQueries:
     """A core set of methods designed to interact with a local instance of UK SIC data.
@@ -44,35 +43,26 @@ class UKSICQueries:
 
     def __init__(
         self, 
-        db_file: str = './company_dns.db', 
-        name: str = 'uk_sic', 
-        description: str = 'A module to lookup UK SIC data.'
-    ) -> None:
+        db_file='./company_dns.db', 
+        name='uk_sic', 
+        description='A module to lookup UK SIC data.'):
 
         # The SQLite database connection and cursor
-        self.e_conn: sqlite3.Connection = sqlite3.connect(db_file)
-        self.ec: sqlite3.Cursor = self.e_conn.cursor()
-        self.db_file: str = db_file
+        self.e_conn = sqlite3.connect(db_file)
+        self.ec = self.e_conn.cursor()
+        self.db_file = db_file
 
         # Naming helpers
-        self.NAME: str = name
-        self.DESC: str = description
+        self.NAME = name
+        self.DESC = description
 
         # Query object
-        self.query: Optional[str] = None
+        self.query = None
 
         # Set up the logging
-        self.logger: logging.Logger = logging.getLogger(self.NAME)
-    
-    def _safe_query(self) -> str:
-        """Return a safe version of the query string, handling None values
-        
-        Returns:
-            str: The query string or empty string if None
-        """
-        return "" if self.query is None else str(self.query)
+        self.logger = logging.getLogger(self.NAME)
 
-    def get_uk_sic_by_code(self) -> Dict[str, Any]:
+    def get_uk_sic_by_code(self):
         """Using a query string find and return a dictionary containing UK SIC codes with their descriptions.
 
         A UK SIC lookup tool enabling a user to specify a query string and obtain a dictionary containing an object
@@ -92,20 +82,17 @@ class UKSICQueries:
         my_class = self.__class__.__name__
 
         # Set up the final data structure
-        final_sics: Dict[str, Any] = {
+        final_sics = {
             'uk_sics': {},
             'total': 0
         }
-        tmp_sics: Dict[str, Dict[str, str]] = {}
+        tmp_sics = {}
 
-        # Get safe query string
-        query_str = self._safe_query()
-
-        # Define the SQL Query - use parameter binding instead of string concatenation
-        sql_query = "SELECT sic_code, description FROM uk_sic WHERE sic_code LIKE ?"
+        # Define the SQL Query
+        sql_query = "SELECT sic_code, description FROM uk_sic WHERE sic_code LIKE '%" + self.query + "%'"
 
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query):
             # Get the fields in a structure we can manipulate
             sic_code = str(row[SIC_CODE])
             sic_desc = str(row[SIC_DESC])
@@ -124,7 +111,7 @@ class UKSICQueries:
         if final_sics['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No UK SIC found for query [' + query_str + '].',
+                'message': 'No UK SIC found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sics,
                 'dependencies': DEPENDENCIES
@@ -132,13 +119,13 @@ class UKSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'UK SIC data has been returned for query [' + query_str + '].',
+                'message': 'UK SIC data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sics,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_uk_sic_by_name(self) -> Dict[str, Any]:
+    def get_uk_sic_by_name(self):
         """Using a query string find and return a dictionary containing UK SIC descriptions with their codes.
 
         A UK SIC lookup tool enabling a user to specify a query string and obtain a dictionary containing an object
@@ -158,22 +145,19 @@ class UKSICQueries:
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_sics: Dict[str, Any] = {
+        final_sics = {
             'uk_sics': {},
             'total': 0
         }
-        tmp_sics: Dict[str, Dict[str, str]] = {}
+        tmp_sics = {}
 
-        # Get safe query string
-        query_str = self._safe_query()
+        self.logger.debug('Querying db cache for [' + self.query + ']')
 
-        self.logger.debug('Querying db cache for [' + query_str + ']')
-
-        # Define the SQL Query - use parameter binding instead of string concatenation
-        sql_query = "SELECT sic_code, description FROM uk_sic WHERE description LIKE ?"
+        # Define the SQL Query
+        sql_query = "SELECT sic_code, description FROM uk_sic WHERE description LIKE '%" + self.query + "%'"
 
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query):
             self.logger.debug(f'Processing row [{row}]')
 
             # Get the fields in a structure we can manipulate
@@ -197,7 +181,7 @@ class UKSICQueries:
             final_sics['uk_sics'] = []
             return {
                 'code': 404, 
-                'message': 'No UK SICs found for query [' + query_str + '].',
+                'message': 'No UK SICs found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sics,
                 'dependencies': DEPENDENCIES
@@ -205,7 +189,7 @@ class UKSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'UK SIC data has been returned for query [' + query_str + '].',
+                'message': 'UK SIC data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sics,
                 'dependencies': DEPENDENCIES

@@ -7,6 +7,7 @@ The V3.0.0 release of the `company_dns` is a significant update to the service. 
 2. Automated monthly container builds, from the main branch of the repository, using GitHub Actions.
 3. Simplification of all aspects of the service including code structure, shift towards simpler Docker, and a more streamlined service control script.
 4. Vastly improved embedded help with a query console to test queries.
+
 We were motivated to make these changes to the service making it easier to improve, maintain and use.
 
 

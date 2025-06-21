@@ -1,6 +1,13 @@
 from lib.prepare_db import MakeDb
 from lib.db_functions import DbFunctions
-from lib.utils import download_edgar_data, download_uk_sic_data, download_international_sic_data
+from lib.utils import (
+    ensure_source_data_dir, 
+    download_edgar_data, 
+    download_uk_sic_data, 
+    download_international_sic_data, 
+    download_eu_sic_data, 
+    download_japan_sic_data
+)
 import logging
 import configparser
 import argparse
@@ -32,15 +39,15 @@ logger = logging.getLogger(__file__)
 logger.debug("Debug logging enabled")
 logger.info("Starting database build process")
 
-# Check to see if the database cache file exists and if so log the event and exit
-# if os.path.exists(config['db_control']['DB_NAME']):
-#     logger.info('The database cache file %s already exists, exiting.', config['db_control']['DB_NAME'])
-#     sys.exit(0)
+# First ensure the source_data directory exists
+ensure_source_data_dir()
 
 # Ensure data directories exist and download required data
 download_edgar_data(config)
 download_uk_sic_data(config)
 download_international_sic_data(config)
+# download_eu_sic_data(config)  # Disabled as it doesn't work
+download_japan_sic_data(config)
 
 # Remove the existing database cache file
 db_functions = DbFunctions(config=config)

@@ -5,9 +5,9 @@ db.exists
 cache.exists
 form_*
 edgar_data
-uk_sic_data
-sic_data
 international_sic_data
+uk_sic_data
+japan_sic_data
 
 # Python
 __pycache__/

@@ -1,7 +1,6 @@
 import sys
 import sqlite3
 import logging
-from typing import Optional, Dict, Any, List, Tuple
 
 __author__ = "Michael Hay"
 __copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
@@ -62,34 +61,26 @@ class InternationalSICQueries:
 
     def __init__(
         self, 
-        db_file: str = './company_dns.db', 
-        name: str = 'international_sic', 
-        description: str = 'A module to lookup International SIC (ISIC) data.'):
+        db_file='./company_dns.db', 
+        name='international_sic', 
+        description='A module to lookup International SIC (ISIC) data.'):
 
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
         self.ec = self.e_conn.cursor()
-        self.db_file: str = db_file
+        self.db_file = db_file
 
         # Naming helpers
-        self.NAME: str = name
-        self.DESC: str = description
+        self.NAME = name
+        self.DESC = description
 
         # Query object
-        self.query: Optional[str] = None
+        self.query = None
 
         # Set up the logging
         self.logger = logging.getLogger(self.NAME)
-        
-    def _safe_query(self) -> str:
-        """Return the query string safely, handling None values
-        
-        Returns:
-            str: The query string or empty string if None
-        """
-        return "" if self.query is None else self.query
 
-    def get_section_by_code(self) -> Dict[str, Any]:
+    def get_section_by_code(self):
         """Return section data for the given code
         
         Returns:
@@ -99,19 +90,16 @@ class InternationalSICQueries:
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_sections: Dict[str, Any] = {
+        final_sections = {
             'sections': {},
             'total': 0
         }
-        
-        # Get safe query string
-        query_str = self._safe_query()
         
         # Define the SQL Query
         sql_query = "SELECT section_code, description FROM isic_sections WHERE section_code LIKE ?"
         
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query, ('%' + self.query + '%',)):
             section_code = str(row[SECTION_CODE])
             section_desc = str(row[SECTION_DESC])
             
@@ -124,7 +112,7 @@ class InternationalSICQueries:
         if final_sections['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No section found for query [' + query_str + '].',
+                'message': 'No section found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sections,
                 'dependencies': DEPENDENCIES
@@ -132,13 +120,13 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Section data has been returned for query [' + query_str + '].',
+                'message': 'Section data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_sections,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_division_by_code(self) -> Dict[str, Any]:
+    def get_division_by_code(self):
         """Return division data for the given code
         
         Returns:
@@ -148,19 +136,16 @@ class InternationalSICQueries:
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_divisions: Dict[str, Any] = {
+        final_divisions = {
             'divisions': {},
             'total': 0
         }
-        
-        # Get safe query string
-        query_str = self._safe_query()
         
         # Define the SQL Query
         sql_query = "SELECT division_code, description, section_code FROM isic_divisions WHERE division_code LIKE ?"
         
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query, ('%' + self.query + '%',)):
             division_code = str(row[DIVISION_CODE])
             division_desc = str(row[DIVISION_DESC])
             section_code = str(row[DIVISION_SECTION])
@@ -175,7 +160,7 @@ class InternationalSICQueries:
         if final_divisions['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No division found for query [' + query_str + '].',
+                'message': 'No division found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_divisions,
                 'dependencies': DEPENDENCIES
@@ -183,13 +168,13 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Division data has been returned for query [' + query_str + '].',
+                'message': 'Division data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_divisions,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_group_by_code(self) -> Dict[str, Any]:
+    def get_group_by_code(self):
         """Return group data for the given code
         
         Returns:
@@ -199,19 +184,16 @@ class InternationalSICQueries:
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_groups: Dict[str, Any] = {
+        final_groups = {
             'groups': {},
             'total': 0
         }
-        
-        # Get safe query string
-        query_str = self._safe_query()
         
         # Define the SQL Query
         sql_query = "SELECT group_code, description, division_code, section_code FROM isic_groups WHERE group_code LIKE ?"
         
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query, ('%' + self.query + '%',)):
             group_code = str(row[GROUP_CODE])
             group_desc = str(row[GROUP_DESC])
             division_code = str(row[GROUP_DIVISION])
@@ -228,7 +210,7 @@ class InternationalSICQueries:
         if final_groups['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No group found for query [' + query_str + '].',
+                'message': 'No group found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_groups,
                 'dependencies': DEPENDENCIES
@@ -236,13 +218,13 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Group data has been returned for query [' + query_str + '].',
+                'message': 'Group data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_groups,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_class_by_code(self) -> Dict[str, Any]:
+    def get_class_by_code(self):
         """Return class data for the given code
         
         Returns:
@@ -252,19 +234,16 @@ class InternationalSICQueries:
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_classes: Dict[str, Any] = {
+        final_classes = {
             'classes': {},
             'total': 0
         }
-        
-        # Get safe query string
-        query_str = self._safe_query()
         
         # Define the SQL Query
         sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM isic_classes WHERE class_code LIKE ?"
         
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query, ('%' + self.query + '%',)):
             class_code = str(row[CLASS_CODE])
             class_desc = str(row[CLASS_DESC])
             group_code = str(row[CLASS_GROUP])
@@ -283,7 +262,7 @@ class InternationalSICQueries:
         if final_classes['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No class found for query [' + query_str + '].',
+                'message': 'No class found for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES
@@ -291,13 +270,13 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Class data has been returned for query [' + query_str + '].',
+                'message': 'Class data has been returned for query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_class_by_description(self) -> Dict[str, Any]:
+    def get_class_by_description(self):
         """Return classes matching the description
         
         Returns:
@@ -307,19 +286,16 @@ class InternationalSICQueries:
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_classes: Dict[str, Any] = {
+        final_classes = {
             'classes': {},
             'total': 0
         }
-        
-        # Get safe query string
-        query_str = self._safe_query()
         
         # Define the SQL Query
         sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM isic_classes WHERE description LIKE ?"
         
         # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+        for row in self.ec.execute(sql_query, ('%' + self.query + '%',)):
             class_code = str(row[CLASS_CODE])
             class_desc = str(row[CLASS_DESC])
             group_code = str(row[CLASS_GROUP])
@@ -338,7 +314,7 @@ class InternationalSICQueries:
         if final_classes['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No class found for description query [' + query_str + '].',
+                'message': 'No class found for description query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES
@@ -346,7 +322,7 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Class data has been returned for description query [' + query_str + '].',
+                'message': 'Class data has been returned for description query [' + self.query + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_classes,
                 'dependencies': DEPENDENCIES

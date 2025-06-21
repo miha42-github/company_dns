@@ -19,52 +19,52 @@ UKN = "Unknown"
 DEPENDENCIES = {
     'modules': {},
     'data': {
-        'isicData': 'https://unstats.un.org/unsd/classifications/Econ/isic'
+        'japanSicData': 'https://www.stat.go.jp/english/data/e-census/2021/industry.html'
     }
 }
 
 # Fields from the SQL Select results
-SECTION_CODE = 0
-SECTION_DESC = 1
-
 DIVISION_CODE = 0
 DIVISION_DESC = 1
-DIVISION_SECTION = 2
+
+MAJOR_GROUP_CODE = 0
+MAJOR_GROUP_DESC = 1
+MAJOR_GROUP_DIVISION = 2
 
 GROUP_CODE = 0
 GROUP_DESC = 1
-GROUP_DIVISION = 2
-GROUP_SECTION = 3
+GROUP_MAJOR_GROUP = 2
+GROUP_DIVISION = 3
 
-CLASS_CODE = 0
-CLASS_DESC = 1
-CLASS_GROUP = 2
-CLASS_DIVISION = 3
-CLASS_SECTION = 4
+INDUSTRY_GROUP_CODE = 0
+INDUSTRY_GROUP_DESC = 1
+INDUSTRY_GROUP_GROUP = 2
+INDUSTRY_GROUP_MAJOR_GROUP = 3
+INDUSTRY_GROUP_DIVISION = 4
 
-class InternationalSICQueries:
-    """A core set of methods designed to interact with a local instance of International SIC (ISIC) data.
+class JapanSICQueries:
+    """A core set of methods designed to interact with a local instance of Japan SIC data.
 
-    The design point is to enable key data to be retrieved from a cache of ISIC data, as stored in SQLite,
+    The design point is to enable key data to be retrieved from a cache of Japan SIC data, as stored in SQLite,
     and respond back to the calling user with appropriate data.
 
     Import and Construct the class:
-        import international_sic
-        controller = international_sic.InternationalSICQueries()
+        import japan_sic
+        controller = japan_sic.JapanSICQueries()
 
     Methods:
-        get_section_by_code(query_string) - Return section data for the given code
         get_division_by_code(query_string) - Return division data for the given code
+        get_major_group_by_code(query_string) - Return major group data for the given code
         get_group_by_code(query_string) - Return group data for the given code
-        get_class_by_code(query_string) - Return class data for the given code
-        get_class_by_description(query_string) - Return classes matching the description
+        get_industry_group_by_code(query_string) - Return industry group data for the given code
+        get_industry_group_by_description(query_string) - Return industry groups matching the description
     """
 
     def __init__(
         self, 
         db_file: str = './company_dns.db', 
-        name: str = 'international_sic', 
-        description: str = 'A module to lookup International SIC (ISIC) data.'):
+        name: str = 'japan_sic', 
+        description: str = 'A module to lookup Japan SIC data.'):
 
         # The SQLite database connection and cursor
         self.e_conn = sqlite3.connect(db_file)
@@ -89,55 +89,6 @@ class InternationalSICQueries:
         """
         return "" if self.query is None else self.query
 
-    def get_section_by_code(self) -> Dict[str, Any]:
-        """Return section data for the given code
-        
-        Returns:
-            sections_data (dict): Data about the section
-        """
-        my_function = sys._getframe(0).f_code.co_name
-        my_class = self.__class__.__name__
-        
-        # Set up the final data structure
-        final_sections: Dict[str, Any] = {
-            'sections': {},
-            'total': 0
-        }
-        
-        # Get safe query string
-        query_str = self._safe_query()
-        
-        # Define the SQL Query
-        sql_query = "SELECT section_code, description FROM isic_sections WHERE section_code LIKE ?"
-        
-        # Issue the query
-        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
-            section_code = str(row[SECTION_CODE])
-            section_desc = str(row[SECTION_DESC])
-            
-            final_sections['sections'][section_code] = {
-                'description': section_desc
-            }
-        
-        final_sections['total'] = len(final_sections['sections'])
-        
-        if final_sections['total'] == 0:
-            return {
-                'code': 404, 
-                'message': 'No section found for query [' + query_str + '].',
-                'module': my_class + '-> ' + my_function,
-                'data': final_sections,
-                'dependencies': DEPENDENCIES
-            }
-        else:
-            return {
-                'code': 200, 
-                'message': 'Section data has been returned for query [' + query_str + '].',
-                'module': my_class + '-> ' + my_function,
-                'data': final_sections,
-                'dependencies': DEPENDENCIES
-            }
-
     def get_division_by_code(self) -> Dict[str, Any]:
         """Return division data for the given code
         
@@ -157,17 +108,15 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT division_code, description, section_code FROM isic_divisions WHERE division_code LIKE ?"
+        sql_query = "SELECT division_code, description FROM japan_sic_divisions WHERE division_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
             division_code = str(row[DIVISION_CODE])
             division_desc = str(row[DIVISION_DESC])
-            section_code = str(row[DIVISION_SECTION])
             
             final_divisions['divisions'][division_code] = {
-                'description': division_desc,
-                'section_code': section_code
+                'description': division_desc
             }
         
         final_divisions['total'] = len(final_divisions['divisions'])
@@ -175,7 +124,7 @@ class InternationalSICQueries:
         if final_divisions['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No division found for query [' + query_str + '].',
+                'message': 'No Japan SIC division found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_divisions,
                 'dependencies': DEPENDENCIES
@@ -183,9 +132,60 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Division data has been returned for query [' + query_str + '].',
+                'message': 'Japan SIC division data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_divisions,
+                'dependencies': DEPENDENCIES
+            }
+
+    def get_major_group_by_code(self) -> Dict[str, Any]:
+        """Return major group data for the given code
+        
+        Returns:
+            major_groups_data (dict): Data about the major group
+        """
+        my_function = sys._getframe(0).f_code.co_name
+        my_class = self.__class__.__name__
+        
+        # Set up the final data structure
+        final_major_groups: Dict[str, Any] = {
+            'major_groups': {},
+            'total': 0
+        }
+        
+        # Get safe query string
+        query_str = self._safe_query()
+        
+        # Define the SQL Query
+        sql_query = "SELECT major_group_code, description, division_code FROM japan_sic_major_groups WHERE major_group_code LIKE ?"
+        
+        # Issue the query
+        for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
+            major_group_code = str(row[MAJOR_GROUP_CODE])
+            major_group_desc = str(row[MAJOR_GROUP_DESC])
+            division_code = str(row[MAJOR_GROUP_DIVISION])
+            
+            final_major_groups['major_groups'][major_group_code] = {
+                'description': major_group_desc,
+                'division_code': division_code
+            }
+        
+        final_major_groups['total'] = len(final_major_groups['major_groups'])
+        
+        if final_major_groups['total'] == 0:
+            return {
+                'code': 404, 
+                'message': 'No Japan SIC major group found for query [' + query_str + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': final_major_groups,
+                'dependencies': DEPENDENCIES
+            }
+        else:
+            return {
+                'code': 200, 
+                'message': 'Japan SIC major group data has been returned for query [' + query_str + '].',
+                'module': my_class + '-> ' + my_function,
+                'data': final_major_groups,
                 'dependencies': DEPENDENCIES
             }
 
@@ -208,19 +208,19 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT group_code, description, division_code, section_code FROM isic_groups WHERE group_code LIKE ?"
+        sql_query = "SELECT group_code, description, major_group_code, division_code FROM japan_sic_groups WHERE group_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
             group_code = str(row[GROUP_CODE])
             group_desc = str(row[GROUP_DESC])
+            major_group_code = str(row[GROUP_MAJOR_GROUP])
             division_code = str(row[GROUP_DIVISION])
-            section_code = str(row[GROUP_SECTION])
             
             final_groups['groups'][group_code] = {
                 'description': group_desc,
-                'division_code': division_code,
-                'section_code': section_code
+                'major_group_code': major_group_code,
+                'division_code': division_code
             }
         
         final_groups['total'] = len(final_groups['groups'])
@@ -228,7 +228,7 @@ class InternationalSICQueries:
         if final_groups['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No group found for query [' + query_str + '].',
+                'message': 'No Japan SIC group found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_groups,
                 'dependencies': DEPENDENCIES
@@ -236,24 +236,24 @@ class InternationalSICQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Group data has been returned for query [' + query_str + '].',
+                'message': 'Japan SIC group data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_groups,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_class_by_code(self) -> Dict[str, Any]:
-        """Return class data for the given code
+    def get_industry_group_by_code(self) -> Dict[str, Any]:
+        """Return industry group data for the given code
         
         Returns:
-            classes_data (dict): Data about the class
+            industry_groups_data (dict): Data about the industry group
         """
         my_function = sys._getframe(0).f_code.co_name
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_classes: Dict[str, Any] = {
-            'classes': {},
+        final_industry_groups: Dict[str, Any] = {
+            'industry_groups': {},
             'total': 0
         }
         
@@ -261,54 +261,54 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM isic_classes WHERE class_code LIKE ?"
+        sql_query = "SELECT industry_code, description, group_code, major_group_code, division_code FROM japan_sic_industry_groups WHERE industry_code LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
-            class_code = str(row[CLASS_CODE])
-            class_desc = str(row[CLASS_DESC])
-            group_code = str(row[CLASS_GROUP])
-            division_code = str(row[CLASS_DIVISION])
-            section_code = str(row[CLASS_SECTION])
+            industry_code = str(row[INDUSTRY_GROUP_CODE])
+            industry_desc = str(row[INDUSTRY_GROUP_DESC])
+            group_code = str(row[INDUSTRY_GROUP_GROUP])
+            major_group_code = str(row[INDUSTRY_GROUP_MAJOR_GROUP])
+            division_code = str(row[INDUSTRY_GROUP_DIVISION])
             
-            final_classes['classes'][class_code] = {
-                'description': class_desc,
+            final_industry_groups['industry_groups'][industry_code] = {
+                'description': industry_desc,
                 'group_code': group_code,
-                'division_code': division_code,
-                'section_code': section_code
+                'major_group_code': major_group_code,
+                'division_code': division_code
             }
         
-        final_classes['total'] = len(final_classes['classes'])
+        final_industry_groups['total'] = len(final_industry_groups['industry_groups'])
         
-        if final_classes['total'] == 0:
+        if final_industry_groups['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No class found for query [' + query_str + '].',
+                'message': 'No Japan SIC industry group found for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_classes,
+                'data': final_industry_groups,
                 'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
-                'message': 'Class data has been returned for query [' + query_str + '].',
+                'message': 'Japan SIC industry group data has been returned for query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_classes,
+                'data': final_industry_groups,
                 'dependencies': DEPENDENCIES
             }
 
-    def get_class_by_description(self) -> Dict[str, Any]:
-        """Return classes matching the description
+    def get_industry_group_by_description(self) -> Dict[str, Any]:
+        """Return industry groups matching the description
         
         Returns:
-            classes_data (dict): Data about matching classes
+            industry_groups_data (dict): Data about matching industry groups
         """
         my_function = sys._getframe(0).f_code.co_name
         my_class = self.__class__.__name__
         
         # Set up the final data structure
-        final_classes: Dict[str, Any] = {
-            'classes': {},
+        final_industry_groups: Dict[str, Any] = {
+            'industry_groups': {},
             'total': 0
         }
         
@@ -316,38 +316,38 @@ class InternationalSICQueries:
         query_str = self._safe_query()
         
         # Define the SQL Query
-        sql_query = "SELECT class_code, description, group_code, division_code, section_code FROM isic_classes WHERE description LIKE ?"
+        sql_query = "SELECT industry_code, description, group_code, major_group_code, division_code FROM japan_sic_industry_groups WHERE description LIKE ?"
         
         # Issue the query
         for row in self.ec.execute(sql_query, ('%' + query_str + '%',)):
-            class_code = str(row[CLASS_CODE])
-            class_desc = str(row[CLASS_DESC])
-            group_code = str(row[CLASS_GROUP])
-            division_code = str(row[CLASS_DIVISION])
-            section_code = str(row[CLASS_SECTION])
+            industry_code = str(row[INDUSTRY_GROUP_CODE])
+            industry_desc = str(row[INDUSTRY_GROUP_DESC])
+            group_code = str(row[INDUSTRY_GROUP_GROUP])
+            major_group_code = str(row[INDUSTRY_GROUP_MAJOR_GROUP])
+            division_code = str(row[INDUSTRY_GROUP_DIVISION])
             
-            final_classes['classes'][class_desc] = {
-                'code': class_code,
+            final_industry_groups['industry_groups'][industry_desc] = {
+                'code': industry_code,
                 'group_code': group_code,
-                'division_code': division_code,
-                'section_code': section_code
+                'major_group_code': major_group_code,
+                'division_code': division_code
             }
         
-        final_classes['total'] = len(final_classes['classes'])
+        final_industry_groups['total'] = len(final_industry_groups['industry_groups'])
         
-        if final_classes['total'] == 0:
+        if final_industry_groups['total'] == 0:
             return {
                 'code': 404, 
-                'message': 'No class found for description query [' + query_str + '].',
+                'message': 'No Japan SIC industry group found for description query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_classes,
+                'data': final_industry_groups,
                 'dependencies': DEPENDENCIES
             }
         else:
             return {
                 'code': 200, 
-                'message': 'Class data has been returned for description query [' + query_str + '].',
+                'message': 'Japan SIC industry group data has been returned for description query [' + query_str + '].',
                 'module': my_class + '-> ' + my_function,
-                'data': final_classes,
+                'data': final_industry_groups,
                 'dependencies': DEPENDENCIES
             }

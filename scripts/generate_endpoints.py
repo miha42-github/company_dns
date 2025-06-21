@@ -36,7 +36,17 @@ HANDLER_DESCRIPTIONS = {
     "international_sic_division": "Accepts a string containing a division code, returns data about the matching ISIC division.",
     "international_sic_group": "Accepts a string containing a group code, returns data about the matching ISIC group.",
     "international_sic_class": "Accepts a string containing a class code, returns data about the matching ISIC class.",
-    "international_sic_class_description": "Accepts a string containing a description, returns ISIC classes matching the description."
+    "international_sic_class_description": "Accepts a string containing a description, returns ISIC classes matching the description.",
+    "japan_sic_division": "Accepts a string containing a division code, returns data about the matching Japan SIC division.",
+    "japan_sic_major_group": "Accepts a string containing a major group code, returns data about the matching Japan SIC major group.",
+    "japan_sic_group": "Accepts a string containing a group code, returns data about the matching Japan SIC group.",
+    "japan_sic_industry_group": "Accepts a string containing an industry code, returns data about the matching Japan SIC industry group.",
+    "japan_sic_industry_group_description": "Accepts a string containing a description, returns Japan SIC industry groups matching the description.",
+    "eu_sic_section": "Accepts a string containing a section code, returns data about the matching EU SIC (NACE) section.",
+    "eu_sic_division": "Accepts a string containing a division code, returns data about the matching EU SIC (NACE) division.",
+    "eu_sic_group": "Accepts a string containing a group code, returns data about the matching EU SIC (NACE) group.",
+    "eu_sic_class": "Accepts a string containing a class code, returns data about the matching EU SIC (NACE) class.",
+    "eu_sic_class_description": "Accepts a string containing a description, returns EU SIC (NACE) classes matching the description.",
 }
 
 # Dictionary to map endpoints to friendly names
@@ -70,7 +80,12 @@ ENDPOINT_FRIENDLY_NAMES = {
     "/sic/code/": "SIC Code",
     "/sic/division/": "SIC Division",
     "/sic/industry/": "SIC Industry",
-    "/sic/major/": "SIC Major"
+    "/sic/major/": "SIC Major",
+    "/japan/sic/division/": "Japan SIC Division",
+    "/japan/sic/major_group/": "Japan SIC Major Group",
+    "/japan/sic/group/": "Japan SIC Group", 
+    "/japan/sic/industry_group/": "Japan SIC Industry Group",
+    "/japan/sic/description/": "Japan SIC Description",
 }
 
 def parse_endpoints():
