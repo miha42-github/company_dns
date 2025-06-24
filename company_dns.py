@@ -17,6 +17,7 @@ from lib.uk_sic import UKSICQueries
 from lib.international_sic import InternationalSICQueries
 from lib.eu_sic import EuSICQueries
 from lib.japan_sic import JapanSICQueries
+from lib.unified_sic import UnifiedSICQueries
     
 # -------------------------------------------------------------- #
 # BEGIN: Standard Idustry Classification (SIC) database cache functions
@@ -105,6 +106,14 @@ async def japan_sic_industry_group_description(request):
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
+# BEGIN: Unified Standard Industry Classification database cache functions
+async def unified_sic_description(request):
+    return _handle_request(request, unified_sic_q, unified_sic_q.search_all_descriptions, 'query_string')
+
+# END: Unified Standard Industry Classification database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
 # BEGIN: EDGAR dabase cache functions
 async def edgar_detail(request):
     return _handle_request(request, eq, eq.get_all_details, 'company_name')
@@ -189,6 +198,9 @@ eusicsq = EuSICQueries()
 
 global japansicsq
 japansicsq = JapanSICQueries()
+
+global unified_sic_q
+unified_sic_q = UnifiedSICQueries()
 # END: Define query objects
 # -------------------------------------------------------------- #
 
@@ -289,6 +301,12 @@ app = Starlette(debug=True, middleware=middleware, routes=[
     Route('/V3.0/japan/sic/group/{group_code}', japan_sic_group),
     Route('/V3.0/japan/sic/industry_group/{industry_code}', japan_sic_industry_group),
     Route('/V3.0/japan/sic/description/{industry_desc}', japan_sic_industry_group_description),
+    # -------------------------------------------------------------- #
+
+
+    # -------------------------------------------------------------- #
+    # Unified SIC endpoints
+    Route('/V3.0/global/sic/description/{query_string}', unified_sic_description),
     # -------------------------------------------------------------- #
 
 

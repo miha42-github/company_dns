@@ -84,6 +84,23 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Set up listeners for form changes
   setupFormStateListeners();
+  
+  // Add this event listener for the execute button
+  const executeButton = document.getElementById('executeRequestBtn');
+  if (executeButton) {
+    executeButton.addEventListener('click', function() {
+      // Manually trigger the form submission
+      const form = document.getElementById('endpointForm');
+      if (form) {
+        // Create and dispatch a submit event
+        const submitEvent = new Event('submit', {
+          bubbles: true,
+          cancelable: true
+        });
+        form.dispatchEvent(submitEvent);
+      }
+    });
+  }
 });
 
 document.getElementById('endpointForm').addEventListener('submit', function(event) {
@@ -135,3 +152,35 @@ document.getElementById('endpointForm').addEventListener('submit', function(even
       });
   }
 });
+
+// Update the function to use the new class names
+
+function copyResponseToClipboard() {
+  const responseElement = document.getElementById('queryResults');
+  let textToCopy = '';
+  
+  // Check if the results contain a pre element (formatted JSON)
+  const preElement = responseElement.querySelector('pre');
+  if (preElement) {
+    textToCopy = preElement.textContent;
+  } else {
+    textToCopy = responseElement.textContent;
+  }
+  
+  // Only copy if there's content
+  if (textToCopy.trim() && !textToCopy.includes('Execute a request to see results')) {
+    navigator.clipboard.writeText(textToCopy).then(() => {
+      const button = document.getElementById('copyResponseButton');
+      const originalText = button.querySelector('.copy-text').textContent;
+      button.querySelector('.copy-text').textContent = 'Copied!';
+      
+      setTimeout(() => {
+        button.querySelector('.copy-text').textContent = originalText;
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+    });
+  }
+}
+
+// Update copyToClipboard function if needed to handle the new class naming

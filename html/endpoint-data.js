@@ -45,7 +45,8 @@ const endpointsData = {
     "/japan/sic/major_group/{major_group_code}": "Accepts a string containing a major group code, returns data about the matching Japan SIC major group.",
     "/japan/sic/group/{group_code}": "Accepts a string containing a group code, returns data about the matching Japan SIC group.",
     "/japan/sic/industry_group/{industry_code}": "Accepts a string containing an industry code, returns data about the matching Japan SIC industry group.",
-    "/japan/sic/description/{industry_desc}": "Accepts a string containing a description, returns Japan SIC industry groups matching the description."
+    "/japan/sic/description/{industry_desc}": "Accepts a string containing a description, returns Japan SIC industry groups matching the description.",
+    "/global/sic/description/{query_string}": "Accepts a string containing a SIC description of interest, returns all SIC descriptions that matched the full or partial string across all SIC systems."
   }
 };
 
@@ -91,6 +92,7 @@ const endpoints = {
     "/japan/sic/major_group/{major_group_code}": "/japan/sic/major_group/{major_group_code}",
     "/japan/sic/group/{group_code}": "/japan/sic/group/{group_code}",
     "/japan/sic/industry_group/{industry_code}": "/japan/sic/industry_group/{industry_code}",
-    "/japan/sic/description/{industry_desc}": "/japan/sic/description/{industry_desc}"
+    "/japan/sic/description/{industry_desc}": "/japan/sic/description/{industry_desc}",
+    "/global/sic/description/{query_string}": "/global/sic/description/{query_string}"
   }
 };

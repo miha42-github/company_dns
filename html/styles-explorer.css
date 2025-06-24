@@ -1,0 +1,647 @@
+/* Industry Code Explorer styling */
+.explorer-search-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0 1rem;
+  height: 100%;
+  margin-top: 0; /* Ensure no top margin */
+}
+
+.explorer-search-container h1 {
+  margin-top: 1rem; /* Match other tabs' heading margin */
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.explorer-intro {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 1rem;
+}
+
+.explorer-intro-compact {
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.explorer-features {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.explorer-feature {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  border-left: 3px solid #1696c8;
+  min-width: 200px;
+}
+
+.explorer-feature span {
+  margin-left: 10px;
+}
+
+.explorer-search-card {
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin: 2rem auto;
+  border: 1px solid #3c3b3b;
+  max-width: 700px;
+  width: 100%;
+}
+
+.explorer-search-card h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #3c3b3b;
+  text-align: center;
+}
+
+.explorer-input-group {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.explorer-input-group .explorer-input {
+  flex-grow: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.explorer-input-group .explorer-button {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.explorer-search-hint {
+  font-size: 0.9em;
+  color: rgb(104, 95, 88);
+  margin-top: 0.8rem;
+  text-align: center;
+}
+
+.explorer-action-icon {
+  display: inline-block;
+  width: 50px; /* Increase from 1rem to 20px */
+  height: 20px; /* Increase from 1rem to 20px */
+  margin-right: 4px;
+  vertical-align: middle;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E");
+  background-size: contain; /* Keep this */
+  background-repeat: no-repeat;
+  position: relative;
+  top: 1.5px;
+}
+
+/* Results layout redesign */
+.explorer-results-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 140px); /* Use fixed calculation instead of auto */
+  margin-bottom: 10px; /* Add a small margin */
+  padding: 0 1rem 10px 1rem; /* Add bottom padding */
+  box-sizing: border-box;
+  gap: 1rem;
+  overflow: visible;
+}
+
+.explorer-search-wrapper {
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #3c3b3b;
+}
+
+.explorer-top-container {
+  height: auto;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+
+.explorer-content-wrapper {
+  flex: 1;
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  border: 1px solid #3c3b3b;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  /* height: calc(100vh - 220px);
+  min-height: 400px; */
+}
+
+/* Results with filters container */
+.explorer-results-filters {
+  display: flex;
+  height: 100%; /* Take full height of parent */
+  flex: 1; 
+  overflow: hidden;
+}
+
+/* Filters sidebar redesign */
+.explorer-sidebar {
+  width: 220px;
+  padding: 1rem;
+  border-right: 1px solid #3c3b3b;
+  height: 100%;
+  overflow-y: auto;
+  flex-shrink: 0;
+  background-color: transparent;
+}
+
+.explorer-sidebar-title {
+  text-align: left;
+  margin-bottom: 1rem;
+  margin-top: 0;
+  color: #1696c8;
+  font-size: 1.1em;
+  font-weight: bold;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+}
+
+.explorer-filter-guide {
+  margin-top: 2rem;
+  font-size: 0.9em;
+}
+
+.explorer-filter-guide h4 {
+  color: #1696c8;
+  margin-bottom: 0.8rem;
+}
+
+.explorer-classification-guide {
+  list-style-type: none;
+  padding: 0;
+}
+
+.explorer-classification-guide li {
+  margin-bottom: 0.8rem;
+  border-left: 2px solid #3c3b3b;
+  padding-left: 0.8rem;
+}
+
+.explorer-classification-guide strong {
+  color: #ca703f;
+}
+
+/* Make the results area take full height and distribute content correctly */
+.explorer-results-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Take full height */
+  overflow: hidden;
+  position: relative;
+}
+
+/* Ensure the container wrapper expands but allows scrolling */
+.explorer-container-wrapper {
+  flex: 1;
+  overflow: hidden; /* Not auto - let inner container handle scrolling */
+  display: flex;
+  flex-direction: column;
+  /* min-height: 0; */
+}
+
+/* Fix the results container to properly scroll */
+.explorer-results-container {
+  padding: 1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
+  margin: 0;
+  border: none;
+  /* Remove the conflicting height definitions */
+  /* height: auto; */
+  position: relative;
+}
+
+/* Ensure pagination stays visible */
+.explorer-pagination {
+  flex: 0 0 50px; /* Fixed height, don't grow or shrink */
+  height: 50px;
+  border-top: 1px solid #3c3b3b;
+  background-color: #1a1718;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative; /* Not sticky - that's causing issues */
+  z-index: 10;
+  width: 100%;
+  margin-top: auto; /* Push to bottom of flex container */
+}
+
+/* Ensure content wrapper doesn't overflow */
+.explorer-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 300px; /* Minimum reasonable height */
+  height: calc(100vh - 300px); /* Better height calculation */
+  max-height: none; /* Remove max height restriction causing cutoff */
+  overflow: hidden;
+}
+
+/* Modified search status specific to Explorer */
+.explorer-search-status {
+  padding: 0;
+  padding-left: 1rem;
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.1;
+  overflow: hidden;
+  color: #1696c8;
+  font-weight: bold;
+}
+
+.explorer-container-wrapper {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Explorer-specific results container */
+.explorer-results-container {
+  padding: 1rem;
+  height: auto;
+  flex: 1;
+  overflow-y: auto !important; /* Force scrolling */
+  margin: 0;
+  border: none;
+}
+
+/* Result card redesign */
+.explorer-result-card {
+  background-color: #0F0D0E;
+  border: 1px solid #3c3b3b;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+.explorer-result-title-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.explorer-result-title {
+  font-weight: 500;
+  color: #f0f0f0;
+}
+
+.explorer-source-badge {
+  background-color: #1696c8;
+  color: #0F0D0E;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.explorer-result-source {
+  padding: 0.3rem;
+  font-weight: bold;
+  color: #ca703f;
+  white-space: nowrap;
+}
+
+.explorer-result-details {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.5rem 1.5rem;
+}
+
+.explorer-detail-item {
+  display: flex;
+  gap: 0.5rem;
+  color: #f0f0f0;
+  font-size: 0.9em;
+}
+
+.explorer-detail-label {
+  color: #1696c8;
+  font-weight: 500;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+/* Add this to handle text truncation in result details */
+.explorer-detail-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px; /* Limit width to force truncation */
+  display: inline-block;
+  cursor: help; /* Show help cursor on hover */
+}
+
+/* Optional: Improve appearance when hovering */
+.explorer-detail-value:hover {
+  color: #1696c8;
+  text-decoration: underline dotted;
+}
+
+/* Pagination container */
+.explorer-pagination {
+  flex-shrink: 0;
+  height: 50px; /* Set fixed height instead of vh */
+  border-top: 1px solid #3c3b3b;
+  background-color: #1a1718;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  position: relative; /* Add this */
+  z-index: 2; /* Ensure controls appear above content */
+  width: 100%; /* Ensure full width */
+}
+
+/* Pagination controls */
+.explorer-pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 8px 0;
+}
+
+/* Style pagination buttons to match app design */
+.explorer-pagination-controls button {
+  background-color: #0F0D0E;
+  border: 0.05rem solid rgb(104, 95, 88);
+  color: #1696c8;
+  padding: 0.3rem 0.6rem;
+  margin: 0 0.3rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 11pt;
+  min-width: 2rem;
+  text-align: center;
+}
+
+/* Active page button styling */
+.explorer-pagination-controls button.active {
+  background-color: #1696c8;
+  color: #0F0D0E;
+  border-color: #1696c8;
+  font-weight: bold;
+}
+
+/* Hover effect on buttons */
+.explorer-pagination-controls button:hover:not(.active):not(:disabled) {
+  border-color: #ca703f;
+}
+
+/* Disabled button styling */
+.explorer-pagination-controls button:disabled {
+  color: rgb(104, 95, 88);
+  cursor: not-allowed;
+}
+
+/* Style for ellipsis between page numbers */
+.explorer-pagination-controls span {
+  color: #ca703f;
+  margin: 0 0.3rem;
+}
+
+/* Filter-related classes */
+.explorer-filter-options {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.explorer-filter-label {
+  margin-bottom: 0.8rem;
+  font-weight: bold;
+  color: #ca703f;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+}
+
+.explorer-filter-checkboxes {
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.explorer-filter-checkbox {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  position: relative;
+  height: 24px;
+}
+
+.explorer-filter-checkbox label {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  width: calc(100% - 30px);
+}
+
+.explorer-filter-checkbox input[type="checkbox"] {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.explorer-filter-count {
+  position: absolute;
+  right: 0;
+  top: 33%;
+  transform: translateY(-50%);
+  color: #ca703f;
+  font-size: 0.9em;
+  min-width: 25px;
+  text-align: right;
+}
+
+/* Responsiveness for smaller screens */
+@media (max-width: 768px) {
+  .explorer-results-filters {
+    flex-direction: column;
+  }
+  
+  .explorer-sidebar {
+    width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid #3c3b3b;
+  }
+  
+  .explorer-features {
+    flex-direction: column;
+  }
+}
+
+/* Add styles for explorer inputs and buttons */
+.explorer-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem;
+  background-color: #0F0D0E;
+  border: 0.05rem solid rgb(104, 95, 88);
+  border-radius: 0.5rem;
+  color: #1696c8;
+  font-size: 1em;
+  min-height: 2.5rem;
+}
+
+.explorer-button {
+  display: flex;
+  align-items: center;
+  justify-content: center; /* Add this for horizontal centering */
+  padding: 0.7rem 1.2rem;
+  font-size: 1em;
+  background-color: #1a1718;
+  border: 0.05rem solid #1696c8;
+  color: #1696c8;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin: 0;
+  min-height: 2.5rem; /* Match the input height */
+}
+
+.explorer-button:hover {
+  background-color: #202020;
+}
+
+/* Style the tab content */
+.explorer-pagecontent {
+  box-sizing: border-box;
+  display: none;
+  /* height: calc(100vh - 90px); */
+  padding: 0;
+  overflow: visible;
+}
+
+/* Add these styles for the JSON modal viewer */
+
+/* "View JSON" button for result cards */
+.explorer-view-json-btn {
+  background: none;
+  border: 1px solid #1696c8;
+  color: #1696c8;
+  cursor: pointer;
+  font-size: 0.9em;
+  padding: 0.3rem 0.6rem;
+  margin-top: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 0.3rem;
+}
+
+.explorer-view-json-btn:hover {
+  background-color: rgba(22, 150, 200, 0.1);
+}
+
+/* Modal overlay */
+.explorer-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
+
+.explorer-modal {
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  border: 1px solid #3c3b3b;
+  width: 80%;
+  max-width: 800px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.explorer-modal-header {
+  padding: 1rem;
+  border-bottom: 1px solid #3c3b3b;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.explorer-modal-title {
+  font-size: 1.2rem;
+  color: #ca703f;
+  font-weight: bold;
+}
+
+.explorer-modal-close {
+  background: none;
+  border: none;
+  color: #1696c8;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.explorer-modal-content {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.explorer-json-display {
+  background-color: #0F0D0E;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  font-family: monospace;
+  white-space: pre;
+  overflow-x: auto;
+  color: #f0f0f0;
+}
+
+.explorer-modal-footer {
+  padding: 1rem;
+  border-top: 1px solid #3c3b3b;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.explorer-copy-json-btn {
+  background-color: #1696c8;
+  color: #0F0D0E;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.explorer-copy-json-btn:hover {
+  background-color: #41a6ce;
+}

@@ -47,6 +47,7 @@ HANDLER_DESCRIPTIONS = {
     "eu_sic_group": "Accepts a string containing a group code, returns data about the matching EU SIC (NACE) group.",
     "eu_sic_class": "Accepts a string containing a class code, returns data about the matching EU SIC (NACE) class.",
     "eu_sic_class_description": "Accepts a string containing a description, returns EU SIC (NACE) classes matching the description.",
+    "unified_sic_description": "Accepts a string containing a SIC description of interest, returns all SIC descriptions that matched the full or partial string across all SIC systems.",
 }
 
 # Dictionary to map endpoints to friendly names
@@ -86,6 +87,7 @@ ENDPOINT_FRIENDLY_NAMES = {
     "/japan/sic/group/": "Japan SIC Group", 
     "/japan/sic/industry_group/": "Japan SIC Industry Group",
     "/japan/sic/description/": "Japan SIC Description",
+    "/global/sic/description/": "Global SIC Description",
 }
 
 def parse_endpoints():
