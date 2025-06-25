@@ -1,9 +1,30 @@
 from lib.prepare_db import MakeDb
 from lib.db_functions import DbFunctions
+from lib.utils import (
+    ensure_source_data_dir, 
+    download_edgar_data, 
+    download_uk_sic_data, 
+    download_international_sic_data, 
+    download_eu_sic_data, 
+    download_japan_sic_data
+)
 import logging
-import os
-import sys
 import configparser
+import argparse
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Build the company DNS database.')
+parser.add_argument('--verbose', '-v', action='store_true', help='Enable verbose logging')
+parser.add_argument('--debug', '-d', action='store_true', help='Enable debug logging')
+args = parser.parse_args()
+
+# Set logging level based on arguments
+if args.debug:
+    log_level = logging.DEBUG
+elif args.verbose:
+    log_level = logging.INFO
+else:
+    log_level = logging.WARNING
 
 # Create a ConfigParser object
 config = configparser.ConfigParser()
@@ -12,22 +33,21 @@ config = configparser.ConfigParser()
 config.read('company_dns.conf')
 
 # Set up the logging
-logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=logging.INFO)
+logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
 logger = logging.getLogger(__file__)
 
-#  Check to see if the database cache file exists and if so log the event and exit
-if os.path.exists(config['db_control']['DB_NAME']):
-    logger.info('The database cache file %s already exists, exiting.', config['db_control']['DB_NAME'])
-    sys.exit(0)
+logger.debug("Debug logging enabled")
+logger.info("Starting database build process")
 
-# Check to see if the directory ./edgar_data exists if not create it
-logger.info('Checking for the existence of the directory %s.', config['edgar_data']['EDGAR_DATA_DIR'])
-try:
-    os.mkdir(config['edgar_data']['EDGAR_DATA_DIR'])
-    logger.info('%s does not exist creating it.', config['edgar_data']['EDGAR_DATA_DIR'])
-except FileExistsError:
-    logger.info('%s exists skipping creation.', config['edgar_data']['EDGAR_DATA_DIR'])
-    pass
+# First ensure the source_data directory exists
+ensure_source_data_dir()
+
+# Ensure data directories exist and download required data
+download_edgar_data(config)
+download_uk_sic_data(config)
+download_international_sic_data(config)
+# download_eu_sic_data(config)  # Disabled as it doesn't work
+download_japan_sic_data(config)
 
 # Remove the existing database cache file
 db_functions = DbFunctions(config=config)
