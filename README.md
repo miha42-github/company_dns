@@ -1,8 +1,23 @@
 # Motivation for the company_dns
 To enable a more automated approach to gathering information about companies `company_dns` was created.  This release enables the synthesis of data from the [SEC EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html) and [Wikipedia](https://wikipedia.org).  A [Medium](https://medium.com) article entitled "[A case for API based open company firmographics](https://medium.com/@michaelhay_90395/a-case-for-api-based-open-company-firmographics-145e4baf121b)" is available discussing the process and motivation behind the creation of this service.
 
-# Introducing V3.0.0
-The V3.0.0 release of the `company_dns` is a significant update to the service.  The primary changes are:
+# Changes
+
+## Introducing V3.1.0
+The V3.1.0 release of `company_dns` brings significant UI improvements to enhance usability and functionality:
+
+1. Renamed sections to "[Industry Code Explorer](./IndustryCodeExplorer.md)" and "[Query Explorer](./QueryExplorer.md)" for consistent terminology
+2. Fixed cross-browser compatibility issues affecting Chrome and Safari
+3. Improved search results display with horizontal detail layout
+4. Added JSON viewer modal for search results with copy capability
+5. More compact layout for the Query Explorer to maximize screen real estate
+6. Enhanced pagination controls and scroll behavior
+7. Added proper DOCTYPE declaration to ensure modern rendering mode
+
+These changes improve the overall user experience while maintaining the core functionality of the service.
+
+## Introducing V3.0.0
+The V3.0.0 release of the `company_dns` is a significant update to the service. The primary changes are:
 1. Shift from Flask to Starlette with Uvicorn.
 2. Automated monthly container builds, from the main branch of the repository, using GitHub Actions.
 3. Simplification of all aspects of the service including code structure, shift towards simpler Docker, and a more streamlined service control script.
@@ -104,14 +119,9 @@ Here are the things that are likely to be worked but without any strict deadline
 
 1. Determine if feasible to talk to the companies house API for gathering data from the UK
     1. Initial feasibility has been checked, but the value of the data is still being evaluated
-2. Research other pools of public data which can serve to enrich 
-    1. There are additional data pools including NAICS and UK SIC codes which could be added. Additional Industry Code data sources by country are likely a first target to add. The deeper question is how to merge these data sources for a kind of universal classification.
-3. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House
+2. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House
 4. Provide instructions/details for running on a Pi or Arm based system
     1. Since one of the target docker images is for ARM, the next logical step is to provide instructions for running on a Pi.
-
-### The Lagniappe 
-Run on a RasberryPi: To be reauthored
 
 # License
 Since this code falls under a liberal Apache-V2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.
