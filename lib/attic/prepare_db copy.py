@@ -5,8 +5,7 @@ from .prepare_sic_data import ExtractSicData
 from .prepare_edgar_data import ExtractEdgarData
 from .prepare_uk_sic_data import ExtractUkSicData
 from .prepare_international_sic_data import ExtractInternationalSicData
-from .prepare_eu_sic_data import ExtractEuSicData
-from .prepare_japan_sic_data import ExtractJapanSicData
+from .prepare_eu_sic_data import ExtractEuSicData  # Add import for EU SIC data
 
 class MakeDb:
     """Create the database cache file
@@ -23,8 +22,7 @@ class MakeDb:
         self.edgar_extractor = ExtractEdgarData(config=self.config)
         self.uk_sic_extractor = ExtractUkSicData(config=self.config)
         self.international_sic_extractor = ExtractInternationalSicData(config=self.config)
-        self.eu_sic_extractor = ExtractEuSicData(config=self.config)
-        self.japan_sic_extractor = ExtractJapanSicData(config=self.config)  # Add Japan SIC extractor
+        self.eu_sic_extractor = ExtractEuSicData(config=self.config)  # Add EU SIC extractor
         self.db_functions = DbFunctions(operating_path=self.operating_path, config=self.config)
 
 # -------------------------------------------------------------- #
@@ -205,45 +203,6 @@ class MakeDb:
     # END: EU Standard Industry Classification (NACE) database cache functions
     # -------------------------------------------------------------- #
 
-    # -------------------------------------------------------------- #
-    # BEGIN: Japan Standard Industry Classification database cache functions
-
-    def _create_japan_sic_tables(self, c, conn):
-        """Create the Japan SIC tables
-        """
-        logger.info('Creating tables for the Japan SIC data.')
-        c.execute('CREATE TABLE japan_sic_divisions (division_code text, description text)')
-        c.execute('CREATE TABLE japan_sic_major_groups (major_group_code text, description text, division_code text)')
-        c.execute('CREATE TABLE japan_sic_groups (group_code text, description text, major_group_code text, division_code text)')
-        c.execute('CREATE TABLE japan_sic_industry_groups (industry_code text, description text, group_code text, major_group_code text, division_code text)')
-        conn.commit()
-
-    def _insert_japan_sic_data(self, c, conn, japan_sic_data):
-        """Load the Japan SIC data into the DB cache file
-        """
-        logger.info('Adding Japan SIC data to the companies db cache file.')
-        num = len(japan_sic_data['divisions']) + len(japan_sic_data['major_groups']) + len(japan_sic_data['groups']) + len(japan_sic_data['industry_groups'])
-        
-        c.executemany('INSERT INTO japan_sic_divisions VALUES (?,?)', japan_sic_data['divisions'])
-        c.executemany('INSERT INTO japan_sic_major_groups VALUES (?,?,?)', japan_sic_data['major_groups'])
-        c.executemany('INSERT INTO japan_sic_groups VALUES (?,?,?,?)', japan_sic_data['groups'])
-        c.executemany('INSERT INTO japan_sic_industry_groups VALUES (?,?,?,?,?)', japan_sic_data['industry_groups'])
-        
-        conn.commit()
-        return num
-
-    def _build_japan_sic_db(self, c, conn):
-        """Build the Japan SIC data in the DB cache file
-        """
-        logger.info('Creating the Japan SIC tables, and loading the Japan SIC data into the db cache file.')
-        self._create_japan_sic_tables(c, conn)
-        japan_sic_data = self.japan_sic_extractor.extract_data()
-        num = self._insert_japan_sic_data(c, conn, japan_sic_data)
-        return num
-
-    # END: Japan Standard Industry Classification database cache functions
-    # -------------------------------------------------------------- #
-
     def build_db(self):
         """
         Perform all operations needed to build the DB cache file
@@ -270,9 +229,6 @@ class MakeDb:
         
         # Build and load the EU SIC data
         total += self._build_eu_sic_db(my_cursor, my_conn)
-
-        # Build and load the Japan SIC data
-        total += self._build_japan_sic_db(my_cursor, my_conn)
 
         # Log the total number of entries in the database
         logger.info('Total number of entries in the database cache file: %s.', total)
