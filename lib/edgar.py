@@ -127,13 +127,17 @@ class EdgarQueries:
         }
         tmp_companies = {}
 
+        # Previous implementation:
+        # "SELECT * FROM companies WHERE name LIKE '%" + 
+        #     self.query + 
+        #     "%' AND form LIKE '" + 
+        #     self.form_type +
+        #     "%'"):
+
         # Select all companies from the table that match the query string  
         for row in self.ec.execute(
-            "SELECT * FROM companies WHERE name LIKE '%" + 
-            self.query + 
-            "%' AND form LIKE '" + 
-            self.form_type +
-            "%'"):
+            "SELECT * FROM companies WHERE name LIKE ? AND form LIKE ?",
+            (f'%{self.query}%', f'{self.form_type}%')):
 
             # Company name
             company_name = str(row[COMPANY])
@@ -158,7 +162,7 @@ class EdgarQueries:
         elif final_companies['totalCompanies'] == 0:
             return {
                 'code': 404, 
-                'message': 'No company CIK found for query [' + self.query + '].',
+                'message': f'No company CIK found for query [{self.query}].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -166,7 +170,7 @@ class EdgarQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Company CIK data has been returned for query [' + self.query + '].',
+                'message': f'Company CIK data has been returned for query [{self.query}].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -200,20 +204,28 @@ class EdgarQueries:
         }
         tmp_companies = {}
 
-        # Define the type of SQL query to use
-        sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
-            self.query + \
-            "%' AND form LIKE '" + \
-            self.form_type + \
-            "%'" \
-        if not cik_query \
-        else "SELECT * FROM companies WHERE cik = " + \
-            self.query + \
-            " AND form LIKE '" + \
-            self.form_type + \
-            "%'"
+        # Previous implementation:
+        #         sql_query = "SELECT * FROM companies WHERE name LIKE '%" + \
+        #     self.query + \
+        #     "%' AND form LIKE '" + \
+        #     self.form_type + \
+        #     "%'" \
+        # if not cik_query \
+        # else "SELECT * FROM companies WHERE cik = " + \
+        #     self.query + \
+        #     " AND form LIKE '" + \
+        #     self.form_type + \
+        #     "%'"
 
-        for row in self.ec.execute(sql_query):
+        # Define the type of SQL query to use
+        if not cik_query:
+            sql_query = "SELECT * FROM companies WHERE name LIKE ? AND form LIKE ?"
+            params = (f'%{self.query}%', f'{self.form_type}%')
+        else:
+            sql_query = "SELECT * FROM companies WHERE cik = ? AND form LIKE ?"
+            params = (self.query, f'{self.form_type}%')
+
+        for row in self.ec.execute(sql_query, params):
             
             # Directory Listing for the filing
             filing_dir = str(row[CIK]) + '/' + row[ACCESSION].replace('-', '')
@@ -271,7 +283,7 @@ class EdgarQueries:
         elif final_companies['totalCompanies'] == 0:
             return {
                 'code': 404, 
-                'message': 'No company found for query [' + self.query + '].',
+                'message': f'No company found for query [{self.query}].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -280,7 +292,7 @@ class EdgarQueries:
         else:
             return {
                 'code': 200, 
-                'message': 'Company data has been returned for query [' + self.query + '].',
+                'message': f'Company data has been returned for query [{self.query}].',
                 'module': my_class + '-> ' + my_function,
                 'data': final_companies,
                 'dependencies': DEPENDENCIES
@@ -323,10 +335,10 @@ class EdgarQueries:
         my_cik = cik if cik else self.query
 
         # Define the CIK and the CIK file name
-        cik_padding_needed = 10 - len(my_cik)
-        cik_with_padding = '0' * cik_padding_needed + my_cik
+        cik_padding_needed = 10 - len(str(my_cik))
+        cik_with_padding = f"{'0' * cik_padding_needed}{my_cik}"
 
-        cik_file = 'CIK' + cik_with_padding + '.json'
+        cik_file = f'CIK{cik_with_padding}.json'
 
         # Define the full URL for the RESTful call
         my_url = EDGARDATA + cik_file
@@ -366,30 +378,35 @@ class EdgarQueries:
         firmographics = self._transform_raw_firmographics(firmographics, raw_firmographics)
 
         # Enrich with some additional URLs to better access EDGAR data
-        firmographics['companyFactsURL'] = fact_url
-        firmographics['firmographicsURL'] = my_url
-        firmographics['filingsURL'] = EDGARURI + EDGARSERVER + BROWSEEDGAR+ my_cik + EDGARSEARCH
-        firmographics['transactionsByIssuer'] = EDGARURI + EDGARSERVER + GETISSUER + my_cik
-        firmographics['transactionsByOwner'] = EDGARURI + EDGARSERVER + GETOWNER + my_cik
+        firmographics['companyFactsURL'] = fact_url # type: ignore
+        firmographics['firmographicsURL'] = my_url # type: ignore
+        firmographics['filingsURL'] = f"{EDGARURI}{EDGARSERVER}{BROWSEEDGAR}{my_cik}{EDGARSEARCH}" # type: ignore
+        firmographics['transactionsByIssuer'] = f"{EDGARURI}{EDGARSERVER}{GETISSUER}{my_cik}" # type: ignore
+        firmographics['transactionsByOwner'] = f"{EDGARURI}{EDGARSERVER}{GETOWNER}{my_cik}" # type: ignore
 
         # Cleanup stock information
-        firmographics['exchanges'] = [firmographics['exchanges'][0]]
-        firmographics['tickers'] = [firmographics['exchanges'][0], firmographics['tickers'][0]]
+        firmographics['exchanges'] = [firmographics['exchanges'][0]] # type: ignore
+        firmographics['tickers'] = [firmographics['exchanges'][0], firmographics['tickers'][0]] # type: ignore
 
         # Flatten the address information
-        firmographics['city'] = firmographics['addresses']['mailing']['city']
-        firmographics['stateProvince'] = firmographics['addresses']['mailing']['stateOrCountry']
-        firmographics['zipPostal'] = firmographics['addresses']['mailing']['zipCode']
-        firmographics['address'] = firmographics['addresses']['mailing']['street1'] \
-            if not firmographics['addresses']['mailing']['street2'] \
-            else firmographics['addresses']['mailing']['street1'] + " " + firmographics['addresses']['mailing']['street2']
+        firmographics['city'] = firmographics['addresses']['mailing']['city'] # type: ignore
+        firmographics['stateProvince'] = firmographics['addresses']['mailing']['stateOrCountry'] # type: ignore
+        firmographics['zipPostal'] = firmographics['addresses']['mailing']['zipCode'] # type: ignore
+        firmographics['address'] = ( # type: ignore
+            firmographics['addresses']['mailing']['street1'] # type: ignore
+            if not firmographics['addresses']['mailing']['street2'] # type: ignore
+            else f"{firmographics['addresses']['mailing']['street1']} {firmographics['addresses']['mailing']['street2']}" # type: ignore
+        )  # type: ignore
         del firmographics['addresses']
 
         # Extend and normalize data related to the Standard Information code
         sic_query = sic.SICQueries(db_file=self.db_file)
-        sic_query.query = firmographics['sic'] # Existing value, example: 3570
-        industry_group = firmographics['sic'][0:3] # Fallback value, example: 357
-        major_group = firmographics['sic'][0:2] # Fallback value, example: 35
+        # Existing value, example: 3570
+        sic_query.query = firmographics['sic'] # type: ignore
+        # Fallback value, example: 357
+        industry_group = firmographics['sic'][0:3]  # type: ignore
+        # Fallback value, example: 35
+        major_group = firmographics['sic'][0:2]  # type: ignore
         division = None
         sic_results = sic_query.get_all_sic_by_no()
         
@@ -421,7 +438,7 @@ class EdgarQueries:
             if industry_results['code'] == 200:
                 firmographics['industryGroupDescription'] = industry_results['data']['industry_groups'][industry_group]['description']
             else:
-                firmographics['industryGroupDescription'] = UKN
+                firmographics['industryGroupDescription'] = UKN # type: ignore
 
             # Major group
             firmographics['majorGroup'] = major_group
@@ -430,7 +447,7 @@ class EdgarQueries:
             if major_results['code'] == 200:
                 firmographics['majorGroupDescription'] = major_results['data']['major_groups'][major_group]['description']
             else:
-                firmographics['majorGroupDescription'] = UKN
+                firmographics['majorGroupDescription'] = UKN # type: ignore
 
             # Division
             if firmographics['majorGroupDescription'] != UKN:
@@ -440,10 +457,10 @@ class EdgarQueries:
                 if division_results['code'] == 200:
                     firmographics['divisionDescription'] = division_results['data']['division'][firmographics['division']]['description']
                 else:
-                    firmographics['divisionDescription'] = UKN
+                    firmographics['divisionDescription'] = UKN # type: ignore
             else:
-                firmographics['division'] = UKN
-                firmographics['divisionDescription'] = UKN
+                firmographics['division'] = UKN # type: ignore
+                firmographics['divisionDescription'] = UKN # type: ignore
         
 
         # Return the company details
@@ -452,7 +469,7 @@ class EdgarQueries:
         else:
             return {
                     'code': 200, 
-                    'message': 'Company data has been returned for query [' + my_cik + '].',
+                    'message': f'Company data has been returned for query [{my_cik}].',
                     'module': my_class + '-> ' + my_function,
                     'data': firmographics,
                     'dependencies': DEPENDENCIES

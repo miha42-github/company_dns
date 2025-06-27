@@ -3,9 +3,11 @@ import pprint
 import re
 import sys
 import logging
+import time
+import concurrent.futures
 
 __author__ = "Michael Hay"
-__copyright__ = "Copyright 2024, Mediumroast, Inc. All rights reserved."
+__copyright__ = "Copyright 2025, Mediumroast, Inc. All rights reserved."
 __license__ = "Apache 2.0"
 __version__ = "1.2.0"
 __maintainer__ = "Michael Hay"
@@ -21,6 +23,13 @@ DEPENDENCIES = {
     'data': {'wikiData': 'https://www.wikidata.org/wiki/Wikidata:Data_access'}
 }
 
+# Precompiled regex patterns for better performance
+RE_BRACKETS = re.compile(r'\[\[|\]\]')
+RE_PARENS = re.compile(r'\s*\(\S+\)$')
+RE_PIPES = re.compile(r'\|')
+RE_BRACES = re.compile(r'\{\{.+?\|.+?\}\}')
+RE_BR = re.compile(r'<br>')
+
 class WikipediaQueries:
     def __init__(self, name='wikipedia', description='A module and simple CLI too to search for company data in wikipedia.'):
         self.query = None
@@ -31,14 +40,14 @@ class WikipediaQueries:
         # What we are are to query
         self.query = None
 
+    # Update _get_item method
     def _get_item(self, obj, variants, rules, idx):
         for variant in variants:
             if variant in obj:
-                # Remove the uncessary characters
+                # Remove the unnecessary characters
                 tmp_item = obj[variant].strip(rules)
                 # If there are pipes then get rid of them
-                # TODO this might not be so general purpose check it out
-                if re.search(r'\|', tmp_item):
+                if RE_PIPES.search(tmp_item):
                     return tmp_item.split('|')[idx]  
                 else: 
                     return tmp_item
@@ -46,44 +55,46 @@ class WikipediaQueries:
                 continue
         return UKN
     
+    # Update _transform_isin method
     def _transform_isin(self, isin):
         tmp_item = str()
-        if re.search('ISIN', isin):
-            tmp_item = re.findall(r'\{\{.+?\|.+?\}\}', isin.strip())[-1]
-            tmp_item = isin.strip(r'[\{\}]')
-            tmp_item = tmp_item.split('|')[-1] 
+        if 'ISIN' in isin:
+            try:
+                tmp_item = RE_BRACES.findall(isin.strip())[-1]
+                tmp_item = tmp_item.strip('{}')
+                return tmp_item.split('|')[-1]
+            except (IndexError, AttributeError):
+                return UKN
         else:
-            tmp_item = isin.strip(r'[\{\}]')
+            tmp_item = isin.strip('{}')
         return tmp_item
 
+    # Update _transform_stock_ticker method
     def _transform_stock_ticker(self, traded_as):
-        """Transformation of the traded_as into sufficient stock exchange and ticker
-
-        {{Unbulleted list'
-                      '   | |NASDAQ|TSLA|'
-                      '   | [[Nasdaq-100]] component'
-                      '   | [[S&P 100]] component'
-                      '   | [[S&P 500]] component}} {{NASDAQ|TSLA}}' <-- Get this last part as it is consistent
-        """
-        tmp_match = re.findall(r'\{\{.+?\|.+?\}\}', traded_as.strip())[-1]
-
-        # {{{NASDAQ|TSLA}} -> NASDAQ|TSLA
-        tmp_match = tmp_match.strip(r'[\{\}]')
-
-        # NASDAQ|TSLA -> [NASDAQ, TSLA]
-        exchange = None
-        ticker = None
         try:
-            [exchange, ticker] = tmp_match.split('|')
-        except:
-            [exchange, ticker] = [UKN, UKN]
+            tmp_match = RE_BRACES.findall(traded_as.strip())[-1]
+            tmp_match = tmp_match.strip('{}')
 
-        return [exchange, ticker]
+            exchange = None
+            ticker = None
+            try:
+                parts = RE_PIPES.split(tmp_match)
+                exchange, ticker = parts[0], parts[1]
+            except:
+                exchange, ticker = UKN, UKN
+
+            return [exchange, ticker]
+        except (IndexError, AttributeError):
+            return [UKN, UKN]
 
 
-    def get_firmographics(self):
+    def get_firmographics(self, fields=None):
         my_function = sys._getframe(0).f_code.co_name
         my_class = self.__class__.__name__
+        
+        # Start timing the entire operation
+        total_start_time = time.time()
+        self.logger.info(f'Starting retrieval of firmographics for [{self.query}] via its wikipedia page.')
 
         # Store data here for return to the caller
         firmographics = dict()
@@ -91,7 +102,7 @@ class WikipediaQueries:
         # Define the common lookup_error
         lookup_error = {
                 'code': 404,
-                'message': 'Unable to find a company by the name [' + self.query + ']. Maybe you should try an alternative structure like [' + self.query + ' Inc.,' + self.query + ' Corp., or ' + self.query + ' Corporation].',
+                'message': f'Unable to find a company by the name [{self.query}]. Maybe you should try an alternative structure like [{self.query} Inc.,{self.query} Corp., or {self.query} Corporation].',
                 'error': 'LookupError',
                 'module': my_class + '-> ' + my_function,
                 'dependencies': DEPENDENCIES,
@@ -101,141 +112,234 @@ class WikipediaQueries:
                 }
             }
 
-        # TODO try to do the right thing by trying different common combinations like Company, Inc.; Company Corp, etc.
-        # Log the start of this process including self.query
-        self.logger.info(f'Starting retrieval of firmographics for [{self.query}] via its wikipedia page.')
-        company_page = None
-        try:
-            company_page = wptools.page(self.query, silent=True)
-            if not company_page:
-                self.logger.error(f'A wikipedia page for [{self.query}] was not found.')
+        # Track all timing separately
+        page_creation_start = time.time()
+        # Create the page object once
+        company_page = wptools.page(self.query, silent=True)
+        page_elapsed = time.time() - page_creation_start
+
+        # Execute API calls in parallel
+        parallel_api_start = time.time()
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+            # Submit all tasks
+            parse_future = executor.submit(company_page.get_parse, show=False)
+            query_future = executor.submit(company_page.get_query, show=False)
+            wikidata_future = executor.submit(company_page.get_wikidata, show=False)
+            
+            # Get results as they complete
+            try:
+                parse_results = parse_future.result()
+                query_results = query_future.result()
+                page_data = wikidata_future.result()
+            except Exception as e:
+                parallel_api_elapsed = time.time() - parallel_api_start
+                self.logger.error(f"Error retrieving data for [{self.query}]: {str(e)} after {parallel_api_elapsed:.3f} seconds")
                 return lookup_error
-            # Log the completion of the page creation
-            self.logger.debug(f'Page results for [{self.query}]: {company_page}')
-        except Exception as e:
-            self.logger.error(f'A wikipedia page for [{self.query}] was not found due to [{e}].')
-            return lookup_error
+    
+        parallel_api_elapsed = time.time() - parallel_api_start
+        self.logger.info(f'Completed parallel API calls for [{self.query}] in {parallel_api_elapsed:.3f} seconds')
 
         # Prepare to get the infoblox for the company
-        # Log the start of the process to get the infobox for the company
+        parse_start_time = time.time()
         self.logger.info(f'Starting process to retrieve infobox for [{self.query}].')
         parse_results = None
         try:
             parse_results = company_page.get_parse(show=False)
-            if not parse_results.data['infobox']:
-                self.logger.error('An infobox for [' + self.query + '] was not found.')
+            if not parse_results.data['infobox']: # type: ignore
+                parse_elapsed = time.time() - parse_start_time
+                self.logger.error(f'An infobox for [{self.query}] was not found. Operation took {parse_elapsed:.3f} seconds')
                 return lookup_error
-            # Log the completion of the infobox creation
-            self.logger.info('Completed infobox retrieval for [' + self.query + '].')
+            parse_elapsed = time.time() - parse_start_time
+            self.logger.info(f'Completed infobox retrieval for [{self.query}] in {parse_elapsed:.3f} seconds')
         except Exception as e:
-            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}].')
+            parse_elapsed = time.time() - parse_start_time
+            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}]. Operation took {parse_elapsed:.3f} seconds')
             return lookup_error
         
         # Get the company info from the infobox
+        infobox_start_time = time.time()
         company_info = None
         try:
-            company_info = parse_results.data['infobox']
+            company_info = parse_results.data['infobox'] # type: ignore
             if not company_info: 
-                self.logger.error('An infobox for [' + self.query + '] was not found.')
+                infobox_elapsed = time.time() - infobox_start_time
+                self.logger.error(f'An infobox for [{self.query}] was not found. Operation took {infobox_elapsed:.3f} seconds')
                 return lookup_error
-            self.logger.info('Completed infobox parse for [' + self.query + '].')
+            infobox_elapsed = time.time() - infobox_start_time
+            self.logger.info(f'Completed infobox parse for [{self.query}] in {infobox_elapsed:.3f} seconds')
         except Exception as e:
-            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}].')
+            infobox_elapsed = time.time() - infobox_start_time
+            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}]. Operation took {infobox_elapsed:.3f} seconds')
             return lookup_error
 
         # Obtain the query results
+        query_start_time = time.time()
         try:
-            # Log the start of the process to get the query results for the company
-            self.logger.info('Starting get query for [' + self.query + '].')
+            self.logger.info(f'Starting get query for [{self.query}].')
             query_results = company_page.get_query(show=False)
-            # Log the completion of the query results for the company
-            self.logger.info('Completed get query for [' + self.query + '].')
-        except:
+            query_elapsed = time.time() - query_start_time
+            self.logger.info(f'Completed get query for [{self.query}] in {query_elapsed:.3f} seconds')
+        except Exception as e:
+            query_elapsed = time.time() - query_start_time
+            self.logger.error(f'Query for [{self.query}] failed due to [{e}]. Operation took {query_elapsed:.3f} seconds')
             return lookup_error
         
         # Try to get the wikidata for the company
+        wikidata_start_time = time.time()
         try:
-            # Log the start of the process to get the wikidata for the company
-            self.logger.info('Starting wikidata retrieval for [' + self.query + '].')
+            self.logger.info(f'Starting wikidata retrieval for [{self.query}].')
             page_data = company_page.get_wikidata(show=False)
-            # Log the completion of the wikidata for the company
-            self.logger.info('Completed wikidata retrieval for [' + self.query + '].')
-        except:
+            wikidata_elapsed = time.time() - wikidata_start_time
+            self.logger.info(f'Completed wikidata retrieval for [{self.query}] in {wikidata_elapsed:.3f} seconds')
+        except Exception as e:
+            wikidata_elapsed = time.time() - wikidata_start_time
+            self.logger.error(f'Wikidata retrieval for [{self.query}] failed due to [{e}]. Operation took {wikidata_elapsed:.3f} seconds')
             return lookup_error
 
         # Log the beginning of the firmographics data extraction
-        self.logger.info('Starting firmographics data extraction for [' + self.query + '].')
+        extraction_start_time = time.time()
+        self.logger.info(f'Starting firmographics data extraction for [{self.query}].')
 
         # Set the description
-        firmographics['description'] = query_results.data['extext'].replace('\n', ' ').replace('**', '')
+        desc_start_time = time.time()
+        # Don't store the entire HTML content if not needed
+        if 'extext' in query_results.data: # type: ignore
+            firmographics['description'] = query_results.data['extext'].replace('\n', ' ').replace('**', '') # type: ignore
+            # Remove the original text to save memory
+            del query_results.data['extext'] # type: ignore
+        desc_elapsed = time.time() - desc_start_time
+        self.logger.debug(f'Description extraction completed in {desc_elapsed:.3f} seconds')
 
         # Wikipedia page URL
-        firmographics['wikipediaURL'] = query_results.data['url']
+        firmographics['wikipediaURL'] = query_results.data['url'] # type: ignore
 
         # Company type
-        # [[Public company|Public]] This is the format if a public company, but others can be different
-        firmographics['type'] = re.sub(r'\[\[|\]\]', '', company_info['type']) if 'type' in company_info else 'Private Company (Assumed)'
-        firmographics['type'] = firmographics['type'].split('|')[0].strip() if re.search(r'\|', firmographics['type']) else firmographics['type']
-        firmographics['type'] = firmographics['type'].split('(')[0].strip() if re.search(r'\(', firmographics['type']) else firmographics['type']
-        firmographics['type'] = firmographics['type'].strip(']') # if re.search(r'\]', firmographics['type']) else firmographics['type']
-        firmographics['type'] = firmographics['type'].strip('[') # if re.search(r'\[', firmographics['type']) else firmographics['type']
+        type_start_time = time.time()
+        if 'type' in company_info:
+            company_type = RE_BRACKETS.sub('', company_info['type'])
+            if RE_PIPES.search(company_type):
+                company_type = RE_PIPES.split(company_type)[0].strip()
+            firmographics['type'] = company_type.split('(')[0].strip() if '(' in company_type else company_type
+        else:
+            firmographics['type'] = 'Private Company (Assumed)'
+        type_elapsed = time.time() - type_start_time
+        self.logger.debug(f'Company type extraction completed in {type_elapsed:.3f} seconds')
 
         # Industry ['industry (P452)'] <-- may contain more than one industry making this a list
-        firmographics['industry'] = page_data.data['wikidata']['industry (P452)'] if 'industry (P452)' in page_data.data['wikidata'] else UKN
+        industry_start_time = time.time()
+        firmographics['industry'] = page_data.data['wikidata'].get('industry (P452)', UKN) # type: ignore
         # In the case this isn't a list clean off the last bit of string data: <Industry Name> (123...N) <-- this last part should be removed
-        if not type(firmographics['industry']) is list: 
-            firmographics['industry'] = [re.sub(r'\s*\(\S+\)$', '', firmographics['industry'])]
+        if not isinstance(firmographics['industry'], list): 
+            firmographics['industry'] = [RE_PARENS.sub('', firmographics['industry'])]
         else:
-            firmographics['industry'] = [re.sub(r'\s*\(\S+\)$', '', industry) for industry in firmographics['industry']]
+            firmographics['industry'] = [RE_PARENS.sub('', industry) for industry in firmographics['industry']]
+        industry_elapsed = time.time() - industry_start_time
+        self.logger.debug(f'Industry extraction completed in {industry_elapsed:.3f} seconds')
 
         # Formal company name
-        firmographics['name'] = company_info['name'] if 'name' in company_info else UKN
+        firmographics['name'] = company_info.get('name', UKN)
 
         # Country ['country (P17)'] with a fallback to what is in company_info, the wikidata version is cleaner
-        firmographics['country'] = page_data.data['wikidata']['country (P17)'] if 'country (P17)' in page_data.data['wikidata'] else self._get_item(company_info, ['location_country', 'hq_location_country'], r'[\[\]]', 0)
-        if not type(firmographics['country']) is list: 
-            firmographics['country'] = re.sub(r'\s*\(\S+\)$', '', firmographics['country'])
+        country_start_time = time.time()
+        firmographics['country'] = page_data.data['wikidata']['country (P17)'] if 'country (P17)' in page_data.data['wikidata'] else self._get_item(company_info, ['location_country', 'hq_location_country'], r'[\[\]]', 0) # type: ignore
+        if not isinstance(firmographics['country'], list): 
+            firmographics['country'] = RE_PARENS.sub('', firmographics['country'])
         else:
-            firmographics['country'] = [re.sub(r'\s*\(\S+\)$', '', country) for country in firmographics['country']]
-
+            firmographics['country'] = [RE_PARENS.sub('', country) for country in firmographics['country']]
+        country_elapsed = time.time() - country_start_time
+        self.logger.debug(f'Country extraction completed in {country_elapsed:.3f} seconds')
 
         # City
+        city_start_time = time.time()
         firmographics['city'] = self._get_item(company_info, ['location_city', 'hq_location_city', 'location'], r'\[\[\]\]', 0)
-        firmographics['city'] = firmographics['city'].replace('[[', '').replace(']]', '') if re.search(r'(\[)|(\])', firmographics['city']) else firmographics['city']
-        firmographics['city'] = firmographics['city'].replace('<br>', ', ') if re.search('<br>', firmographics['city']) else firmographics['city']
-
+        firmographics['city'] = RE_BRACKETS.sub('', firmographics['city'])
+        firmographics['city'] = RE_BR.sub(', ', firmographics['city'])
+        city_elapsed = time.time() - city_start_time
+        self.logger.debug(f'City extraction completed in {city_elapsed:.3f} seconds')
 
         # Website ['official website (P856)'] <-- This could be an array of multiple websites we will return all of them
-        firmographics['website'] = page_data.data['wikidata']['official website (P856)'] if 'official website (P856)' in page_data.data['wikidata'] else self._get_item(company_info, ['website', 'homepage', 'url'], r'[\{\}]', 1)
-        firmographics['website'] = [firmographics['website']] if type(firmographics['website']) is not list else firmographics['website']
+        website_start_time = time.time()
+        firmographics['website'] = page_data.data['wikidata']['official website (P856)'] if 'official website (P856)' in page_data.data['wikidata'] else self._get_item(company_info, ['website', 'homepage', 'url'], r'[\{\}]', 1) # type: ignore
+        if not isinstance(firmographics['website'], list): 
+            firmographics['website'] = [firmographics['website'].strip()]
+        website_elapsed = time.time() - website_start_time
+        self.logger.debug(f'Website extraction completed in {website_elapsed:.3f} seconds')
 
         # ISIN which is International Securities Identification Number
+        isin_start_time = time.time()
         firmographics['isin'] = self._transform_isin(company_info['ISIN']) if 'ISIN' in company_info else UKN
+        isin_elapsed = time.time() - isin_start_time
+        self.logger.debug(f'ISIN extraction completed in {isin_elapsed:.3f} seconds')
 
         # CIK Central Index Key for Public companies
         # ['Central Index Key (P5531)'] <-- Exists if this is a public company in the US
-        firmographics['cik'] = page_data.data['wikidata']['Central Index Key (P5531)'] if 'Central Index Key (P5531)' in page_data.data['wikidata'] else UKN
+        cik_start_time = time.time()
+        firmographics['cik'] = page_data.data['wikidata'].get('Central Index Key (P5531)', UKN) # type: ignore
+        cik_elapsed = time.time() - cik_start_time
+        self.logger.debug(f'CIK extraction completed in {cik_elapsed:.3f} seconds')
 
-        # Stock information if available
-        # [firmographics['exchanges'], firmographics['tickers']] = self._transform_stock_ticker(company_info['traded_as'])
-        
         # Stock exchange ['stock exchange (P414)'] <-- potentially an array if the company is listed on multiple exchanges
-        firmographics['exchanges'] = page_data.data['wikidata']['stock exchange (P414)'] if 'stock exchange (P414)' in page_data.data['wikidata'] else UKN
+        exchange_start_time = time.time()
+        firmographics['exchanges'] = page_data.data['wikidata'].get('stock exchange (P414)', UKN) # type: ignore
         # In the case this isn't a list clean off the last bit of string data: <Exchange Name> (123...N) <-- this last part should be removed
-        if not type(firmographics['exchanges']) is list: 
-            firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', firmographics['exchanges'])]
+        if not isinstance(firmographics['exchanges'], list): 
+            firmographics['exchanges'] = [RE_PARENS.sub('', firmographics['exchanges'])]
         else:
-            firmographics['exchanges'] = [re.sub(r'\s*\(\S+\)$', '', exchange) for exchange in firmographics['exchanges']]
+            firmographics['exchanges'] = [RE_PARENS.sub('', exchange) for exchange in firmographics['exchanges']]
+        exchange_elapsed = time.time() - exchange_start_time
+        self.logger.debug(f'Stock exchange extraction completed in {exchange_elapsed:.3f} seconds')
 
-        if 'traded_as' in company_info: firmographics['tickers'] = self._transform_stock_ticker(company_info['traded_as'])
+        if 'traded_as' in company_info: 
+            ticker_start_time = time.time()
+            firmographics['tickers'] = self._transform_stock_ticker(company_info['traded_as'])
+            ticker_elapsed = time.time() - ticker_start_time
+            self.logger.debug(f'Ticker extraction completed in {ticker_elapsed:.3f} seconds')
         
-        # Log the completion of the firmographics data extraction
-        self.logger.info('Completed firmographics data extraction for [' + self.query + '].')
+        extraction_elapsed = time.time() - extraction_start_time
+        total_elapsed = time.time() - total_start_time
+        self.logger.info(f'Completed firmographics data extraction for [{self.query}] in {extraction_elapsed:.3f} seconds')
+        self.logger.info(f'Total firmographics retrieval for [{self.query}] completed in {total_elapsed:.3f} seconds')
+
+        # If fields is specified, only extract those fields
+        if fields:
+            # Create a subset of firmographics with only the requested fields
+            result = {field: firmographics.get(field, UKN) for field in fields if field in firmographics}
+        else:
+            result = firmographics
 
         return {
                 'code': 200,
-                'message': 'Discovered and returning wikipedia data for the company [' + self.query + '].',
+                'message': f'Discovered and returning wikipedia data for the company [{self.query}].',
                 'module': my_class + '-> ' + my_function,
-                'data': firmographics,
-                'dependencies': DEPENDENCIES
+                'data': result,
+                'dependencies': DEPENDENCIES,
+                'performance': {
+                    'total_time': total_elapsed,
+                    'page_creation': page_elapsed,
+                    'parallel_api_time': parallel_api_elapsed,
+                    'parse_time': parse_elapsed if 'parse_elapsed' in locals() else 0,
+                    'infobox_time': infobox_elapsed if 'infobox_elapsed' in locals() else 0,
+                    'query_time': query_elapsed if 'query_elapsed' in locals() else 0,
+                    'wikidata_time': wikidata_elapsed if 'wikidata_elapsed' in locals() else 0,
+                    'extraction_time': extraction_elapsed
+                }
         }
+
+    # Add static resource pool
+    _page_pool = []
+    _pool_size = 5
+
+    # Get a page object from the pool
+    def _get_page_object(self):
+        if WikipediaQueries._page_pool:
+            page = WikipediaQueries._page_pool.pop()
+            page.refresh(self.query)
+        else:
+            page = wptools.page(self.query, silent=True)
+        return page
+
+    # Return a page object to the pool
+    def _return_page_object(self, page):
+        if len(WikipediaQueries._page_pool) < WikipediaQueries._pool_size:
+            WikipediaQueries._page_pool.append(page)

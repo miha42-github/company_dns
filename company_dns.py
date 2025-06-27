@@ -8,11 +8,14 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
+import asyncio
 
 from lib.sic import SICQueries
 from lib.edgar import EdgarQueries
 from lib.wikipedia import WikipediaQueries
+# from lib.wikipedia_async import WikipediaQueriesAsync as WikipediaQueries
 from lib.firmographics import GeneralQueries
+# from lib.firmographics_async import GeneralQueriesAsync as GeneralQueries
 from lib.uk_sic import UKSICQueries
 from lib.international_sic import InternationalSICQueries
 from lib.eu_sic import EuSICQueries
@@ -22,93 +25,93 @@ from lib.unified_sic import UnifiedSICQueries
 # -------------------------------------------------------------- #
 # BEGIN: Standard Idustry Classification (SIC) database cache functions
 async def sic_description(request):
-    return _handle_request(request, sq, sq.get_all_sic_by_name, 'sic_desc')
+    return await _handle_request(request, sq, sq.get_all_sic_by_name, 'sic_desc')
 
 async def sic_code(request):
-    return _handle_request(request, sq, sq.get_all_sic_by_no, 'sic_code')
+    return await _handle_request(request, sq, sq.get_all_sic_by_no, 'sic_code')
 
 async def division_code(request):
-    return _handle_request(request, sq, sq.get_division_desc_by_id, 'division_code')
+    return await _handle_request(request, sq, sq.get_division_desc_by_id, 'division_code')
 
 async def industry_code(request):
-    return _handle_request(request, sq, sq.get_all_industry_group_by_no, 'industry_code')
+    return await _handle_request(request, sq, sq.get_all_industry_group_by_no, 'industry_code')
 
 async def major_code(request):
-    return _handle_request(request, sq, sq.get_all_major_group_by_no, 'major_code')
+    return await _handle_request(request, sq, sq.get_all_major_group_by_no, 'major_code')
 # END: Standard Idustry Classification (SIC) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: UK Standard Industry Classification (SIC) database cache functions
 async def uk_sic_description(request):
-    return _handle_request(request, uksq, uksq.get_uk_sic_by_name, 'uk_sic_desc')
+    return await _handle_request(request, uksq, uksq.get_uk_sic_by_name, 'uk_sic_desc')
 
 async def uk_sic_code(request):
-    return _handle_request(request, uksq, uksq.get_uk_sic_by_code, 'uk_sic_code')
+    return await _handle_request(request, uksq, uksq.get_uk_sic_by_code, 'uk_sic_code')
 # END: UK Standard Industry Classification (SIC) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: International Standard Industry Classification (ISIC) database cache functions
 async def international_sic_section(request):
-    return _handle_request(request, isicsq, isicsq.get_section_by_code, 'section_code')
+    return await _handle_request(request, isicsq, isicsq.get_section_by_code, 'section_code')
 
 async def international_sic_division(request):
-    return _handle_request(request, isicsq, isicsq.get_division_by_code, 'division_code')
+    return await _handle_request(request, isicsq, isicsq.get_division_by_code, 'division_code')
 
 async def international_sic_group(request):
-    return _handle_request(request, isicsq, isicsq.get_group_by_code, 'group_code')
+    return await _handle_request(request, isicsq, isicsq.get_group_by_code, 'group_code')
 
 async def international_sic_class(request):
-    return _handle_request(request, isicsq, isicsq.get_class_by_code, 'class_code')
+    return await _handle_request(request, isicsq, isicsq.get_class_by_code, 'class_code')
 
 async def international_sic_class_description(request):
-    return _handle_request(request, isicsq, isicsq.get_class_by_description, 'class_desc')
+    return await _handle_request(request, isicsq, isicsq.get_class_by_description, 'class_desc')
 # END: International Standard Industry Classification (ISIC) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: EU Standard Industry Classification (NACE) database cache functions
 async def eu_sic_section(request):
-    return _handle_request(request, eusicsq, eusicsq.get_section_by_code, 'section_code')
+    return await _handle_request(request, eusicsq, eusicsq.get_section_by_code, 'section_code')
 
 async def eu_sic_division(request):
-    return _handle_request(request, eusicsq, eusicsq.get_division_by_code, 'division_code')
+    return await _handle_request(request, eusicsq, eusicsq.get_division_by_code, 'division_code')
 
 async def eu_sic_group(request):
-    return _handle_request(request, eusicsq, eusicsq.get_group_by_code, 'group_code')
+    return await _handle_request(request, eusicsq, eusicsq.get_group_by_code, 'group_code')
 
 async def eu_sic_class(request):
-    return _handle_request(request, eusicsq, eusicsq.get_class_by_code, 'class_code')
+    return await _handle_request(request, eusicsq, eusicsq.get_class_by_code, 'class_code')
 
 async def eu_sic_class_description(request):
-    return _handle_request(request, eusicsq, eusicsq.get_class_by_description, 'class_desc')
+    return await _handle_request(request, eusicsq, eusicsq.get_class_by_description, 'class_desc')
 # END: EU Standard Industry Classification (NACE) database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Japan Standard Industry Classification database cache functions
 async def japan_sic_division(request):
-    return _handle_request(request, japansicsq, japansicsq.get_division_by_code, 'division_code')
+    return await _handle_request(request, japansicsq, japansicsq.get_division_by_code, 'division_code')
 
 async def japan_sic_major_group(request):
-    return _handle_request(request, japansicsq, japansicsq.get_major_group_by_code, 'major_group_code')
+    return await _handle_request(request, japansicsq, japansicsq.get_major_group_by_code, 'major_group_code')
 
 async def japan_sic_group(request):
-    return _handle_request(request, japansicsq, japansicsq.get_group_by_code, 'group_code')
+    return await _handle_request(request, japansicsq, japansicsq.get_group_by_code, 'group_code')
 
 async def japan_sic_industry_group(request):
-    return _handle_request(request, japansicsq, japansicsq.get_industry_group_by_code, 'industry_code')
+    return await _handle_request(request, japansicsq, japansicsq.get_industry_group_by_code, 'industry_code')
 
 async def japan_sic_industry_group_description(request):
-    return _handle_request(request, japansicsq, japansicsq.get_industry_group_by_description, 'industry_desc')
+    return await _handle_request(request, japansicsq, japansicsq.get_industry_group_by_description, 'industry_desc')
 # END: Japan Standard Industry Classification database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Unified Standard Industry Classification database cache functions
 async def unified_sic_description(request):
-    return _handle_request(request, unified_sic_q, unified_sic_q.search_all_descriptions, 'query_string')
+    return await _handle_request(request, unified_sic_q, unified_sic_q.search_all_descriptions, 'query_string')
 
 # END: Unified Standard Industry Classification database cache functions
 # -------------------------------------------------------------- #
@@ -116,23 +119,23 @@ async def unified_sic_description(request):
 # -------------------------------------------------------------- #
 # BEGIN: EDGAR dabase cache functions
 async def edgar_detail(request):
-    return _handle_request(request, eq, eq.get_all_details, 'company_name')
+    return await _handle_request(request, eq, eq.get_all_details, 'company_name')
 
 async def edgar_summary(request):
-    return _handle_request(request, eq, eq.get_all_details, 'company_name', firmographics=False)
+    return await _handle_request(request, eq, eq.get_all_details, 'company_name', firmographics=False)
 
 async def edgar_ciks(request):
-    return _handle_request(request, eq, eq.get_all_ciks, 'company_name')
+    return await _handle_request(request, eq, eq.get_all_ciks, 'company_name')
 
 async def edgar_firmographics(request):
-    return _handle_request(request, eq, eq.get_firmographics, 'cik_no')
+    return await _handle_request(request, eq, eq.get_firmographics, 'cik_no')
 # END: EDGAR dabase cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Wikipedia functions
 async def wikipedia_firmographics(request):
-    return _handle_request(request, wq, wq.get_firmographics, 'company_name')
+    return await _handle_request(request, wq, wq.get_firmographics, 'company_name')
 # END: Wikipedia functions
 # -------------------------------------------------------------- #
 
@@ -140,7 +143,7 @@ async def wikipedia_firmographics(request):
 # BEGIN: General query functions
 # 
 async def general_query(request):
-    return _handle_request(request, gq, gq.get_firmographics, 'company_name')
+    return await _handle_request(request, gq, gq.get_firmographics, 'company_name')
 
 # END: General query functions
 # -------------------------------------------------------------- #
@@ -163,9 +166,15 @@ def _prepare_logging(log_level=logging.INFO):
     logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
     return logging.getLogger(__file__)
 
-def _handle_request(request, handler, func, path_param, *args, **kwargs):
+async def _handle_request(request, handler, func, path_param, *args, **kwargs):
     handler.query = request.path_params.get(path_param)
-    data = func(*args, **kwargs)
+    
+    # If the function is async, await it, otherwise call it directly
+    if asyncio.iscoroutinefunction(func):
+        data = await func(*args, **kwargs)
+    else:
+        data = func(*args, **kwargs)
+        
     checked_data = _check_status_and_return(data, path_param)
     if 'error' in checked_data:
         return JSONResponse(checked_data, status_code=checked_data['code'])
