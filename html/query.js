@@ -122,10 +122,10 @@ document.getElementById('endpointForm').addEventListener('submit', function(even
   if (query.trim() !== '') {
     // Find the parameter pattern like {class_desc} or {sic_desc}
     const paramPattern = /{[^}]+}/;
-    
-    // Replace the parameter placeholder with the actual query value
-    // This completely removes the {param} and puts the query in its place
-    const cleanEndpoint = endpoint.replace(paramPattern, query);
+
+    // Replace the parameter placeholder with the encoded query value
+    const encodedQuery = encodeURIComponent(query);
+    const cleanEndpoint = endpoint.replace(paramPattern, encodedQuery);
     
     // Construct the URL
     const url = `${companyDnsServers[host]}/${cleanEndpoint}`;
@@ -182,5 +182,3 @@ function copyResponseToClipboard() {
     });
   }
 }
-
-// Update copyToClipboard function if needed to handle the new class naming
