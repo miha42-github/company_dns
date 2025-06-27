@@ -15,7 +15,7 @@ RUN apk --no-cache add curl curl-dev gcc musl-dev linux-headers && mkdir -p /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run makedb.py to create the database cache
-RUN python makedb.py
+RUN python makedb.py --verbose
 
 # Make port 80 available to the world outside this container
 EXPOSE 8000
