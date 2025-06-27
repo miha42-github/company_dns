@@ -7,3 +7,5 @@ wptools>=0.4.17
 uvicorn>=0.34.3
 beautifulsoup4>=4.13.4
 openpyxl>=3.1.5
+aiowiki>=1.3.0
+aiohttp>=3.12.0
