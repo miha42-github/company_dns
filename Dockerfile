@@ -1,5 +1,4 @@
 # Use an official Python runtime as a parent image
-# FROM python:3.12-slim
 FROM python:3.12-alpine
 
 # Set the working directory in the container to /app
@@ -16,7 +15,7 @@ RUN apk --no-cache add curl curl-dev gcc musl-dev linux-headers && mkdir -p /app
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Run makedb.py to create the database cache
-RUN python makedb.py
+RUN python makedb.py --verbose
 
 # Make port 80 available to the world outside this container
 EXPOSE 8000
