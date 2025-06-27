@@ -53,6 +53,20 @@ class ExtractEdgarData:
         """
         logger.info('Downloading the cache files from SEC EDGAR.')
         success, message = self._initialize()
+        
+        # Check if the gzipped file exists
+        if not path.exists(self.company_data + '.gz'):
+            logger.warning(f"Required file {self.company_data + '.gz'} not found. Forcing download.")
+            # Force download by removing cache marker
+            if path.exists(self.cache_exists):
+                import os
+                os.remove(self.cache_exists)
+            success, message = self._initialize()
+            
+            # Check again after forced download
+            if not path.exists(self.company_data + '.gz'):
+                logger.error(f"Failed to download {self.company_data + '.gz'} even after forcing re-download")
+                return [], 0
 
         logger.info('Creating the data structure from the compressed index file.')
         header_re = re.compile('^cik', re.IGNORECASE)  # Detect the headers for the idx
@@ -60,7 +74,7 @@ class ExtractEdgarData:
         num = 0
         with gzip.open(self.company_data + '.gz', 'rb') as f_in:
             with open(self.company_data, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
+                shutil.copyfileobj(f_in, f_out) # type: ignore
 
         with open(self.company_data, newline='') as content:
             csv_reader = csv.reader(content, delimiter='\t')
