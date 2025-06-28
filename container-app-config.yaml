@@ -4,6 +4,17 @@ properties:
       external: true
       targetPort: 8000
       allowInsecure: false
+      corsPolicy:
+        allowedOrigins:
+          - "*"
+        allowedMethods:
+          - "GET"
+          - "POST"
+          - "OPTIONS"
+        allowedHeaders:
+          - "*"
+        allowCredentials: true
+        maxAge: 600
       traffic:
         - weight: 100
           latestRevision: true
