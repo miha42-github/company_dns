@@ -1,35 +1,30 @@
 #!/bin/sh
 set -e
 
-# Path to the hosts.json file
-HOSTS_FILE="/app/html/hosts.json"
+# Path to the hosts.js file
+HOSTS_FILE="/app/html/hosts.js"
 
 # Check if COMPANY_DNS_HOST environment variable is set
 if [ -n "$COMPANY_DNS_HOST" ]; then
   echo "Setting primary host to $COMPANY_DNS_HOST"
 
-  # Check if this host already exists in the JSON
-  HOST_EXISTS=$(cat $HOSTS_FILE | jq -r ".hosts[] | select(.name == \"$COMPANY_DNS_HOST\") | .name")
-  
-  if [ -z "$HOST_EXISTS" ]; then
-    # Host doesn't exist, need to add it
-    # Determine protocol based on hostname
-    if echo "$COMPANY_DNS_HOST" | grep -q "localhost"; then
-      PROTOCOL="http://"
-    else
-      PROTOCOL="https://"
-    fi
-    
-    # Add new host and set it as primary, setting all others to non-primary
-    cat $HOSTS_FILE | jq ".hosts = (.hosts | map(.isPrimary = false)) + [{\"name\": \"$COMPANY_DNS_HOST\", \"url\": \"${PROTOCOL}${COMPANY_DNS_HOST}\", \"isPrimary\": true, \"description\": \"Custom Host\"}]" > $HOSTS_FILE.tmp
+  # Determine protocol based on hostname
+  if echo "$COMPANY_DNS_HOST" | grep -q "localhost"; then
+    PROTOCOL="http://"
   else
-    # Host exists, just set it as primary
-    cat $HOSTS_FILE | jq ".hosts = (.hosts | map(if .name == \"$COMPANY_DNS_HOST\" then .isPrimary = true else .isPrimary = false end))" > $HOSTS_FILE.tmp
+    PROTOCOL="https://"
   fi
   
-  # Replace the original file
-  mv $HOSTS_FILE.tmp $HOSTS_FILE
-  echo "Updated hosts.json file with $COMPANY_DNS_HOST as primary"
+  # Update the JavaScript file using sed
+  # 1. Add the host to companyDnsServers if not present
+  if ! grep -q "\"$COMPANY_DNS_HOST\":" $HOSTS_FILE; then
+    sed -i "s/const companyDnsServers = {/const companyDnsServers = {\n  \"$COMPANY_DNS_HOST\": \"$PROTOCOL$COMPANY_DNS_HOST\",/g" $HOSTS_FILE
+  fi
+  
+  # 2. Update the primaryHost value
+  sed -i "s/const primaryHost = \"[^\"]*\"/const primaryHost = \"$COMPANY_DNS_HOST\"/g" $HOSTS_FILE
+  
+  echo "Updated hosts.js file with $COMPANY_DNS_HOST as primary"
 fi
 
 # Execute the main application
