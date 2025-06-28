@@ -1,82 +1,15 @@
 let companyDnsServers = {};
 
-// Load hosts from JSON file
-function loadHostsConfiguration() {
-  fetch('/hosts.json')
-    .then(response => response.json())
-    .then(data => {
-      // Reset the servers object
-      companyDnsServers = {};
-      
-      // Create a dropdown for host selection
-      const hostSelect = document.getElementById('hostSelect');
-      hostSelect.innerHTML = ''; // Clear existing options
-      
-      // Find the primary host for default selection
-      let primaryHost = null;
-      
-      // Process each host in the configuration
-      data.hosts.forEach(host => {
-        // Add to servers object
-        companyDnsServers[host.name] = host.url;
-        
-        // Create dropdown option
-        const option = document.createElement('option');
-        option.value = host.name;
-        option.text = `${host.name} (${host.description})`;
-        option.selected = host.isPrimary;
-        hostSelect.appendChild(option);
-        
-        // Track primary host
-        if (host.isPrimary) {
-          primaryHost = host.name;
-        }
-      });
-      
-      // If we found a primary host, save it
-      if (primaryHost) {
-        localStorage.setItem('savedHost', primaryHost);
-      }
-      
-      // Continue with form initialization
-      loadFormState();
-    })
-    .catch(error => {
-      console.error('Error loading hosts configuration:', error);
-      // Fall back to default configuration if JSON file can't be loaded
-      companyDnsServers = {
-        "localhost:8000": "http://localhost:8000",
-        "company-dns.mediumroast.io": "https://company-dns.mediumroast.io"
-      };
-      loadFormState();
-    });
-}
-
-let url = null
-
-// Save form state to localStorage
-function saveFormState() {
-  const host = document.getElementById('hostSelect').value;
-  const endpoint = document.getElementById('endpointSelect').value;
-  const query = document.getElementById('queryInput').value;
-  
-  localStorage.setItem('savedHost', host);
-  localStorage.setItem('savedEndpoint', endpoint);
-  localStorage.setItem('savedQuery', query);
-}
-
 // Load form state from localStorage
 function loadFormState() {
   const hostSelect = document.getElementById('hostSelect');
   const endpointSelect = document.getElementById('endpointSelect');
   const queryInput = document.getElementById('queryInput');
   
-  // Set values from localStorage if they exist
-  if (localStorage.getItem('savedHost')) {
-    hostSelect.value = localStorage.getItem('savedHost');
-  }
+  // Initialize the host select dropdown
+  initializeHostSelect();
   
-  // Populate endpoints first before trying to select one
+  // Populate endpoints
   populateEndpoints();
   
   if (localStorage.getItem('savedEndpoint')) {
@@ -125,11 +58,8 @@ function setupFormStateListeners() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-  // First load hosts from JSON
-  loadHostsConfiguration();
-  
-  // Then populate endpoints
-  populateEndpoints();
+  // Load form state (includes host initialization)
+  loadFormState();
   
   // Set up listeners for form changes
   setupFormStateListeners();
