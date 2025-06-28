@@ -1,6 +1,55 @@
-const companyDnsServers = {
-  "localhost:8000": "http://localhost:8000",
-  "company-dns.mediumroast.io": "https://company-dns.mediumroast.io"
+let companyDnsServers = {};
+
+// Load hosts from JSON file
+function loadHostsConfiguration() {
+  fetch('/hosts.json')
+    .then(response => response.json())
+    .then(data => {
+      // Reset the servers object
+      companyDnsServers = {};
+      
+      // Create a dropdown for host selection
+      const hostSelect = document.getElementById('hostSelect');
+      hostSelect.innerHTML = ''; // Clear existing options
+      
+      // Find the primary host for default selection
+      let primaryHost = null;
+      
+      // Process each host in the configuration
+      data.hosts.forEach(host => {
+        // Add to servers object
+        companyDnsServers[host.name] = host.url;
+        
+        // Create dropdown option
+        const option = document.createElement('option');
+        option.value = host.name;
+        option.text = `${host.name} (${host.description})`;
+        option.selected = host.isPrimary;
+        hostSelect.appendChild(option);
+        
+        // Track primary host
+        if (host.isPrimary) {
+          primaryHost = host.name;
+        }
+      });
+      
+      // If we found a primary host, save it
+      if (primaryHost) {
+        localStorage.setItem('savedHost', primaryHost);
+      }
+      
+      // Continue with form initialization
+      loadFormState();
+    })
+    .catch(error => {
+      console.error('Error loading hosts configuration:', error);
+      // Fall back to default configuration if JSON file can't be loaded
+      companyDnsServers = {
+        "localhost:8000": "http://localhost:8000",
+        "company-dns.mediumroast.io": "https://company-dns.mediumroast.io"
+      };
+      loadFormState();
+    });
 }
 
 let url = null
@@ -76,16 +125,16 @@ function setupFormStateListeners() {
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
-  // First populate endpoints
-  populateEndpoints();
+  // First load hosts from JSON
+  loadHostsConfiguration();
   
-  // Then load saved state
-  loadFormState();
+  // Then populate endpoints
+  populateEndpoints();
   
   // Set up listeners for form changes
   setupFormStateListeners();
   
-  // Add this event listener for the execute button
+  // Add event listener for execute button
   const executeButton = document.getElementById('executeRequestBtn');
   if (executeButton) {
     executeButton.addEventListener('click', function() {

@@ -3,15 +3,37 @@
 // Get active host from the existing query console
 function getActiveHost() {
   console.log("Getting host...");
-  // Get host from the select element if it exists, otherwise use default
+  
+  // First check the hostSelect dropdown from query.js
   const hostSelect = document.getElementById('hostSelect');
-  if (hostSelect) {
+  if (hostSelect && hostSelect.value) {
     console.log("Host from select:", hostSelect.value);
     return hostSelect.value;
-  } else {
-    console.log("Using default host: localhost:8000");
-    return 'localhost:8000';
   }
+  
+  // If no dropdown or value, try to find the primary host from hosts.json
+  try {
+    // This is a synchronous fetch, just for the primary check
+    const request = new XMLHttpRequest();
+    request.open('GET', '/hosts.json', false);  // Synchronous request
+    request.send(null);
+    
+    if (request.status === 200) {
+      const data = JSON.parse(request.responseText);
+      const primaryHost = data.hosts.find(host => host.isPrimary);
+      
+      if (primaryHost) {
+        console.log("Host from JSON:", primaryHost.name);
+        return primaryHost.name;
+      }
+    }
+  } catch (error) {
+    console.error("Error loading hosts.json:", error);
+  }
+  
+  // Fallback to default
+  console.log("Using default host: localhost:8000");
+  return 'localhost:8000';
 }
 
 // Pagination settings
