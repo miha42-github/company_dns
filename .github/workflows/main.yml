@@ -35,3 +35,19 @@ jobs:
             platforms: linux/amd64,linux/arm64
             cache-from: type=gha
             cache-to: type=gha,mode=max
+            
+        # Azure deployment steps
+        - name: Azure Login
+          uses: azure/login@v1
+          with:
+            creds: ${{ secrets.AZURE_CREDENTIALS }}
+            
+        - name: Deploy to Azure Container App
+          uses: azure/container-apps-deploy-action@v2
+          with:
+            resourceGroup: ${{ secrets.AZURE_RESOURCE_GROUP }}
+            containerAppName: ${{ secrets.AZURE_CONTAINER_APP_NAME }}
+            containerAppEnvironment: ${{ secrets.AZURE_CONTAINER_APP_ENV }}
+            location: 'West US'
+            imageToDeploy: ghcr.io/${{ github.repository }}/company_dns:latest
+            yamlConfigPath: ${{ github.workspace }}/container-app-config.yaml
