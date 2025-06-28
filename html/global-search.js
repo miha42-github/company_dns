@@ -11,27 +11,14 @@ function getActiveHost() {
     return hostSelect.value;
   }
   
-  // If no dropdown or value, try to find the primary host from hosts.json
-  try {
-    // This is a synchronous fetch, just for the primary check
-    const request = new XMLHttpRequest();
-    request.open('GET', '/hosts.json', false);  // Synchronous request
-    request.send(null);
-    
-    if (request.status === 200) {
-      const data = JSON.parse(request.responseText);
-      const primaryHost = data.hosts.find(host => host.isPrimary);
-      
-      if (primaryHost) {
-        console.log("Host from JSON:", primaryHost.name);
-        return primaryHost.name;
-      }
-    }
-  } catch (error) {
-    console.error("Error loading hosts.json:", error);
+  // If no dropdown, use the host from localStorage if available
+  const savedHost = localStorage.getItem('savedHost');
+  if (savedHost) {
+    console.log("Host from localStorage:", savedHost);
+    return savedHost;
   }
   
-  // Fallback to default
+  // Default fallback
   console.log("Using default host: localhost:8000");
   return 'localhost:8000';
 }
@@ -148,8 +135,10 @@ function performGlobalSearch(query, selectedSources) {
   // Get host and construct URL
   const host = getActiveHost();
   
-  // Make sure the URL is properly constructed with http://
-  let url = `http://${host}/V3.0/global/sic/description/${encodeURIComponent(query)}`;
+  let baseUrl = companyDnsServers[host] || 
+                (host.includes("localhost") ? `http://${host}` : `https://${host}`);
+  
+  let url = `${baseUrl}/V3.0/global/sic/description/${encodeURIComponent(query)}`;
   
   // Ensure we don't have double slashes in the URL
   url = url.replace(/([^:]\/)\/+/g, "$1");

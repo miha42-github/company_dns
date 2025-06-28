@@ -225,7 +225,14 @@ class CatchAllMiddleware(BaseHTTPMiddleware):
 
 middleware = [
     Middleware(CatchAllMiddleware),
-    Middleware(CORSMiddleware, allow_origins=['*'])
+    Middleware(
+        CORSMiddleware, 
+        allow_origins=["*"],
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["*"],
+        allow_credentials=True,
+        expose_headers=["Content-Type", "X-Custom-Header"]
+    )
 ]
 
 global logger
