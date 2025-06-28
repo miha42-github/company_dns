@@ -1,28 +1,5 @@
 // Global Industry Code Search functionality with refinements
 
-// Get active host from the existing query console
-function getActiveHost() {
-  console.log("Getting host...");
-  
-  // First check the hostSelect dropdown from query.js
-  const hostSelect = document.getElementById('hostSelect');
-  if (hostSelect && hostSelect.value) {
-    console.log("Host from select:", hostSelect.value);
-    return hostSelect.value;
-  }
-  
-  // If no dropdown, use the host from localStorage if available
-  const savedHost = localStorage.getItem('savedHost');
-  if (savedHost) {
-    console.log("Host from localStorage:", savedHost);
-    return savedHost;
-  }
-  
-  // Default fallback
-  console.log("Using default host: localhost:8000");
-  return 'localhost:8000';
-}
-
 // Pagination settings
 const RESULTS_PER_PAGE = 10;
 let currentPage = 1;
