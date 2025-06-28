@@ -14,12 +14,10 @@ properties:
         resources:
           cpu: 0.5
           memory: "1Gi"
+        env:
+          - name: COMPANY_DNS_HOST
+            value: "company-dns.mediumroast.io"
     scale:
       minReplicas: 0
       maxReplicas: 10
       cooldownPeriod: 300
-      rules:
-        - name: http-scaling
-          http:
-            metadata:
-              concurrentRequests: "100"
