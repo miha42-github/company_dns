@@ -1,0 +1,25 @@
+properties:
+  configuration:
+    ingress:
+      external: true
+      targetPort: 8000
+      allowInsecure: false
+      traffic:
+        - weight: 100
+          latestRevision: true
+  template:
+    containers:
+      - image: ghcr.io/miha42-github/company_dns/company_dns:latest
+        name: company-dns
+        resources:
+          cpu: 0.5
+          memory: "1Gi"
+    scale:
+      minReplicas: 0
+      maxReplicas: 10
+      cooldownPeriod: 300
+      rules:
+        - name: http-scaling
+          http:
+            metadata:
+              concurrentRequests: "100"
