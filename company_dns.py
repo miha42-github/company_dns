@@ -355,14 +355,19 @@ app = Starlette(debug=True, middleware=middleware, routes=[
 
 if __name__ == "__main__": 
     try:
-        # Change these parameters to be more explicit about logging
+        # In development (local)
+        if os.environ.get('ENVIRONMENT') == 'dev':
+            host = '127.0.0.1'
+        else:
+            # In production (container)
+            host = '0.0.0.0'  # Accept connections from any IP
+            
         uvicorn.run(
             app, 
-            host='127.0.0.1',  # Change from 0.0.0.0 to 127.0.0.1 for local testing
+            host=host,
             port=8000, 
-            log_level='debug',  # Increase log level to see more details
-            access_log=True,    # Ensure access logs are enabled
-            lifespan='off'
+            log_level='info',
+            access_log=True
         )
     except KeyboardInterrupt:
         logger.info("Server was shut down by the user.")
