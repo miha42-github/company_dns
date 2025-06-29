@@ -1,5 +1,5 @@
 from starlette.applications import Starlette
-from starlette.responses import JSONResponse, RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse, FileResponse
 from starlette.routing import Route
 from starlette.routing import Mount
 from starlette.staticfiles import StaticFiles
@@ -9,13 +9,13 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import uvicorn
 import logging
 import asyncio
+import os
+from pathlib import Path
 
 from lib.sic import SICQueries
 from lib.edgar import EdgarQueries
 from lib.wikipedia import WikipediaQueries
-# from lib.wikipedia_async import WikipediaQueriesAsync as WikipediaQueries
 from lib.firmographics import GeneralQueries
-# from lib.firmographics_async import GeneralQueriesAsync as GeneralQueries
 from lib.uk_sic import UKSICQueries
 from lib.international_sic import InternationalSICQueries
 from lib.eu_sic import EuSICQueries
@@ -219,8 +219,11 @@ unified_sic_q = UnifiedSICQueries()
 class CatchAllMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if response.status_code == 404:
+        
+        # Only redirect API 404s to help, not static content 404s
+        if response.status_code == 404 and not request.url.path.startswith(('/static', '/help')):
             return RedirectResponse(url='/help')
+            
         return response
 
 middleware = [
@@ -238,7 +241,21 @@ middleware = [
 global logger
 logger = _prepare_logging()
 
+# Add this function to handle the root route
+async def homepage(request):
+    """Serve the index.html from the root URL"""
+    return RedirectResponse(url='/help')
+
+# Add this function to get absolute paths
+def get_abs_path(relative_path):
+    """Convert relative paths to absolute paths based on script location"""
+    base_dir = Path(__file__).resolve().parent
+    return os.path.join(base_dir, relative_path)
+
 app = Starlette(debug=True, middleware=middleware, routes=[
+    # Add a direct route for the root URL
+    Route('/', homepage),
+    
     # -------------------------------------------------------------- #
     # SIC endpoints for V2.0
     Route('/V2.0/sic/description/{sic_desc}', sic_description),
@@ -327,7 +344,9 @@ app = Starlette(debug=True, middleware=middleware, routes=[
 
 
     # Serve the local directory ./html at the /help
-    Mount('/help', app=StaticFiles(directory='html', html=True)),    
+    Mount('/help', app=StaticFiles(directory=get_abs_path('html'), html=True)),
+    # Serve static files for direct asset access
+    Mount('/static', app=StaticFiles(directory=get_abs_path('html'))),
 ])
 # END: Define the Starlette app
 # -------------------------------------------------------------- #
@@ -336,6 +355,14 @@ app = Starlette(debug=True, middleware=middleware, routes=[
 
 if __name__ == "__main__": 
     try:
-        uvicorn.run(app, host='0.0.0.0', port=8000, log_level='info', lifespan='off')
+        # Change these parameters to be more explicit about logging
+        uvicorn.run(
+            app, 
+            host='127.0.0.1',  # Change from 0.0.0.0 to 127.0.0.1 for local testing
+            port=8000, 
+            log_level='debug',  # Increase log level to see more details
+            access_log=True,    # Ensure access logs are enabled
+            lifespan='off'
+        )
     except KeyboardInterrupt:
         logger.info("Server was shut down by the user.")
