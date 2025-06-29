@@ -7,7 +7,7 @@ WORKDIR /app
 # Add the current directory contents into the container at /app
 ADD . /app
 
-# Install curl, jq and create directory
+# Install curl and other dependencies
 RUN apk --no-cache add curl curl-dev gcc musl-dev linux-headers jq && mkdir -p /app/edgar_data
 
 # Install any needed packages specified in requirements.txt
@@ -19,11 +19,11 @@ RUN chmod +x /app/scripts/entrypoint.sh
 # Run makedb.py to create the database cache
 RUN python makedb.py
 
+# Set environment variable for production
+ENV ENVIRONMENT=production
+
 # Make port 8000 available to the world outside this container
 EXPOSE 8000
-
-# Set default host if not provided
-ENV COMPANY_DNS_HOST=company-dns.mediumroast.io
 
 # Use entrypoint script to configure hosts
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
