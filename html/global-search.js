@@ -112,6 +112,7 @@ function performGlobalSearch(query, selectedSources) {
   // Get host and construct URL
   const host = getActiveHost();
   
+  // Get the full URL with proper protocol from companyDnsServers
   let baseUrl = companyDnsServers[host] || 
                 (host.includes("localhost") ? `http://${host}` : `https://${host}`);
   

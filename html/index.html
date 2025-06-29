@@ -5,8 +5,9 @@
   <link rel="stylesheet" type="text/css" href="styles-explorer.css">
   <link rel="stylesheet" type="text/css" href="styles-query.css">
   <link rel="stylesheet" type="text/css" href="styles-help.css">
-  <title>company_dns embedded help and query console</title>
+  <title>company_dns - data explorer</title>
   <script src="endpoint-data.js"></script>
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
 
 <body>
@@ -691,9 +692,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
       openTab({ currentTarget: firstMenuLink }, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu');
       
       // Initialize inner tabs (API documentation) if applicable
-      // We'll do this differently - find the first inner tab that should be active 
-      // and initialize it through a direct DOM manipulation, not using openTab which
-      // would hide our main content
       const innerTabContent = document.getElementById('V3');
       if (innerTabContent) {
         innerTabContent.style.display = 'block';
@@ -704,9 +702,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
           innerTabButton.classList.add('active');
         }
       }
-
-      // Populate the endpoint select dropdown
-      populateEndpoints();
       
       console.log("Application initialization complete");
     }
