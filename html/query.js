@@ -1,5 +1,3 @@
-let companyDnsServers = {};
-
 // Load form state from localStorage
 function loadFormState() {
   const hostSelect = document.getElementById('hostSelect');
@@ -47,6 +45,19 @@ function populateEndpoints() {
       }
     }
   }
+}
+
+// Save form state to localStorage
+function saveFormState() {
+  const host = document.getElementById('hostSelect').value;
+  const endpoint = document.getElementById('endpointSelect').value;
+  const query = document.getElementById('queryInput').value;
+  
+  localStorage.setItem('savedHost', host);
+  localStorage.setItem('savedEndpoint', endpoint);
+  localStorage.setItem('savedQuery', query);
+  
+  console.log('Form state saved:', { host, endpoint, query });
 }
 
 // Add event listeners to form fields to save state on change
