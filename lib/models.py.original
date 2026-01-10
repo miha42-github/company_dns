@@ -1,0 +1,327 @@
+"""
+Pydantic models for request validation and response serialization.
+These models provide automatic validation, documentation, and type safety.
+"""
+
+from pydantic import BaseModel, Field, ConfigDict
+from typing import Optional, Dict, Any
+
+
+# ============================================================================
+# Base Response Models
+# ============================================================================
+
+class DependenciesData(BaseModel):
+    """Dependencies data structure"""
+    modules: Dict[str, Any] = Field(default_factory=dict)
+    data: Dict[str, str] = Field(default_factory=dict)
+    
+    model_config = ConfigDict(extra='allow')
+
+
+class BaseAPIResponse(BaseModel):
+    """Base response model matching actual backend structure"""
+    code: int = Field(..., ge=200, le=599, description="HTTP status code")
+    message: Optional[str] = Field(None, description="Response message")
+    module: Optional[str] = Field(None, description="Module that processed the request")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Response data")
+    dependencies: Optional[DependenciesData] = Field(None, description="Data dependencies")
+    
+    model_config = ConfigDict(
+        extra='allow',
+        json_schema_extra={
+            "example": {
+                "code": 200,
+                "message": "Success",
+                "module": "Module->method",
+                "data": {},
+                "dependencies": {"modules": {}, "data": {}}
+            }
+        }
+    )
+
+
+# ============================================================================
+# SIC (Standard Industry Classification) Models
+# ============================================================================
+
+class SICCodeDetail(BaseModel):
+    """Individual SIC code details"""
+    code: str = Field(..., description="SIC code number", examples=["7372"])
+    description: str = Field(..., description="Industry description", examples=["Prepackaged Software"])
+    division: Optional[str] = Field(None, description="Division category", examples=["I"])
+    major_group: Optional[str] = Field(None, description="Major group category")
+    industry_group: Optional[str] = Field(None, description="Industry group")
+
+
+class SICResponse(BaseAPIResponse):
+    """Response model for SIC code queries"""
+    total: int = Field(..., ge=0, description="Number of results returned")
+    data: List[SICCodeDetail] = Field(default_factory=list, description="List of SIC code details")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "code": 200,
+                "total": 1,
+                "data": [{
+                    "code": "7372",
+                    "description": "Prepackaged Software",
+                    "division": "I"
+                }]
+            }
+        }
+    )
+
+
+class DivisionDetail(BaseModel):
+    """Division level details"""
+    code: str = Field(..., description="Division code")
+    description: str = Field(..., description="Division description")
+    range_start: Optional[str] = Field(None, description="Starting SIC code in range")
+    range_end: Optional[str] = Field(None, description="Ending SIC code in range")
+
+
+class DivisionResponse(BaseAPIResponse):
+    """Response for division queries"""
+    total: int = Field(..., ge=0, description="Number of results")
+    data: List[DivisionDetail] = Field(default_factory=list)
+
+
+# ============================================================================
+# UK SIC Models
+# ============================================================================
+
+class UKSICDetail(BaseModel):
+    """UK SIC code details"""
+    code: str = Field(..., description="UK SIC code")
+    description: str = Field(..., description="Industry description")
+
+
+class UKSICResponse(BaseAPIResponse):
+    """Response for UK SIC queries"""
+    total: int = Field(..., ge=0, description="Number of results")
+    data: List[UKSICDetail] = Field(default_factory=list)
+
+
+# ============================================================================
+# International SIC (ISIC) Models
+# ============================================================================
+
+class ISICDetail(BaseModel):
+    """International SIC (ISIC Rev 5) details"""
+    code: str = Field(..., description="ISIC code")
+    description: str = Field(..., description="Industry description")
+    level: Optional[str] = Field(None, description="ISIC level (Section, Division, Group, Class)")
+    parent_code: Optional[str] = Field(None, description="Parent classification code")
+
+
+class ISICResponse(BaseAPIResponse):
+    """Response for International SIC queries"""
+    total: int = Field(..., ge=0, description="Number of results")
+    data: List[ISICDetail] = Field(default_factory=list)
+
+
+# ============================================================================
+# EU SIC (NACE) Models
+# ============================================================================
+
+class EUSICDetail(BaseModel):
+    """EU NACE Rev 2.1 details"""
+    code: str = Field(..., description="NACE code")
+    description: str = Field(..., description="Industry description in English")
+    level: Optional[str] = Field(None, description="NACE level (Section, Division, Group, Class)")
+
+
+class EUSICResponse(BaseAPIResponse):
+    """Response for EU NACE queries"""
+    total: int = Field(..., ge=0, description="Number of results")
+    data: List[EUSICDetail] = Field(default_factory=list)
+
+
+# ============================================================================
+# Japan SIC Models
+# ============================================================================
+
+class JapanSICDetail(BaseModel):
+    """Japan SIC details"""
+    code: str = Field(..., description="Japan SIC code")
+    description: str = Field(..., description="Industry description")
+    level: Optional[str] = Field(None, description="Classification level")
+
+
+class JapanSICResponse(BaseAPIResponse):
+    """Response for Japan SIC queries"""
+    total: int = Field(..., ge=0, description="Number of results")
+    data: List[JapanSICDetail] = Field(default_factory=list)
+
+
+# ============================================================================
+# Unified SIC Models
+# ============================================================================
+
+class UnifiedSICDetail(BaseModel):
+    """Unified SIC search result from multiple classification systems"""
+    code: str = Field(..., description="Classification code")
+    description: str = Field(..., description="Industry description")
+    system: str = Field(..., description="Classification system (US, UK, EU, International, Japan)")
+    level: Optional[str] = Field(None, description="Classification level")
+
+
+class UnifiedSICResponse(BaseAPIResponse):
+    """Response for unified SIC searches across all systems"""
+    total: int = Field(..., ge=0, description="Total number of results")
+    data: List[UnifiedSICDetail] = Field(default_factory=list)
+    systems_searched: List[str] = Field(
+        default_factory=list, 
+        description="List of classification systems included in search"
+    )
+
+
+# ============================================================================
+# EDGAR (SEC Filing) Models
+# ============================================================================
+
+class EdgarCompanyBasic(BaseModel):
+    """Basic EDGAR company information"""
+    cik: str = Field(..., description="Central Index Key (10-digit)", examples=["0000789019"])
+    company_name: str = Field(..., description="Official company name", examples=["MICROSOFT CORP"])
+    ticker: Optional[str] = Field(None, description="Stock ticker symbol", examples=["MSFT"])
+    exchange: Optional[str] = Field(None, description="Stock exchange", examples=["Nasdaq"])
+
+
+class EdgarFirmographics(BaseModel):
+    """Detailed EDGAR firmographics"""
+    cik: str = Field(..., description="Central Index Key")
+    company_name: str = Field(..., description="Company name")
+    ticker: Optional[str] = Field(None, description="Ticker symbol")
+    sic_code: Optional[str] = Field(None, description="Primary SIC code")
+    sic_description: Optional[str] = Field(None, description="SIC industry description")
+    address: Optional[str] = Field(None, description="Business address")
+    state: Optional[str] = Field(None, description="State of incorporation")
+    fiscal_year_end: Optional[str] = Field(None, description="Fiscal year end (MMDD)")
+    business_phone: Optional[str] = Field(None, description="Business phone number")
+    irs_number: Optional[str] = Field(None, description="IRS/EIN number")
+
+
+class EdgarCIKResponse(BaseAPIResponse):
+    """Response for CIK lookup"""
+    total: int = Field(..., ge=0, description="Number of matching companies")
+    data: List[EdgarCompanyBasic] = Field(default_factory=list)
+
+
+class EdgarDetailResponse(BaseAPIResponse):
+    """Response for detailed EDGAR company information"""
+    total: int = Field(..., ge=0, description="Number of results")
+    data: List[EdgarFirmographics] = Field(default_factory=list)
+
+
+# ============================================================================
+# Wikipedia Models
+# ============================================================================
+
+class WikipediaFirmographics(BaseModel):
+    """Firmographics from Wikipedia"""
+    company_name: str = Field(..., description="Company name")
+    industry: Optional[str] = Field(None, description="Industry sector")
+    founded: Optional[str] = Field(None, description="Year founded")
+    headquarters: Optional[str] = Field(None, description="Headquarters location")
+    employees: Optional[str] = Field(None, description="Number of employees")
+    revenue: Optional[str] = Field(None, description="Annual revenue")
+    website: Optional[str] = Field(None, description="Official website")
+    description: Optional[str] = Field(None, description="Company description/summary")
+    latitude: Optional[float] = Field(None, description="Headquarters latitude")
+    longitude: Optional[float] = Field(None, description="Headquarters longitude")
+
+
+class WikipediaResponse(BaseAPIResponse):
+    """Response for Wikipedia company queries"""
+    data: WikipediaFirmographics
+    source: str = Field(default="wikipedia", description="Data source")
+
+
+# ============================================================================
+# Merged/General Firmographics Models
+# ============================================================================
+
+class MergedFirmographics(BaseModel):
+    """Merged firmographics from multiple sources (EDGAR + Wikipedia)"""
+    company_name: str = Field(..., description="Company name")
+    
+    # From EDGAR
+    cik: Optional[str] = Field(None, description="SEC CIK number")
+    ticker: Optional[str] = Field(None, description="Stock ticker")
+    sic_code: Optional[str] = Field(None, description="Primary SIC code")
+    sic_description: Optional[str] = Field(None, description="SIC description")
+    
+    # From Wikipedia
+    industry: Optional[str] = Field(None, description="Industry sector")
+    founded: Optional[str] = Field(None, description="Year founded")
+    headquarters: Optional[str] = Field(None, description="Headquarters location")
+    employees: Optional[str] = Field(None, description="Number of employees")
+    revenue: Optional[str] = Field(None, description="Annual revenue")
+    website: Optional[str] = Field(None, description="Website URL")
+    
+    # Geographic data
+    address: Optional[str] = Field(None, description="Business address")
+    state: Optional[str] = Field(None, description="State")
+    country: Optional[str] = Field(None, description="Country")
+    latitude: Optional[float] = Field(None, description="Latitude")
+    longitude: Optional[float] = Field(None, description="Longitude")
+    
+    # Metadata
+    sources: List[str] = Field(default_factory=list, description="Data sources used")
+    last_updated: Optional[str] = Field(None, description="Last update timestamp")
+
+
+class MergedFirmographicsResponse(BaseAPIResponse):
+    """Response for merged firmographics queries"""
+    data: MergedFirmographics
+    sources: List[str] = Field(default_factory=list, description="Sources used for merge")
+
+
+# ============================================================================
+# Error Response Models
+# ============================================================================
+
+class ErrorDetail(BaseModel):
+    """Detailed error information"""
+    loc: Optional[List[Union[str, int]]] = Field(None, description="Error location")
+    msg: str = Field(..., description="Error message")
+    type: str = Field(..., description="Error type")
+
+
+class ErrorResponse(BaseModel):
+    """Standard error response"""
+    detail: Union[str, List[ErrorDetail]] = Field(..., description="Error details")
+    code: int = Field(..., description="HTTP status code")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "detail": "Not Found",
+                "code": 404
+            }
+        }
+    )
+
+
+# ============================================================================
+# Health Check Model
+# ============================================================================
+
+class HealthCheckResponse(BaseModel):
+    """Health check response"""
+    status: str = Field(..., description="Service status", examples=["healthy"])
+    version: str = Field(..., description="API version", examples=["3.2.0"])
+    timestamp: str = Field(..., description="Current timestamp")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "healthy",
+                "version": "3.2.0",
+                "timestamp": "2026-01-10T12:00:00Z"
+            }
+        }
+    )

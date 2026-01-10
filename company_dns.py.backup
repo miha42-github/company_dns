@@ -26,104 +26,8 @@ from lib.models import (
     SICResponse, DivisionResponse, UKSICResponse, ISICResponse,
     EUSICResponse, JapanSICResponse, UnifiedSICResponse,
     EdgarCIKResponse, EdgarDetailResponse, WikipediaResponse,
-    MergedFirmographicsResponse
+    MergedFirmographicsResponse, ErrorResponse, HealthCheckResponse
 )
-
-# -------------------------------------------------------------- #
-# BEGIN: Define query objects
-sq = SICQueries()
-eq = EdgarQueries()
-wq = WikipediaQueries()
-gq = GeneralQueries()
-uksq = UKSICQueries()
-isicsq = InternationalSICQueries()
-eusicsq = EuSICQueries()
-japansicsq = JapanSICQueries()
-unified_sic_q = UnifiedSICQueries()
-# END: Define query objects
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: Helper functions
-def _check_status_and_return(result_data, resource_name):
-    """Check status code and return appropriate response"""
-    return_code = result_data.get('code')
-    result_count = result_data.get('total')
-    return_msg = result_data.get('message')
-    if return_code != 200:
-        logger.error(f'There were [{result_count}] results for resource [{resource_name}].')
-        raise HTTPException(
-            status_code=return_code,
-            detail=return_msg or f"Error retrieving {resource_name}"
-        )
-    return result_data
-
-async def _handle_request(handler, func, query_value, *args, **kwargs):
-    """Generic request handler for all endpoints"""
-    handler.query = query_value
-    
-    # If the function is async, await it, otherwise call it directly
-    if asyncio.iscoroutinefunction(func):
-        data = await func(*args, **kwargs)
-    else:
-        data = func(*args, **kwargs)
-        
-    checked_data = _check_status_and_return(data, query_value)
-    return checked_data
-
-def get_abs_path(relative_path):
-    """Convert relative paths to absolute paths based on script location"""
-    base_dir = PathLib(__file__).resolve().parent
-    return os.path.join(base_dir, relative_path)
-# END: Helper functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: Initialize FastAPI app
-app = FastAPI(
-    title="company_dns API",
-    description="Company firmographics and SIC code lookup service",
-    version="3.2.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
-)
-
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
-    allow_credentials=True,
-    expose_headers=["Content-Type", "X-Custom-Header"]
-)
-
-# Add security middleware
-app.middleware("http")(security_middleware)
-
-# Add logging middleware
-app.middleware("http")(logging_middleware)
-
-# Add rate limiting
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
-
-# Add custom 404 handler (no more catch-all redirects)
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc):
-    return JSONResponse(
-        status_code=404,
-        content={
-            "detail": "Endpoint not found",
-            "code": 404,
-            "path": str(request.url.path),
-            "help": "Visit /docs for API documentation"
-        }
-    )
-# END: Initialize FastAPI app
-# -------------------------------------------------------------- #
-
 # -------------------------------------------------------------- #
 # BEGIN: Standard Industry Classification (SIC) database cache functions
 @app.get(
@@ -325,192 +229,159 @@ async def eu_sic_class_description(class_desc: str = Path(..., min_length=2, des
 
 # -------------------------------------------------------------- #
 # BEGIN: Japan Standard Industry Classification database cache functions
-@app.get(
-    "/V3.0/japan/sic/division/{division_code}",
-    response_model=JapanSICResponse,
-    tags=["SIC - Japan (V3.0)"],
-    summary="Get Japan SIC division by code"
-)
-async def japan_sic_division(division_code: str = Path(..., description="Division code")):
-    return await _handle_request(japansicsq, japansicsq.get_division_by_code, division_code)
+async def japan_sic_division(request):
+    return await _handle_request(request, japansicsq, japansicsq.get_division_by_code, 'division_code')
 
-@app.get(
-    "/V3.0/japan/sic/major_group/{major_group_code}",
-    response_model=JapanSICResponse,
-    tags=["SIC - Japan (V3.0)"],
-    summary="Get Japan SIC major group by code"
-)
-async def japan_sic_major_group(major_group_code: str = Path(..., description="Major group code")):
-    return await _handle_request(japansicsq, japansicsq.get_major_group_by_code, major_group_code)
+async def japan_sic_major_group(request):
+    return await _handle_request(request, japansicsq, japansicsq.get_major_group_by_code, 'major_group_code')
 
-@app.get(
-    "/V3.0/japan/sic/group/{group_code}",
-    response_model=JapanSICResponse,
-    tags=["SIC - Japan (V3.0)"],
-    summary="Get Japan SIC group by code"
-)
-async def japan_sic_group(group_code: str = Path(..., description="Group code")):
-    return await _handle_request(japansicsq, japansicsq.get_group_by_code, group_code)
+async def japan_sic_group(request):
+    return await _handle_request(request, japansicsq, japansicsq.get_group_by_code, 'group_code')
 
-@app.get(
-    "/V3.0/japan/sic/industry_group/{industry_code}",
-    response_model=JapanSICResponse,
-    tags=["SIC - Japan (V3.0)"],
-    summary="Get Japan SIC industry group by code"
-)
-async def japan_sic_industry_group(industry_code: str = Path(..., description="Industry code")):
-    return await _handle_request(japansicsq, japansicsq.get_industry_group_by_code, industry_code)
+async def japan_sic_industry_group(request):
+    return await _handle_request(request, japansicsq, japansicsq.get_industry_group_by_code, 'industry_code')
 
-@app.get(
-    "/V3.0/japan/sic/description/{industry_desc}",
-    response_model=JapanSICResponse,
-    tags=["SIC - Japan (V3.0)"],
-    summary="Get Japan SIC industry by description"
-)
-async def japan_sic_industry_group_description(industry_desc: str = Path(..., min_length=2, description="Industry description")):
-    return await _handle_request(japansicsq, japansicsq.get_industry_group_by_description, industry_desc)
+async def japan_sic_industry_group_description(request):
+    return await _handle_request(request, japansicsq, japansicsq.get_industry_group_by_description, 'industry_desc')
 # END: Japan Standard Industry Classification database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Unified Standard Industry Classification database cache functions
-@app.get(
-    "/V3.0/global/sic/description/{query_string}",
-    response_model=UnifiedSICResponse,
-    tags=["SIC - Unified Global (V3.0)"],
-    summary="Search all SIC systems by description"
-)
-async def unified_sic_description(query_string: str = Path(..., min_length=2, description="Search query across all SIC systems")):
-    return await _handle_request(unified_sic_q, unified_sic_q.search_all_descriptions, query_string)
+async def unified_sic_description(request):
+    return await _handle_request(request, unified_sic_q, unified_sic_q.search_all_descriptions, 'query_string')
+
 # END: Unified Standard Industry Classification database cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
-# BEGIN: EDGAR database cache functions
-@app.get(
-    "/V2.0/companies/edgar/detail/{company_name}",
-    response_model=EdgarDetailResponse,
-    tags=["EDGAR (V2.0)"],
-    summary="Get detailed EDGAR company information"
-)
-@app.get(
-    "/V3.0/na/companies/edgar/detail/{company_name}",
-    response_model=EdgarDetailResponse,
-    tags=["EDGAR (V3.0)"],
-    summary="Get detailed EDGAR company information"
-)
-async def edgar_detail(company_name: str = Path(..., min_length=1, description="Company name to search")):
-    return await _handle_request(eq, eq.get_all_details, company_name)
+# BEGIN: EDGAR dabase cache functions
+async def edgar_detail(request):
+    return await _handle_request(request, eq, eq.get_all_details, 'company_name')
 
-@app.get(
-    "/V2.0/companies/edgar/summary/{company_name}",
-    response_model=EdgarDetailResponse,
-    tags=["EDGAR (V2.0)"],
-    summary="Get EDGAR company summary"
-)
-@app.get(
-    "/V3.0/na/companies/edgar/summary/{company_name}",
-    response_model=EdgarDetailResponse,
-    tags=["EDGAR (V3.0)"],
-    summary="Get EDGAR company summary"
-)
-async def edgar_summary(company_name: str = Path(..., min_length=1, description="Company name")):
-    return await _handle_request(eq, eq.get_all_details, company_name, firmographics=False)
+async def edgar_summary(request):
+    return await _handle_request(request, eq, eq.get_all_details, 'company_name', firmographics=False)
 
-@app.get(
-    "/V2.0/companies/edgar/ciks/{company_name}",
-    response_model=EdgarCIKResponse,
-    tags=["EDGAR (V2.0)"],
-    summary="Get CIK numbers for company"
-)
-@app.get(
-    "/V3.0/na/companies/edgar/ciks/{company_name}",
-    response_model=EdgarCIKResponse,
-    tags=["EDGAR (V3.0)"],
-    summary="Get CIK numbers for company"
-)
-async def edgar_ciks(company_name: str = Path(..., min_length=1, description="Company name")):
-    return await _handle_request(eq, eq.get_all_ciks, company_name)
+async def edgar_ciks(request):
+    return await _handle_request(request, eq, eq.get_all_ciks, 'company_name')
 
-@app.get(
-    "/V2.0/company/edgar/firmographics/{cik_no}",
-    response_model=EdgarDetailResponse,
-    tags=["EDGAR (V2.0)"],
-    summary="Get firmographics by CIK number"
-)
-@app.get(
-    "/V3.0/na/company/edgar/firmographics/{cik_no}",
-    response_model=EdgarDetailResponse,
-    tags=["EDGAR (V3.0)"],
-    summary="Get firmographics by CIK number"
-)
-async def edgar_firmographics(cik_no: str = Path(..., description="10-digit CIK number")):
-    return await _handle_request(eq, eq.get_firmographics, cik_no)
-# END: EDGAR database cache functions
+async def edgar_firmographics(request):
+    return await _handle_request(request, eq, eq.get_firmographics, 'cik_no')
+# END: EDGAR dabase cache functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Wikipedia functions
-@app.get(
-    "/V2.0/company/wikipedia/firmographics/{company_name}",
-    response_model=WikipediaResponse,
-    tags=["Wikipedia (V2.0)"],
-    summary="Get company firmographics from Wikipedia"
-)
-@app.get(
-    "/V3.0/global/company/wikipedia/firmographics/{company_name}",
-    response_model=WikipediaResponse,
-    tags=["Wikipedia (V3.0)"],
-    summary="Get company firmographics from Wikipedia"
-)
-async def wikipedia_firmographics(company_name: str = Path(..., min_length=1, description="Company name")):
-    return await _handle_request(wq, wq.get_firmographics, company_name)
+async def wikipedia_firmographics(request):
+    return await _handle_request(request, wq, wq.get_firmographics, 'company_name')
 # END: Wikipedia functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
-# BEGIN: General query functions (merged data from all sources)
-@app.get(
-    "/V2.0/company/merged/firmographics/{company_name}",
-    response_model=MergedFirmographicsResponse,
-    tags=["Merged Data (V2.0)"],
-    summary="Get merged firmographics from all sources"
-)
-@app.get(
-    "/V3.0/global/company/merged/firmographics/{company_name}",
-    response_model=MergedFirmographicsResponse,
-    tags=["Merged Data (V3.0)"],
-    summary="Get merged firmographics from all sources"
-)
-async def general_query(company_name: str = Path(..., min_length=1, description="Company name")):
-    return await _handle_request(gq, gq.get_firmographics, company_name)
+# BEGIN: General query functions
+# 
+async def general_query(request):
+    return await _handle_request(request, gq, gq.get_firmographics, 'company_name')
+
 # END: General query functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
-# BEGIN: Utility endpoints
-@app.get("/", include_in_schema=False)
-async def root():
-    """Redirect root to help documentation"""
-    return RedirectResponse(url="/help/", status_code=307)
+# BEGIN: Helper functions
+def _check_status_and_return(result_data, resource_name):
+    """Check status code and return appropriate response"""
+    return_code = result_data.get('code')
+    result_count = result_data.get('total')
+    return_msg = result_data.get('message')
+    if return_code != 200:
+        logger.error(f'There were [{result_count}] results for resource [{resource_name}].')
+        raise HTTPException(
+            status_code=return_code,
+            detail=return_msg or f"Error retrieving {resource_name}"
+        )
+    return result_data
 
-@app.get("/health", tags=["System"])
-async def health_check():
-    """Health check endpoint for monitoring"""
-    return {
-        "status": "healthy",
-        "version": "3.2.0",
-        "timestamp": datetime.utcnow().isoformat() + "Z"
-    }
-# END: Utility endpoints
+async def _handle_request(handler, func, query_value, *args, **kwargs):
+    """Generic request handler for all endpoints"""
+    handler.query = query_value
+    
+    # If the function is async, await it, otherwise call it directly
+    if asyncio.iscoroutinefunction(func):
+        data = await func(*args, **kwargs)
+    else:
+        data = func(*args, **kwargs)
+        
+    checked_data = _check_status_and_return(data, query_value)
+    return checked_data
+# END: Helper functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
-# BEGIN: Mount static files
-# Serve help documentation and static assets
-app.mount("/help", StaticFiles(directory=get_abs_path('html'), html=True), name="help")
-app.mount("/static", StaticFiles(directory=get_abs_path('html')), name="static")
+# BEGIN: Define query objects
+sq = SICQueries()
+eq = EdgarQueries()
+wq = WikipediaQueries()
+gq = GeneralQueries()
+uksq = UKSICQueries()
+isicsq = InternationalSICQueries()
+eusicsq = EuSICQueries()
+japansicsq = JapanSICQueries()
+unified_sic_q = UnifiedSICQueries()
+# END: Define query objects
 # -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: Initialize FastAPI app
+app = FastAPI(
+    title="company_dns API",
+    description="Company firmographics and SIC code lookup service",
+    version="3.2.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    allow_credentials=True,
+    expose_headers=["Content-Type", "X-Custom-Header"]
+)
+
+# Add security middleware
+app.middleware("http")(security_middleware)
+
+# Add logging middleware
+app.middleware("http")(logging_middleware)
+
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
+
+# Add custom 404 handler (no more catch-all redirects)
+@app.exception_handler(404)
+async def not_found_handler(request: Request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "Endpoint not found",
+            "code": 404,
+            "path": str(request.url.path),
+            "help": "Visit /docs for API documentation"
+        }
+    )
+
+def get_abs_path(relative_path):
+    """Convert relative paths to absolute paths based on script location"""
+    base_dir = PathLib(__file__).resolve().parent
+    return os.path.join(base_dir, relative_path)
+# END: Initialize FastAPI app
+# -------------------------------------------------------------- #
+
+
 
 if __name__ == "__main__": 
     try:
