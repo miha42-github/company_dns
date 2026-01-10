@@ -3,6 +3,35 @@ To enable a more automated approach to gathering information about companies `co
 
 # Changes
 
+## Introducing V3.2.0
+The V3.2.0 release brings **comprehensive security hardening** and modernizes the web framework:
+
+### Security Enhancements
+1. **Security Middleware**: Blocks 70+ known attack patterns including WordPress probes, PHP exploits, SQL injection, and XSS attempts
+2. **Rate Limiting**: IP-based rate limiting (100-1000 req/min by endpoint type) using SlowAPI
+3. **Structured Logging**: Severity-based logging with automatic request tracking and performance metrics
+4. **Input Validation**: Pydantic v2.10.0 provides strict request/response validation
+
+### Framework & Architecture
+1. **FastAPI Migration**: Complete replacement of Starlette with modern FastAPI framework
+2. **Automatic API Docs**: Interactive Swagger UI at `/docs` and ReDoc at `/redoc`
+3. **Enhanced Type Safety**: All endpoints use Pydantic models with proper type hints
+4. **Python 3.13 Support**: Tested with Python 3.13 via Homebrew, uses `.venv` convention
+
+### New Dependencies
+- `fastapi>=0.115.0`: Modern ASGI framework with automatic OpenAPI docs
+- `pydantic>=2.10.0`: Data validation and serialization
+- `slowapi>=0.1.9`: Rate limiting for API protection
+- `python-multipart>=0.0.9`: Multipart form data support
+
+### Verified Security
+✅ Malicious paths (`/wp-login.php`, `xmlrpc.php`, etc.) return 403 Forbidden  
+✅ SQL injection patterns blocked before reaching business logic  
+✅ XSS attempts filtered at middleware level  
+✅ All endpoints enforce rate limits per IP address
+
+See [Security Findings](./experiments/security-hardening-findings/FINDINGS.md) for detailed analysis and recommendations.
+
 ## Introducing V3.1.0
 The V3.1.0 release of `company_dns` brings significant UI improvements to enhance usability and functionality:
 
