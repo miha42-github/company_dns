@@ -774,9 +774,9 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                               <div class="explorer-result-heading">
                                 <span class="explorer-source-pill">EDGAR</span>
                                 <span class="explorer-result-code" x-text="item.filingType"></span>
+                                <span class="explorer-result-code" x-text="item.filingDate"></span>
                               </div>
                               <div class="explorer-result-heading-right">
-                                <span class="explorer-result-code" x-text="item.filingDate"></span>
                                 <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
                               </div>
                             </div>
@@ -802,8 +802,8 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                                   <span class="meta-sub" x-text="item.sic.divisionDescription"></span>
                                 </div>
                                 <div class="meta-item">
-                                  <span class="meta-label">Filer Category</span>
-                                  <span class="meta-value" x-text="item.filerCategory"></span>
+                                  <span class="meta-label">Ticker/Exchange</span>
+                                  <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
                                 </div>
                                 <div class="meta-item">
                                   <span class="meta-label">Fiscal Year End</span>
@@ -813,10 +813,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                                   <span class="meta-label">Location</span>
                                   <span class="meta-value" x-text="item.location.city + ', ' + item.location.stateProvince"></span>
                                   <span class="meta-sub" x-text="item.location.address"></span>
-                                </div>
-                                <div class="meta-item">
-                                  <span class="meta-label">Ticker/Exchange</span>
-                                  <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
                                 </div>
                               </div>
                               <!-- Latest filing pills -->
