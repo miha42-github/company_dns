@@ -1802,6 +1802,17 @@ label {
 }
 
 /* EDGAR Explorer specific card and pill styles */
+.edgar-meta-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.edgar-meta-row:last-of-type {
+  margin-bottom: 0;
+}
+
 .explorer-result-header {
   display: flex;
   justify-content: space-between;
@@ -1834,19 +1845,19 @@ label {
 .edgar-pill-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
   margin-top: 0.5rem;
   align-items: flex-end;
 }
 
 .edgar-pill {
   border-radius: 999px;
-  padding: 0.35rem 0.8rem;
+  padding: 0.3rem 0.7rem;
   min-height: auto;
   width: auto;
-  min-width: 140px;
+  min-width: 130px;
   text-align: center;
-  font-size: 0.85em;
+  font-size: 0.8em;
 }
 
 .edgar-pill.recent {

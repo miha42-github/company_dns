@@ -781,8 +781,8 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                               </div>
                             </div>
                             <div class="explorer-result-body">
-                              <!-- Metadata grid -->
-                              <div class="meta-grid">
+                              <!-- Row 1: Primary metadata -->
+                              <div class="edgar-meta-row">
                                 <div class="meta-item">
                                   <span class="meta-label">Company</span>
                                   <span class="meta-value" x-text="item.companyName"></span>
@@ -801,6 +801,9 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                                   <span class="meta-value" x-text="item.sic.division"></span>
                                   <span class="meta-sub" x-text="item.sic.divisionDescription"></span>
                                 </div>
+                              </div>
+                              <!-- Row 2: Secondary metadata -->
+                              <div class="edgar-meta-row">
                                 <div class="meta-item">
                                   <span class="meta-label">Ticker/Exchange</span>
                                   <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
