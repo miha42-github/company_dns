@@ -742,6 +742,30 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                     <label><input type="checkbox" x-model="filters.recent10Q" @change="applyFilters()"> Recent 10‑Q (≤ 90 days)</label>
                   </div>
                 </div>
+                
+                <div class="explorer-filter-options" x-show="availableDivisions.length > 0">
+                  <div class="explorer-filter-label">Division:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <select x-model="filters.division" @change="applyFilters()" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background-color: #0F0D0E; border: 1px solid #3c3b3b; color: #1696c8; border-radius: 0.3rem;">
+                      <option value="">-- All Divisions --</option>
+                      <template x-for="div in availableDivisions" :key="div">
+                        <option :value="div" x-text="div"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                
+                <div class="explorer-filter-options" x-show="availableFiscalYearEnds.length > 0">
+                  <div class="explorer-filter-label">Fiscal Year End:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <select x-model="filters.fiscalYearEnd" @change="applyFilters()" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background-color: #0F0D0E; border: 1px solid #3c3b3b; color: #1696c8; border-radius: 0.3rem;">
+                      <option value="">-- All Fiscal Year Ends --</option>
+                      <template x-for="fye in availableFiscalYearEnds" :key="fye">
+                        <option :value="fye" x-text="fye"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
                 <div class="explorer-filter-guide">
                   <h4>About Filters</h4>
                   <ul class="explorer-classification-guide">
@@ -838,7 +862,7 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                                 </div>
                                 <div class="meta-item">
                                   <span class="meta-label">Fiscal Year End</span>
-                                  <span class="meta-value" x-text="item.fiscalYearEnd"></span>
+                                  <span class="meta-value" x-text="displayFYE(item.fiscalYearEnd)"></span>
                                 </div>
                                 <div class="meta-item">
                                   <span class="meta-label">Location</span>

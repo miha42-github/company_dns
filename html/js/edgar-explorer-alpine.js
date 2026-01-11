@@ -16,8 +16,14 @@ function createEdgarExplorerComponent() {
     // Filters
     filters: {
       has10K: false,
-      recent10Q: false
+      recent10Q: false,
+      division: '',
+      fiscalYearEnd: ''
     },
+
+    // Dynamic filter options
+    availableDivisions: [],
+    availableFiscalYearEnds: [],
 
     // Results & pagination
     allItems: [],
@@ -174,10 +180,50 @@ function createEdgarExplorerComponent() {
           return dt >= ninetyDaysAgo;
         });
       }
+      if (this.filters.division) {
+        results = results.filter(item => item.sic.division === this.filters.division);
+      }
+      if (this.filters.fiscalYearEnd) {
+        results = results.filter(item => this.formatFYE(item.fiscalYearEnd) === this.filters.fiscalYearEnd);
+      }
 
       this.filteredItems = results;
+      this.updateFilterOptions();
       this.totalPages = Math.max(1, Math.ceil(this.filteredItems.length / this.resultsPerPage));
       if (this.currentPage > this.totalPages) this.currentPage = 1;
+    },
+
+    updateFilterOptions() {
+      // Discover unique divisions and FYE from filtered results
+      const divisionSet = new Set();
+      const fyeSet = new Set();
+      this.filteredItems.forEach(item => {
+        if (item.sic.division) divisionSet.add(item.sic.division);
+        if (item.fiscalYearEnd) fyeSet.add(this.formatFYE(item.fiscalYearEnd));
+      });
+      this.availableDivisions = Array.from(divisionSet).sort();
+      this.availableFiscalYearEnds = Array.from(fyeSet).sort();
+    },
+
+    formatFYE(fyeString) {
+      // Convert "MMDD" or "MM/DD" to "MM/YY" format with current year
+      if (!fyeString) return '';
+      const cleaned = fyeString.replace(/\D/g, '');
+      if (cleaned.length < 4) return fyeString;
+      const mm = cleaned.substring(0, 2);
+      const dd = cleaned.substring(2, 4);
+      const yy = new Date().getFullYear().toString().slice(-2);
+      return `${mm}/${yy}`;
+    },
+
+    displayFYE(fyeString) {
+      // For display in the UI, use MM/DD format
+      if (!fyeString) return '';
+      const cleaned = fyeString.replace(/\D/g, '');
+      if (cleaned.length < 4) return fyeString;
+      const mm = cleaned.substring(0, 2);
+      const dd = cleaned.substring(2, 4);
+      return `${mm}/${dd}`;
     },
 
     // Pagination helpers
