@@ -7,6 +7,7 @@
   <script src="/static/js/functions.js"></script>
   <script src="/static/js/api-service.js"></script>
   <script src="/static/js/global-search-alpine.js"></script>
+  <script src="/static/js/edgar-explorer-alpine.js"></script>
   <script defer src="/static/js/alpine.min.js"></script>
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
@@ -17,6 +18,7 @@
     <header class="page-header">
       <div class="menu">
         <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Classification Explorer</button>
+        <button class="tabmenu" onclick="openTab(event, 'EdgarExplorer', 'explorer-pagecontent', 'tabmenu')">EDGAR Explorer</button>
         <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help & Documentation</button>
         <a href="/docs" target="_blank" class="tabmenu" style="color: inherit; padding: 0.8rem 0.9rem; float: left;">API Reference</a>
       </div>
@@ -671,6 +673,130 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                   <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
                   <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
                   <template x-for="page in getVisiblePages()" :key="'page-' + page">
+                    <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
+                  </template>
+                  <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
+                  <button class="pagination-btn" @click="lastPage()" :disabled="currentPage === totalPages" aria-label="Last page">⏭</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- EDGAR Explorer Tab Content -->
+      <div id="EdgarExplorer" class="explorer-pagecontent" x-data="createEdgarExplorerComponent()" @load="init()" style="display: none;">
+        <!-- Initial centered search (shown before search) -->
+        <div id="initialEdgarSearchContainer" class="explorer-search-container" x-show="!showResults">
+          <h1>EDGAR Explorer</h1>
+          <div class="explorer-intro">
+            <p>
+              Search SEC EDGAR filings by company name or CIK. Use sidebar filters
+              to focus on key filings like annual reports (10‑K) or recent quarterly
+              reports (10‑Q within the last 90 days).
+            </p>
+          </div>
+          <div class="explorer-search-card">
+            <h2>Enter Company Name or CIK</h2>
+            <form id="edgarSearchForm" @submit.prevent="performSearch()">
+              <div class="explorer-input-group">
+                <input type="text" x-model="searchQuery" id="edgarSearchInput" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
+                <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                  <i class="explorer-action-icon"></i>
+                  <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                </button>
+              </div>
+              <div class="explorer-search-hint">Tip: Use the official company name for broader results.</div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Post-search layout -->
+        <div id="edgarSearchResultsLayout" class="explorer-results-layout" x-show="showResults">
+          <h1>EDGAR Explorer</h1>
+          <div class="explorer-search-wrapper">
+            <div class="explorer-top-container">
+              <form id="edgarSearchFormTop" @submit.prevent="performSearch()">
+                <div class="explorer-input-group">
+                  <input type="text" x-model="searchQuery" id="edgarSearchInputTop" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
+                  <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                    <i class="explorer-action-icon"></i>
+                    <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="explorer-content-wrapper">
+            <div class="explorer-results-filters">
+              <div class="explorer-sidebar">
+                <h3 class="explorer-sidebar-title">Filter Results</h3>
+                <div class="explorer-filter-options">
+                  <div class="explorer-filter-checkbox">
+                    <label><input type="checkbox" x-model="filters.has10K"> Has 10‑K</label>
+                  </div>
+                  <div class="explorer-filter-checkbox">
+                    <label><input type="checkbox" x-model="filters.recent10Q"> Recent 10‑Q (≤ 90 days)</label>
+                  </div>
+                </div>
+                <div class="explorer-filter-guide">
+                  <h4>About Filters</h4>
+                  <ul class="explorer-classification-guide">
+                    <li><strong>Has 10‑K</strong> — shows annual report filings</li>
+                    <li><strong>Recent 10‑Q</strong> — shows quarterly reports filed within 90 days</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="explorer-results-area">
+                <div class="explorer-header-section">
+                  <div class="results-status">
+                    <div class="status-top">
+                      <span class="status-title">Results</span>
+                      <span class="status-count" x-text="getResultsHeadline()"></span>
+                    </div>
+                    <div class="status-meta">
+                      <span x-text="getResultsRangeLabel()"></span>
+                      <span class="status-dot">•</span>
+                      <span x-text="getActiveFiltersLabel()"></span>
+                    </div>
+                  </div>
+                  <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
+                </div>
+
+                <div class="explorer-container-wrapper">
+                  <div id="edgarSearchResults" class="explorer-results-container">
+                    <template x-if="hasResults && getCurrentPageResults().length > 0">
+                      <div>
+                        <template x-for="item in getCurrentPageResults()" :key="item.accessionNumber + '-' + item.filingType">
+                          <div class="explorer-result-card">
+                            <div class="explorer-result-header">
+                              <span class="result-source-pill">EDGAR</span>
+                              <span class="result-code" x-text="item.filingType"></span>
+                            </div>
+                            <div class="explorer-result-body">
+                              <div class="result-title" x-text="item.companyName"></div>
+                              <div class="result-subtitle">
+                                <span>CIK: </span><span x-text="item.cik"></span>
+                                <span class="status-dot">•</span>
+                                <span>Filed: </span><span x-text="item.filingDate"></span>
+                              </div>
+                              <div class="result-actions">
+                                <a :href="item.documentUrl" target="_blank" class="dns-button">Open Document</a>
+                                <button class="dns-button" @click="viewItemJson(item)">View JSON</button>
+                              </div>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="pagination-controls" x-show="hasResults && filteredItems.length">
+                  <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
+                  <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
+                  <template x-for="page in getVisiblePages()" :key="'edgar-page-' + page">
                     <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
                   </template>
                   <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
