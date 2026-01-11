@@ -1,4 +1,43 @@
 /* Core layout and structural elements */
+:root {
+  /* Color System */
+  --color-bg-primary: #0F0D0E;
+  --color-bg-secondary: #1a1718;
+  --color-bg-tertiary: #3c3b3b;
+  
+  --color-text-primary: #ca703f;
+  --color-text-secondary: rgb(104, 95, 88);
+  --color-text-accent: #924e29;
+  
+  --color-link-primary: #1696c8;
+  --color-link-visited: #41a6ce;
+  --color-link-hover: #82a7b6;
+  
+  /* Spacing */
+  --spacing-xs: 0.3rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* Typography */
+  --font-family-base: 'Avenir Next', 'Open Sans Light', 'Lato Medium';
+  --font-size-base: 11.5pt;
+  --font-size-small: 10.5pt;
+  --font-size-large: 16px;
+  
+  /* Borders */
+  --border-width: 0.05rem;
+  --border-width-medium: 0.12rem;
+  --border-color: rgb(104, 95, 88);
+  --border-radius: 0.5rem;
+  --border-radius-small: 0.3rem;
+  
+  /* Transitions */
+  --transition-fast: 0.2s;
+  --transition-medium: 0.3s;
+}
+
 html, body {
   margin: 0;
   padding: 0;
@@ -7,11 +46,11 @@ html, body {
 }
 
 body {
-  font-family: 'Avenir Next', 'Open Sans Light', 'Lato Medium';
+  font-family: var(--font-family-base);
   scroll-behavior: smooth;
-  background-color: #0F0D0E;
-  color: #ca703f;
-  font-size: 11.5pt;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
 }
 
 /* Page structure */
@@ -37,9 +76,9 @@ body {
 .page-footer {
   flex-shrink: 0;
   height: 40px;
-  border-top: 1px solid #3c3b3b;
+  border-top: 1px solid var(--color-bg-tertiary);
   padding: 0;
-  background-color: #0F0D0E;
+  background-color: var(--color-bg-primary);
   display: flex;
   align-items: center;
   z-index: 50; /* Keep it above content */
@@ -53,22 +92,22 @@ body {
 
 /* Typography */
 h1, h2 {
-  color: #924e29;
+  color: var(--color-text-accent);
   font-weight: bold;
 }
 
 a {
-  color: #1696c8;
+  color: var(--color-link-primary);
   text-decoration: none;
 }
 
 a:visited {
-  color: #41a6ce;
+  color: var(--color-link-visited);
   text-decoration: none;
 }
 
 a:hover, a.focus {
-  color: #82a7b6;
+  color: var(--color-link-hover);
   text-decoration: none;
 }
 
@@ -79,13 +118,13 @@ p {
 /* Tables */
 table {
   border: none;
-  background-color: #0F0D0E;
+  background-color: var(--color-bg-primary);
   font-size: 10pt;
   width: 100%;
 }
 
 table td {
-  border-bottom: 0.12rem solid rgb(104, 95, 88);
+  border-bottom: var(--border-width-medium) solid var(--border-color);
   margin: 0.3rem;
   padding: 0.2rem;
 }
@@ -93,12 +132,12 @@ table td {
 table th {
   position: sticky;
   top: -8;
-  border-bottom: 0.12rem solid rgb(104, 95, 88);
+  border-bottom: var(--border-width-medium) solid var(--border-color);
   margin-left: 0.3rem;
   margin-right: 0.3rem;
   margin-top: none;
   padding-top: none;
-  background-color: #0F0D0E;
+  background-color: var(--color-bg-primary);
 }
 
 table tr:last-child > td {
@@ -108,15 +147,15 @@ table tr:last-child > td {
 /* Common utility classes */
 .json-format, .cmd-format, .copyright {
   font-size: 10.5pt;
-  color: rgb(104, 95, 88);
+  color: var(--border-color);
   padding: 1rem;
 }
 
 /* Tab navigation system */
 .menu {
   overflow: hidden;
-  background-color: #0F0D0E;
-  border-bottom: 1px solid #3c3b3b;
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-bg-tertiary);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -132,6 +171,7 @@ table tr:last-child > td {
   font-size: 16px;
   border: none;
   text-decoration: none;
+  color: var(--color-link-primary);
 }
 
 .menu button:hover {
@@ -139,25 +179,25 @@ table tr:last-child > td {
 }
 
 .menu button.active {
-  background-color: #0F0D0E;
+  background-color: var(--color-bg-primary);
   padding: 0.8rem 0.9rem;
   text-decoration: underline;
 }
 
 .tabmenu {
-  background-color: #0F0D0E;
-  color: rgb(104, 95, 88);
+  background-color: var(--color-bg-primary);
+  color: var(--border-color);
 }
 
 .tabmenu.active {
-  color: #1696c8;
+  color: var(--color-link-primary);
   text-decoration: underline;
 }
 
 /* Inner tab system (for API documentation) */
 .tab {
   overflow: hidden;
-  background-color: #0F0D0E;
+  background-color: var(--color-bg-primary);
   border: none;
 }
 
@@ -169,13 +209,14 @@ table tr:last-child > td {
   cursor: pointer;
   padding: 0.8rem 0.9rem;
   font-size: 16px;
-  background-color: #0F0D0E;
-  border-left: 1px #0F0D0E;
-  border-right: 1px solid #0F0D0E;
-  border-top: 1px solid #0F0D0E;
-  border-top-left-radius: 0.5rem;
-  border-top-right-radius: 0.5rem;
+  background-color: var(--color-bg-primary);
+  border-left: 1px var(--color-bg-primary);
+  border-right: 1px solid var(--color-bg-primary);
+  border-top: 1px solid var(--color-bg-primary);
+  border-top-left-radius: var(--border-radius);
+  border-top-right-radius: var(--border-radius);
   text-decoration: none;
+  color: var(--border-color);
 }
 
 .tab button:hover {
@@ -183,23 +224,24 @@ table tr:last-child > td {
 }
 
 .tab button.active {
-  background-color: #0F0D0E;
-  border-left: 1px solid rgb(104, 95, 88);
-  border-right: 1px solid rgb(104, 95, 88);
-  border-top: 1px solid rgb(104, 95, 88);
-  border-top-left-radius: 0.5rem;
-  border-top-right-radius: 0.5rem;
+  background-color: var(--color-bg-primary);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+  border-top-left-radius: var(--border-radius);
+  border-top-right-radius: var(--border-radius);
   padding: 0.8rem 0.9rem;
   text-decoration: none;
+  color: var(--color-text-primary);
 }
 
 .tablinks {
-  background-color: #0F0D0E;
-  color: rgb(104, 95, 88);
+  background-color: var(--color-bg-primary);
+  color: var(--border-color);
 }
 
 .tablinks.active {
-  color: #ca703f;
+  color: var(--color-text-primary);
 }
 
 /* Tab content container */
@@ -207,9 +249,9 @@ table tr:last-child > td {
   box-sizing: border-box;
   display: none;
   padding: 0.5rem;
-  border: 0.12rem solid rgb(104, 95, 88);
-  border-bottom-left-radius: 0.5rem;
-  border-bottom-right-radius: 0.5rem;
+  border: var(--border-width-medium) solid var(--border-color);
+  border-bottom-left-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
   border-spacing: 0.3rem;
   height: 50vh;
   overflow-y: auto;
@@ -243,9 +285,9 @@ table tr:last-child > td {
 /* Generic form elements used across tabs */
 select {
   margin-right: 1rem;
-  border: 0.05rem solid rgb(104, 95, 88);
-  color: #1696c8;
-  background-color: #0F0D0E;
+  border: var(--border-width) solid var(--border-color);
+  color: var(--color-link-primary);
+  background-color: var(--color-bg-primary);
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -260,28 +302,36 @@ select {
 
 .dns-textfield {
   padding: 0.5rem;
-  border: 0.05rem solid rgb(104, 95, 88);
-  color: #1696c8;
-  background-color: #0F0D0E;
+  border: var(--border-width) solid var(--border-color);
+  color: var(--color-link-primary);
+  background-color: var(--color-bg-primary);
   min-width: 20rem;
   min-height: 2rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius);
 }
 
 .dns-button {
   margin-left: 4rem;
   margin-right: 1rem;
   padding: 0.5rem;
-  border: 0.05rem solid rgb(104, 95, 88);
-  color: #1696c8;
-  background-color: #0F0D0E;
+  border: var(--border-width) solid var(--border-color);
+  color: var(--color-link-primary);
+  background-color: var(--color-bg-primary);
   min-width: 4rem;
   min-height: 2rem;
-  border-radius: 0.5rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dns-button:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
 }
 
 .dns-textfield:focus, select {
   outline: none;
+  border-color: var(--color-text-primary);
 }
 
 /* Basic form label styling */
@@ -315,8 +365,96 @@ label {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/%3E%3C/svg%3E");
 }
 
-/* Media queries */
+/* Enhanced Pagination Controls */
+.explorer-pagination-controls {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-tertiary);
+  border-radius: var(--border-radius);
+  padding: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.pagination-page-button,
+.pagination-nav-button {
+  background-color: var(--color-bg-primary);
+  color: var(--color-link-primary);
+  border: 1px solid var(--color-bg-tertiary);
+  border-radius: var(--border-radius-small);
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.9rem;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.pagination-page-button:hover:not(:disabled),
+.pagination-nav-button:hover:not(:disabled) {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+.pagination-page-button.active {
+  background-color: var(--color-text-accent);
+  color: var(--color-bg-primary);
+  border-color: var(--color-text-accent);
+  font-weight: bold;
+}
+
+.pagination-page-button:disabled,
+.pagination-nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-page-size-select,
+.pagination-jump-input {
+  background-color: var(--color-bg-primary);
+  color: var(--color-link-primary);
+  border: 1px solid var(--color-bg-tertiary);
+  border-radius: var(--border-radius-small);
+  padding: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pagination-page-size-select:hover,
+.pagination-jump-input:hover {
+  border-color: var(--color-text-primary);
+}
+
+.pagination-page-size-select:focus,
+.pagination-jump-input:focus {
+  outline: none;
+  border-color: var(--color-text-primary);
+  box-shadow: 0 0 0 2px var(--color-text-accent);
+}
+
+/* Media queries for pagination on smaller screens */
 @media (max-width: 768px) {
+  .explorer-pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  
+  .pagination-nav-button {
+    flex: 1;
+  }
+  
+  .pagination-page-size-select,
+  .pagination-jump-input {
+    width: 100%;
+  }
+  
   .dns-textfield {
     min-width: 100%;
   }

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Path, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse, FileResponse
+from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
@@ -112,6 +112,32 @@ app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
 # Add custom 404 handler (no more catch-all redirects)
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
+    # Check Accept header to determine response format
+    accept_header = request.headers.get("accept", "").lower()
+    
+    # If browser requests HTML, serve custom 404 page
+    if "text/html" in accept_header:
+        try:
+            with open(get_abs_path('html/404.html'), 'r') as f:
+                html_content = f.read()
+            return HTMLResponse(
+                content=html_content,
+                status_code=404
+            )
+        except Exception as e:
+            logger.error(f"Failed to serve custom 404 page: {e}")
+            # Fallback to JSON if file not found
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": "Endpoint not found",
+                    "code": 404,
+                    "path": str(request.url.path),
+                    "help": "Visit /docs for API documentation"
+                }
+            )
+    
+    # Otherwise return JSON for API clients
     return JSONResponse(
         status_code=404,
         content={

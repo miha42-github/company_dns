@@ -1,12 +1,15 @@
 // Global Industry Code Search functionality with refinements
 
 // Pagination settings
-const RESULTS_PER_PAGE = 10;
+let RESULTS_PER_PAGE = 10;
 let currentPage = 1;
 let totalPages = 1;
 
 // Initialize the global search form
 function initGlobalSearch() {
+  // Add keyboard navigation support
+  document.addEventListener('keydown', handlePaginationKeyboard);
+  
   // Main search form handler
   document.getElementById('globalSearchForm').addEventListener('submit', function(event) {
     event.preventDefault();
@@ -84,7 +87,72 @@ function initGlobalSearch() {
   });
 }
 
-// Get selected source filters
+// Handle keyboard shortcuts for pagination
+function handlePaginationKeyboard(event) {
+  // Only handle if we're in the search results view and have results
+  if (!window.lastSearchResults || !document.getElementById('searchResultsLayout').style.display || 
+      document.getElementById('searchResultsLayout').style.display === 'none') {
+    return;
+  }
+  
+  const resultsDiv = document.getElementById('globalSearchResults');
+  
+  // Arrow Left (Previous Page) - Alt+Left
+  if (event.altKey && event.key === 'ArrowLeft') {
+    event.preventDefault();
+    if (currentPage > 1) {
+      currentPage--;
+      const selectedSources = getSelectedSources();
+      displaySearchResults(window.lastSearchResults, selectedSources);
+      resultsDiv.scrollTop = 0;
+    }
+  }
+  
+  // Arrow Right (Next Page) - Alt+Right
+  if (event.altKey && event.key === 'ArrowRight') {
+    event.preventDefault();
+    if (currentPage < totalPages) {
+      currentPage++;
+      const selectedSources = getSelectedSources();
+      displaySearchResults(window.lastSearchResults, selectedSources);
+      resultsDiv.scrollTop = 0;
+    }
+  }
+  
+  // Home (First Page) - Alt+Home
+  if (event.altKey && event.key === 'Home') {
+    event.preventDefault();
+    if (currentPage !== 1) {
+      currentPage = 1;
+      const selectedSources = getSelectedSources();
+      displaySearchResults(window.lastSearchResults, selectedSources);
+      resultsDiv.scrollTop = 0;
+    }
+  }
+  
+  // End (Last Page) - Alt+End
+  if (event.altKey && event.key === 'End') {
+    event.preventDefault();
+    if (currentPage !== totalPages) {
+      currentPage = totalPages;
+      const selectedSources = getSelectedSources();
+      displaySearchResults(window.lastSearchResults, selectedSources);
+      resultsDiv.scrollTop = 0;
+    }
+  }
+}
+
+// Change results per page and reset pagination
+function changeResultsPerPage(newPageSize) {
+  RESULTS_PER_PAGE = parseInt(newPageSize);
+  currentPage = 1;
+  
+  if (window.lastSearchResults) {
+    const selectedSources = getSelectedSources();
+    displaySearchResults(window.lastSearchResults, selectedSources);
+    document.getElementById('globalSearchResults').scrollTop = 0;
+  }
+}
 function getSelectedSources() {
   const allCheckboxes = document.querySelectorAll('input[name="sourceFilter"]:not([value="All"])');
   return Array.from(allCheckboxes)
@@ -344,10 +412,52 @@ function createPaginationControls() {
   const paginationDiv = document.createElement('div');
   paginationDiv.className = 'explorer-pagination-controls'; // Add explorer- prefix
   
+  // Results per page selector
+  const pageSizeContainer = document.createElement('div');
+  pageSizeContainer.style.display = 'flex';
+  pageSizeContainer.style.alignItems = 'center';
+  pageSizeContainer.style.gap = '0.5rem';
+  pageSizeContainer.style.marginRight = '2rem';
+  pageSizeContainer.title = 'Results per page';
+  
+  const pageSizeLabel = document.createElement('label');
+  pageSizeLabel.textContent = 'Show:';
+  pageSizeLabel.style.whiteSpace = 'nowrap';
+  pageSizeContainer.appendChild(pageSizeLabel);
+  
+  const pageSizeSelect = document.createElement('select');
+  pageSizeSelect.className = 'pagination-page-size-select';
+  pageSizeSelect.style.marginLeft = '0.3rem';
+  
+  const pageSizeOptions = [
+    { value: '10', label: '10' },
+    { value: '25', label: '25' },
+    { value: '50', label: '50' },
+    { value: '100', label: '100' }
+  ];
+  
+  pageSizeOptions.forEach(option => {
+    const opt = document.createElement('option');
+    opt.value = option.value;
+    opt.textContent = option.label;
+    if (parseInt(option.value) === RESULTS_PER_PAGE) {
+      opt.selected = true;
+    }
+    pageSizeSelect.appendChild(opt);
+  });
+  
+  pageSizeSelect.addEventListener('change', (e) => {
+    changeResultsPerPage(e.target.value);
+  });
+  
+  pageSizeContainer.appendChild(pageSizeSelect);
+  
   // Previous button with arrow
   const prevButton = document.createElement('button');
-  prevButton.innerHTML = '&larr;'; // Left arrow
+  prevButton.innerHTML = '&larr; Prev';
+  prevButton.className = 'pagination-nav-button';
   prevButton.disabled = currentPage === 1;
+  prevButton.title = 'Previous page (Alt+←)';
   prevButton.addEventListener('click', () => {
     if (currentPage > 1) {
       currentPage--;
@@ -359,6 +469,15 @@ function createPaginationControls() {
     }
   });
   
+  // Add page number buttons container
+  const pageNumbersContainer = document.createElement('div');
+  pageNumbersContainer.style.display = 'flex';
+  pageNumbersContainer.style.gap = '0.25rem';
+  pageNumbersContainer.style.alignItems = 'center';
+  pageNumbersContainer.style.flexGrow = '1';
+  pageNumbersContainer.style.justifyContent = 'center';
+  pageNumbersContainer.style.flexWrap = 'wrap';
+  
   // Add page number buttons
   const maxPageButtons = 5; // Maximum number of page buttons to show
   let startPage = Math.max(1, currentPage - Math.floor(maxPageButtons / 2));
@@ -369,25 +488,25 @@ function createPaginationControls() {
     startPage = Math.max(1, endPage - maxPageButtons + 1);
   }
   
-  paginationDiv.appendChild(prevButton);
-  
   // Add first page button if not included in the range
   if (startPage > 1) {
     const firstPageButton = document.createElement('button');
     firstPageButton.textContent = '1';
+    firstPageButton.className = 'pagination-page-button';
     firstPageButton.addEventListener('click', () => {
       currentPage = 1;
       const selectedSources = getSelectedSources();
       displaySearchResults(window.lastSearchResults, selectedSources);
       document.getElementById('globalSearchResults').scrollTop = 0;
     });
-    paginationDiv.appendChild(firstPageButton);
+    pageNumbersContainer.appendChild(firstPageButton);
     
     // Add ellipsis if there's a gap
     if (startPage > 2) {
       const ellipsis = document.createElement('span');
       ellipsis.textContent = '...';
-      paginationDiv.appendChild(ellipsis);
+      ellipsis.style.padding = '0 0.3rem';
+      pageNumbersContainer.appendChild(ellipsis);
     }
   }
   
@@ -395,6 +514,7 @@ function createPaginationControls() {
   for (let i = startPage; i <= endPage; i++) {
     const pageButton = document.createElement('button');
     pageButton.textContent = i;
+    pageButton.className = 'pagination-page-button';
     if (i === currentPage) {
       pageButton.classList.add('active');
     }
@@ -404,7 +524,7 @@ function createPaginationControls() {
       displaySearchResults(window.lastSearchResults, selectedSources);
       document.getElementById('globalSearchResults').scrollTop = 0;
     });
-    paginationDiv.appendChild(pageButton);
+    pageNumbersContainer.appendChild(pageButton);
   }
   
   // Add last page button if not included in the range
@@ -413,24 +533,28 @@ function createPaginationControls() {
     if (endPage < totalPages - 1) {
       const ellipsis = document.createElement('span');
       ellipsis.textContent = '...';
-      paginationDiv.appendChild(ellipsis);
+      ellipsis.style.padding = '0 0.3rem';
+      pageNumbersContainer.appendChild(ellipsis);
     }
     
     const lastPageButton = document.createElement('button');
     lastPageButton.textContent = totalPages;
+    lastPageButton.className = 'pagination-page-button';
     lastPageButton.addEventListener('click', () => {
       currentPage = totalPages;
       const selectedSources = getSelectedSources();
       displaySearchResults(window.lastSearchResults, selectedSources);
       document.getElementById('globalSearchResults').scrollTop = 0;
     });
-    paginationDiv.appendChild(lastPageButton);
+    pageNumbersContainer.appendChild(lastPageButton);
   }
   
   // Next button with arrow
   const nextButton = document.createElement('button');
-  nextButton.innerHTML = '&rarr;'; // Right arrow
+  nextButton.innerHTML = 'Next &rarr;';
+  nextButton.className = 'pagination-nav-button';
   nextButton.disabled = currentPage === totalPages;
+  nextButton.title = 'Next page (Alt+→)';
   nextButton.addEventListener('click', () => {
     if (currentPage < totalPages) {
       currentPage++;
@@ -440,9 +564,74 @@ function createPaginationControls() {
     }
   });
   
-  paginationDiv.appendChild(nextButton);
+  // Jump to page input
+  const jumpContainer = document.createElement('div');
+  jumpContainer.style.display = 'flex';
+  jumpContainer.style.alignItems = 'center';
+  jumpContainer.style.gap = '0.3rem';
+  jumpContainer.style.marginLeft = '2rem';
   
-  console.log("Returning pagination controls with", paginationDiv.childNodes.length, "child elements");
+  const jumpLabel = document.createElement('label');
+  jumpLabel.textContent = 'Go to:';
+  jumpLabel.style.whiteSpace = 'nowrap';
+  jumpContainer.appendChild(jumpLabel);
+  
+  const jumpInput = document.createElement('input');
+  jumpInput.type = 'number';
+  jumpInput.min = '1';
+  jumpInput.max = totalPages;
+  jumpInput.value = currentPage;
+  jumpInput.style.width = '3rem';
+  jumpInput.className = 'pagination-jump-input';
+  jumpInput.title = `Enter page number (1-${totalPages})`;
+  
+  jumpInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+      const pageNum = parseInt(jumpInput.value);
+      if (pageNum >= 1 && pageNum <= totalPages && pageNum !== currentPage) {
+        currentPage = pageNum;
+        const selectedSources = getSelectedSources();
+        displaySearchResults(window.lastSearchResults, selectedSources);
+        document.getElementById('globalSearchResults').scrollTop = 0;
+      }
+    }
+  });
+  
+  jumpContainer.appendChild(jumpInput);
+  
+  const jumpOfLabel = document.createElement('span');
+  jumpOfLabel.textContent = `of ${totalPages}`;
+  jumpOfLabel.style.whiteSpace = 'nowrap';
+  jumpContainer.appendChild(jumpOfLabel);
+  
+  // Assemble the pagination controls
+  paginationDiv.style.display = 'flex';
+  paginationDiv.style.alignItems = 'center';
+  paginationDiv.style.justifyContent = 'space-between';
+  paginationDiv.style.padding = '1rem';
+  paginationDiv.style.gap = '1rem';
+  paginationDiv.style.flexWrap = 'wrap';
+  
+  paginationDiv.appendChild(pageSizeContainer);
+  paginationDiv.appendChild(prevButton);
+  paginationDiv.appendChild(pageNumbersContainer);
+  paginationDiv.appendChild(nextButton);
+  paginationDiv.appendChild(jumpContainer);
+  
+  // Add page info display
+  const pageInfoSpan = document.createElement('span');
+  pageInfoSpan.style.marginLeft = 'auto';
+  pageInfoSpan.style.whiteSpace = 'nowrap';
+  pageInfoSpan.style.fontSize = '0.9rem';
+  pageInfoSpan.style.color = 'var(--color-text-secondary, rgb(104, 95, 88))';
+  
+  const startIdx = (currentPage - 1) * RESULTS_PER_PAGE + 1;
+  const endIdx = Math.min(currentPage * RESULTS_PER_PAGE, window.lastSearchResults?.data?.results?.length || 0);
+  pageInfoSpan.textContent = `Page ${currentPage} of ${totalPages}`;
+  
+  paginationDiv.appendChild(pageInfoSpan);
+  
+  console.log("Returning pagination controls with enhanced UI");
   return paginationDiv;
 }
 
