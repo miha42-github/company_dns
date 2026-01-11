@@ -771,10 +771,28 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                         <template x-for="item in getCurrentPageResults()" :key="item.accessionNumber + '-' + item.filingType">
                           <div class="explorer-result-card">
                             <div class="explorer-result-header">
-                              <div class="explorer-result-heading">
-                                <span class="explorer-source-pill">EDGAR</span>
-                                <span class="explorer-result-code" x-text="item.filingType"></span>
-                                <span class="explorer-result-code" x-text="item.filingDate"></span>
+                              <div class="edgar-pill-group-header">
+                                <template x-if="item.latest10K">
+                                  <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
+                                    <span>10‑K</span>
+                                    <span class="status-dot">•</span>
+                                    <span x-text="item.latest10K.date"></span>
+                                  </a>
+                                </template>
+                                <template x-if="!item.latest10K">
+                                  <button class="dns-button edgar-pill disabled" disabled>10‑K</button>
+                                </template>
+
+                                <template x-if="item.latest10Q">
+                                  <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
+                                    <span>10‑Q</span>
+                                    <span class="status-dot">•</span>
+                                    <span x-text="item.latest10Q.date"></span>
+                                  </a>
+                                </template>
+                                <template x-if="!item.latest10Q">
+                                  <button class="dns-button edgar-pill disabled" disabled>10‑Q</button>
+                                </template>
                               </div>
                               <div class="explorer-result-heading-right">
                                 <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
@@ -817,31 +835,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                                   <span class="meta-value" x-text="item.location.city + ', ' + item.location.stateProvince"></span>
                                   <span class="meta-sub" x-text="item.location.address"></span>
                                 </div>
-                              </div>
-                              <!-- Latest filing pills -->
-                              <div class="edgar-pill-group">
-                                <template x-if="item.latest10K">
-                                  <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
-                                    <span>Latest 10‑K</span>
-                                    <span class="status-dot">•</span>
-                                    <span x-text="item.latest10K.date"></span>
-                                  </a>
-                                </template>
-                                <template x-if="!item.latest10K">
-                                  <button class="dns-button edgar-pill disabled" disabled>Latest 10‑K</button>
-                                </template>
-
-                                <template x-if="item.latest10Q">
-                                  <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
-                                    <span>Latest 10‑Q</span>
-                                    <span class="status-dot">•</span>
-                                    <span x-text="item.latest10Q.date"></span>
-                                    <span class="explorer-source-pill" x-show="item.latest10Q.isRecent">Recent</span>
-                                  </a>
-                                </template>
-                                <template x-if="!item.latest10Q">
-                                  <button class="dns-button edgar-pill disabled" disabled>Latest 10‑Q</button>
-                                </template>
                               </div>
                             </div>
                           </div>

@@ -1817,8 +1817,15 @@ label {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.8rem;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.edgar-pill-group-header {
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  align-items: center;
 }
 
 .explorer-result-heading-right {
@@ -1836,6 +1843,7 @@ label {
   padding: 0.3rem 0.6rem;
   border-radius: 0.3rem;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .explorer-view-json-btn:hover {
