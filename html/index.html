@@ -3,7 +3,6 @@
 <head>
   <link rel="stylesheet" type="text/css" href="styles.css">
   <link rel="stylesheet" type="text/css" href="styles-explorer.css">
-  <link rel="stylesheet" type="text/css" href="styles-query.css">
   <link rel="stylesheet" type="text/css" href="styles-help.css">
   <title>company_dns - data explorer</title>
   <script src="endpoint-data.js"></script>
@@ -16,8 +15,8 @@
     <header class="page-header">
       <div class="menu">
         <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Code Explorer</button>
-        <button class="tabmenu" onclick="openTab(event, 'Query', 'query-pagecontent', 'tabmenu')">Query Explorer</button>
-        <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help</button>
+        <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help & Documentation</button>
+        <a href="/docs" target="_blank" class="tabmenu" style="color: inherit; padding: 0.8rem 0.9rem; float: left;">API Reference</a>
       </div>
     </header>
 
@@ -62,7 +61,6 @@
               <button class="help-tab-button active" onclick="openHelpTab(event, 'help-overview')">Overview</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Code Explorer</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-query-help')">Query Explorer</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-examples')">Code Examples</button>
             </div>
             
@@ -124,32 +122,36 @@
             <!-- API Documentation Tab -->
             <div id="help-api-docs" class="help-tab-content">
               <h2>API Documentation</h2>
-              <p>
-                All endpoints return JSON responses. If a request is successful, a status code of 200 is returned.
-                Otherwise, an error code and message are provided in the response.
-              </p>
               
-              <div class="help-endpoint-note">
-                <p><strong>Note:</strong> All query parameters should be URL-encoded. For example, spaces should be encoded as <code>%20</code>.</p>
+              <div class="help-section">
+                <h3>Interactive API Explorer</h3>
+                <p>
+                  The most comprehensive way to explore and test the API is through our interactive <strong>API Reference</strong> page,
+                  which provides real-time request/response testing, automatic schema validation, and detailed documentation.
+                </p>
+                <p>
+                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">Visit the API Reference →</a>
+                </p>
+                <p style="font-size: 0.9rem; color: rgb(104, 95, 88);">
+                  Also available: <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">Alternative ReDoc format →</a>
+                </p>
               </div>
               
-              <div class="help-api-version-tabs">
-                <div class="tab">
-                  <button class="tablinks active" onclick="openInnerTab(event, 'V3', 'tabcontent', 'tablinks')">V3.0 API</button>
-                  <button class="tablinks" onclick="openInnerTab(event, 'V2', 'tabcontent', 'tablinks')">V2.0 API</button>
-                </div>
-                <div id="V3" class="tabcontent" style="display: block;">
-                  <!-- V3 API content will be injected here by JavaScript -->
-                </div>
-                <div id="V2" class="tabcontent">
-                  <!-- V2 API content will be injected here by JavaScript -->
-                </div>
+              <div class="help-api-note" style="background-color: #1a1718; padding: 1rem; border-radius: 0.5rem; margin: 1.5rem 0; border-left: 3px solid #1696c8;">
+                <h4 style="margin-top: 0;">Why Use the API Reference?</h4>
+                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                  <li><strong>Live Testing:</strong> Try requests directly without writing code</li>
+                  <li><strong>Schema Validation:</strong> See request/response models in detail</li>
+                  <li><strong>Documentation:</strong> Full endpoint descriptions and parameter explanations</li>
+                  <li><strong>Request History:</strong> Keep track of recent API calls</li>
+                  <li><strong>OpenAPI Standard:</strong> Industry-standard REST API interface</li>
+                </ul>
               </div>
               
-              <div class="help-response-format">
-                <h3>Response Format</h3>
-                <div class="help-code-container">
-                  <pre><code>{
+              <h3>Response Format</h3>
+              <p>All endpoints return JSON responses with a consistent structure:</p>
+              <div class="help-code-container">
+                <pre><code>{
   "code": 200,                // HTTP status code
   "message": "Success",       // Status message
   "total": 5,                 // Total number of results
@@ -161,12 +163,14 @@
     ]
   }
 }</code></pre>
-                  <button class="help-copy-button" onclick="copyToClipboard(this)">
-                    <span class="help-copy-icon"></span>
-                    <span class="copy-text">Copy</span>
-                  </button>
-                </div>
+                <button class="help-copy-button" onclick="copyToClipboard(this)">
+                  <span class="help-copy-icon"></span>
+                  <span class="copy-text">Copy</span>
+                </button>
               </div>
+              
+              <h3>API Versions</h3>
+              <p>The company_dns API is available in two versions. See the code examples below for version-specific endpoints.</p>
             </div>
             
             <!-- Industry Code Explorer Tab -->
@@ -424,119 +428,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
         </div>
       </div>
 
-      <!-- Query Tab Content -->
-      <div id="Query" class="query-pagecontent">
-        <div class="query-container">
-          <h1>Query Explorer</h1>
-          
-          <div class="query-intro">
-            
-            <div class="query-features">
-              <div class="query-feature">
-                <i class="feature-icon api-icon"></i>
-                <span>Test API endpoints</span>
-              </div>
-              <div class="query-feature">
-                <i class="feature-icon search-icon"></i>
-                <span>Search company data</span>
-              </div>
-              <div class="query-feature">
-                <i class="feature-icon globe-icon"></i>
-                <span>Explore industry codes</span>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Update the form header and structure -->
-          <div class="query-form-wrapper">
-            <div class="query-form-header">
-              <h2>API Request</h2>
-              <button type="button" class="query-button" id="executeRequestBtn">
-                <i class="query-execute-icon"></i>
-                Execute Request
-              </button>
-            </div>
-            
-            <form id="endpointForm" class="query-form">
-              <div class="query-form-row">
-                <div class="query-form-group">
-                  <label for="hostSelect">Host:</label>
-                  <select id="hostSelect" class="query-select">
-                    <option value="localhost:8000">localhost:8000</option>
-                    <option value="company-dns.mediumroast.io">company-dns.mediumroast.io</option>
-                  </select>
-                </div>
-                
-                <div class="query-form-group">
-                  <label for="endpointSelect">Endpoint:</label>
-                  <select id="endpointSelect" class="query-select">
-                    <!-- Options will be populated with JavaScript -->
-                  </select>
-                </div>
-              </div>
-              
-              <div class="query-form-row">
-                <div class="query-form-group full-width">
-                  <label for="queryInput">Query:</label>
-                  <input class="query-input" type="text" id="queryInput" name="queryInput" placeholder="Enter your query (e.g., IBM, oil, 7371)" required>
-                  <div class="query-hint">Enter a company name, keyword, or code</div>
-                </div>
-              </div>
-            </form>
-          </div>
-          
-          <div class="query-results-wrapper">
-            <h2>Response</h2>
-            
-            <div class="query-url-container">
-              <div class="query-url-label">Request URL:</div>
-              <div id="queryUrl" class="query-url-display">
-                <!-- URL will be populated with JavaScript -->
-              </div>
-              <button class="query-copy-button" onclick="copyToClipboard(this)" data-copy-target="queryUrl">
-                <span class="query-copy-icon"></span>
-                <span class="copy-text">Copy URL</span>
-              </button>
-            </div>
-            
-            <div class="query-results-container">
-              <div class="query-results-header">
-                <h3>Response Data</h3>
-                <button class="query-copy-button" onclick="copyResponseToClipboard()" id="copyResponseButton">
-                  <span class="query-copy-icon"></span>
-                  <span class="copy-text">Copy JSON</span>
-                </button>
-              </div>
-              <div id="queryResults" class="query-results-display">
-                <!-- Results will be populated with JavaScript -->
-                <div class="query-no-results">Execute a request to see results</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="query-help-section">
-            <h3>Quick Tips</h3>
-            <div class="tip-box">
-              <h4>Example Queries</h4>
-              <div class="query-examples-grid">
-                <div class="query-example">
-                  <div class="query-example-label">Company Search:</div>
-                  <div class="query-example-value">IBM, Apple, Microsoft</div>
-                </div>
-                <div class="query-example">
-                  <div class="query-example-label">Industry Keywords:</div>
-                  <div class="query-example-value">oil, retail, manufacturing</div>
-                </div>
-                <div class="query-example">
-                  <div class="query-example-label">SIC Codes:</div>
-                  <div class="query-example-value">7371, 2911, 5331</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Global Search Tab Content -->
       <div id="GlobalSearch" class="explorer-pagecontent">
         <!-- Initial centered search (shown before search) -->
@@ -676,7 +567,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
   <!-- Add this before your other scripts -->
   <script src="hosts.js"></script>
   <script src="functions.js"></script>
-  <script src="query.js"></script>
   <script src="global-search.js"></script>
   <script>
     // Update the window.onload function

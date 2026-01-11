@@ -4,7 +4,6 @@ function openTab(evt, tabName, tabContentClass, tabLinks) {
     // Hide ALL possible content tabs regardless of their class
     const allTabContents = [
         ...document.getElementsByClassName("explorer-pagecontent"),
-        ...document.getElementsByClassName("query-pagecontent"),
         ...document.getElementsByClassName("help-pagecontent")
     ];
     
