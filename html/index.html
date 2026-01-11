@@ -17,17 +17,17 @@
     <!-- Fixed header section -->
     <header class="page-header">
       <div class="menu">
+        <button class="tabmenu" onclick="openTab(event, 'Home', 'help-pagecontent', 'tabmenu')">Home</button>
         <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Classification Explorer</button>
         <button class="tabmenu" onclick="openTab(event, 'EdgarExplorer', 'explorer-pagecontent', 'tabmenu')">EDGAR Explorer</button>
-        <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help & Documentation</button>
         <a href="/docs" target="_blank" class="tabmenu" style="color: inherit; padding: 0.8rem 0.9rem; float: left;">API Reference</a>
       </div>
     </header>
 
     <!-- Scrollable main content area -->
     <main class="page-content">
-      <!-- Help Tab Content -->
-      <div id="Help" class="help-pagecontent">
+      <!-- Home Tab Content -->
+      <div id="Home" class="help-pagecontent">
         <div class="help-container">
           <h1>Help for the company_dns</h1>
           
@@ -910,8 +910,8 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
 
       console.log("Setting initial tab state");
       
-      // Initialize the main tab (GlobalSearch)
-      openTab({ currentTarget: firstMenuLink }, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu');
+      // Initialize the main tab (Home)
+      openTab({ currentTarget: firstMenuLink }, 'Home', 'help-pagecontent', 'tabmenu');
       
       // Initialize inner tabs (API documentation) if applicable
       const innerTabContent = document.getElementById('V3');
