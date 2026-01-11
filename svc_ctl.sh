@@ -38,55 +38,66 @@ APP_DIR="app/"
 ###
 ###################################
 
+# Print action with fixed width, awaiting status
+function print_action () {
+    MSG="${1}"
+    printf "%-65s" "${MSG}"
+}
+
+# Print status: OK, FAIL, SKIP, WARN
+function print_status () {
+    STATUS="${1}"
+    case "${STATUS}" in
+        ok|OK)
+            echo -e "[ ${GREEN} OK ${NC} ]"
+            ;;
+        fail|FAIL)
+            echo -e "[ ${RED}FAIL${NC} ]"
+            ;;
+        skip|SKIP)
+            echo -e "[ ${ORANGE}SKIP${NC} ]"
+            ;;
+        warn|WARN)
+            echo -e "[ ${ORANGE}WARN${NC} ]"
+            ;;
+        *)
+            echo -e "[ ${BLUE}${STATUS}${NC} ]"
+            ;;
+    esac
+}
+
+# Check command exit status and print result
 function check_error () {
     EXIT=$1
     CMD=$2
-
     if [ $EXIT -eq 0 ]; then
-        echo -e "${GREEN}ok${NC}"
+        print_status "ok"
     else
-        echo "${RED}FAILED${NC}, ${CMD} exited with code: ${EXIT}"
-        exit -1
+        print_status "fail"
+        echo -e "${RED}Error:${NC} ${CMD} exited with code: ${EXIT}"
+        exit 1
     fi
 }
 
-# Validate environment and dependencies before proceeding
+# Validate environment and dependencies
 function check_dependencies () {
-    FUNC="Checking dependencies"
-    print_header "${FUNC}"
     if ! command -v docker &> /dev/null; then
-        print_detail "${ORANGE}Warning:${NC} Docker not found"
+        print_action "Checking Docker availability"
+        print_status "warn"
     else
-        print_detail "Docker: ${GREEN}found${NC}"
+        print_action "Checking Docker availability"
+        print_status "ok"
     fi
+    
     if [ ! -f "company_dns.py" ]; then
-        print_detail "${RED}Error:${NC} company_dns.py not found"
+        print_action "Checking company_dns.py"
+        print_status "fail"
+        echo -e "${RED}Error:${NC} company_dns.py not found"
         exit 1
     else
-        print_detail "company_dns.py: ${GREEN}found${NC}"
+        print_action "Checking company_dns.py"
+        print_status "ok"
     fi
-    print_footer "${FUNC}"
-}
-
-function print_header () {
-    HEADER="${1}"
-    echo -e ">>>> ${ORANGE}BEGIN:${NC} ${BLUE}${HEADER}${NC}"
-}
-
-function print_step () {
-    MSG="${1}"
-    SEP=" ... "
-    echo -n -e "${ORANGE}${MSG}${NC}${SEP}"
-}
-
-function print_detail () {
-    DETAIL="${1}"
-    echo -e "${BLUE}${DETAIL}${NC}"
-}
-
-function print_footer () {
-    FOOTER="${1}"
-    echo -e ">>>> ${ORANGE}END:${NC} ${BLUE}${FOOTER}${NC}"
 }
 
 function get_container_id () {
@@ -104,185 +115,140 @@ function execute_docker_run () {
 }
 
 function bring_down_server () {
-    FUNC="Bring down service"
-    STEP="bring_down_server"
-    print_header "${FUNC}"
     docker_image=$(get_container_id)
-
     if [ -z "$docker_image" ]; then
-        print_step "No running container found for ${FULL_IMAGE_NAME}"
-        echo -e "${ORANGE}skipped${NC}"
+        print_action "Killing ${SERVICE} container"
+        print_status "skip"
     else
-        print_step "Bringing down ${FULL_IMAGE_NAME} (${docker_image})"
+        print_action "Killing ${SERVICE} container (${docker_image})"
         docker kill ${docker_image} > /dev/null 2>&1
         check_error $? "docker kill"
     fi
-
-    print_footer "${FUNC}"
 }
 
 function stop_server () {
-    FUNC="Stop ${SERVICE}"
-    STEP="stop_server"
-    print_header "${FUNC}"
     docker_image=$(get_container_id)
-
     if [ -z "$docker_image" ]; then
-        print_step "No running container found for ${FULL_IMAGE_NAME}"
-        echo -e "${ORANGE}skipped${NC}"
+        print_action "Stopping ${SERVICE} container"
+        print_status "skip"
     else
-        print_step "Stopping ${FULL_IMAGE_NAME} (${docker_image})"
+        print_action "Stopping ${SERVICE} container (${docker_image})"
         docker stop ${docker_image} > /dev/null 2>&1
         check_error $? "docker stop"
     fi
-
-    print_footer "${FUNC}"
 }
 
 function start_server () {
-    FUNC="Start ${SERVICE} in the background"
-    print_header "${FUNC}"
-    
     docker_image=$(get_container_id)
     if [ ! -z "$docker_image" ]; then
-        print_step "Container already running as ${docker_image}"
-        echo -e "${ORANGE}skipped${NC}"
+        print_action "Starting ${SERVICE} (already running as ${docker_image})"
+        print_status "skip"
     else
-        print_step "Starting ${FULL_IMAGE_NAME}"
+        print_action "Starting ${SERVICE}"
         execute_docker_run "background" > /dev/null 2>&1
         check_error $? "docker run"
-        
-        docker_image=$(get_container_id)
-        print_detail "Container started as ${docker_image}"
     fi
-    
-    print_footer "${FUNC}"
 }
 
 function build_server () {
-    FUNC="Build ${SERVICE}"
-    print_header "${FUNC}"
-    
-    print_step "Building Docker image ${FULL_IMAGE_NAME}"
+    print_action "Building Docker image ${FULL_IMAGE_NAME}"
     docker build -t ${FULL_IMAGE_NAME} . > /dev/null 2>&1
     check_error $? "docker build"
-    
-    print_footer "${FUNC}"
 }
 
 function rebuild_server () {
-    FUNC="Rebuild and restart ${SERVICE}"
-    print_header "${FUNC}"
-    
     stop_server
     build_server
     start_server
-    
-    print_footer "${FUNC}"
 }
 
 function status_server () {
-    FUNC="Check status of ${SERVICE}"
-    print_header "${FUNC}"
-    
     docker_image=$(get_container_id)
     if [ -z "$docker_image" ]; then
-        print_detail "Status: ${RED}NOT RUNNING${NC}"
+        print_action "Checking ${SERVICE} status"
+        print_status "fail"
+        echo "  Status: NOT RUNNING"
     else
-        container_info=$(docker ps --filter "id=${docker_image}" --format "{{.Status}} - Created: {{.CreatedAt}}")
-        print_detail "Status: ${GREEN}RUNNING${NC}"
-        print_detail "Container ID: ${docker_image}"
-        print_detail "Container info: ${container_info}"
-        print_detail "Port mapping: ${PORT}:8000"
+        print_action "Checking ${SERVICE} status"
+        print_status "ok"
+        container_info=$(docker ps --filter "id=${docker_image}" --format "{{.Status}}")
+        echo "  Container: ${docker_image}"
+        echo "  Status: ${container_info}"
+        echo "  Port: ${PORT}:8000"
     fi
-    
-    print_footer "${FUNC}"
 }
 
 function run_foreground () {
-    FUNC="Run $SERVICE in the foreground"
-    print_header "${FUNC}"
-    
-    print_step "Starting ${FULL_IMAGE_NAME} in foreground"
+    print_action "Starting ${SERVICE} in foreground"
+    print_status "ok"
     echo ""
     execute_docker_run "foreground"
-    
-    print_footer "${FUNC}"
 }
 
 function tail_backend () {
-    FUNC="Tail logs for ${SERVICE}"
-    print_header "${FUNC}"
-    
     docker_image=$(get_container_id)
     if [ -z "$docker_image" ]; then
-        print_detail "${RED}Error:${NC} No running container found for ${FULL_IMAGE_NAME}"
+        print_action "Tailing logs for ${SERVICE}"
+        print_status "fail"
+        echo "  Error: No running container found"
     else
-        print_detail "Tailing logs for container ${docker_image}"
+        print_action "Tailing logs for ${SERVICE} (${docker_image})"
+        print_status "ok"
         echo ""
         docker logs -f ${docker_image}
     fi
-    
-    print_footer "${FUNC}"
 }
 
 function cleanup_server () {
-    FUNC="Clean up stale containers for ${SERVICE}"
-    print_header "${FUNC}"
-    
     # Find all containers (including stopped ones) for this image
-    print_step "Finding all containers for ${FULL_IMAGE_NAME}"
+    print_action "Finding containers for ${FULL_IMAGE_NAME}"
     all_containers=$(docker ps -a -q --filter "ancestor=${FULL_IMAGE_NAME}")
     
     if [ -z "$all_containers" ]; then
-        echo -e "${ORANGE}No containers found${NC}"
+        print_status "skip"
+        echo "  No containers found"
     else
         container_count=$(echo "$all_containers" | wc -l | tr -d ' ')
-        echo -e "${GREEN}found ${container_count}${NC}"
+        print_status "ok"
+        echo "  Found ${container_count} container(s)"
         
         # Get running containers
         running_containers=$(get_container_id)
         
         # Remove stopped containers
-        print_step "Removing stopped containers"
         removed_count=0
         
         for container in $all_containers; do
             # Skip if the container is running
             if [[ "$running_containers" == *"$container"* ]]; then
-                print_detail "Skipping running container: ${container}"
                 continue
             fi
             
-            print_detail "Removing container: ${container}"
+            print_action "  Removing container ${container}"
             docker rm $container > /dev/null 2>&1
+            check_error $? "docker rm"
             if [ $? -eq 0 ]; then
                 removed_count=$((removed_count+1))
             fi
         done
         
         if [ $removed_count -eq 0 ]; then
-            echo -e "${ORANGE}No containers removed${NC}"
+            echo "  No stopped containers to remove"
         else
-            echo -e "${GREEN}removed ${removed_count} containers${NC}"
+            echo "  Removed ${removed_count} container(s)"
         fi
     fi
     
     # Optional: Clean up dangling images
-    print_step "Cleaning up dangling images"
+    print_action "Cleaning up dangling images"
     dangling_images=$(docker images -q -f "dangling=true")
     if [ -z "$dangling_images" ]; then
-        echo -e "${ORANGE}No dangling images found${NC}"
+        print_status "skip"
+        echo "  No dangling images found"
     else
         docker rmi $(docker images -q -f "dangling=true") > /dev/null 2>&1
-        if [ $? -eq 0 ]; then
-            echo -e "${GREEN}cleaned up dangling images${NC}"
-        else
-            echo -e "${RED}failed to clean up images${NC}"
-        fi
+        check_error $? "docker rmi"
     fi
-    
-    print_footer "${FUNC}"
 }
 
 ###################################
