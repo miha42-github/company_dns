@@ -16,7 +16,7 @@
     <!-- Fixed header section -->
     <header class="page-header">
       <div class="menu">
-        <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Code Explorer</button>
+        <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Classification Explorer</button>
         <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help & Documentation</button>
         <a href="/docs" target="_blank" class="tabmenu" style="color: inherit; padding: 0.8rem 0.9rem; float: left;">API Reference</a>
       </div>
@@ -62,7 +62,7 @@
             <div class="help-tabs">
               <button class="help-tab-button active" onclick="openHelpTab(event, 'help-overview')">Overview</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Code Explorer</button>
+              <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Classification Explorer</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-examples')">Code Examples</button>
             </div>
             
@@ -177,10 +177,10 @@
             
             <!-- Industry Code Explorer Tab -->
             <div id="help-explorer-help" class="help-tab-content">
-              <h2>Using the Industry Code Explorer</h2>
+              <h2>Using the Industry Classification Explorer</h2>
               
               <p>
-                The Industry Code Explorer allows you to search across multiple industry classification systems
+                The Industry Classification Explorer allows you to search across multiple industry classification systems
                 using keywords. This is useful for finding comparable industry codes across different standards.
               </p>
               
@@ -332,7 +332,7 @@
                   </div>
                   
                   <div class="help-example">
-                    <h4>Search Industry Codes</h4>
+                    <h4>Search Industry Classification Systems</h4>
                     <div class="help-code-container">
                       <pre><code>// URL-encode the search term
 const searchTerm = encodeURIComponent('software');
@@ -434,7 +434,7 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
       <div id="GlobalSearch" class="explorer-pagecontent" x-data="createGlobalSearchComponent()" @load="init()">
         <!-- Initial centered search (shown before search) -->
         <div id="initialSearchContainer" class="explorer-search-container" x-show="!showResults">
-          <h1>Industry Code Explorer</h1>
+          <h1>Industry Classification Explorer</h1>
           
           <div class="explorer-intro">
             <p>
@@ -476,7 +476,7 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
 
         <!-- Post-search layout (initially hidden) -->
         <div id="searchResultsLayout" class="explorer-results-layout" x-show="showResults">
-          <h1>Industry Code Explorer</h1>
+          <h1>Industry Classification Explorer</h1>
           
           <div class="explorer-search-wrapper">
             <div class="explorer-top-container">
