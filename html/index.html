@@ -3,12 +3,9 @@
 <head>
   <link rel="stylesheet" type="text/css" href="/static/styles.css">
   <title>company_dns - data explorer</title>
-  <script src="endpoint-data.js"></script>
-  <script defer src="js/alpine.min.js"></script>
-  <script defer src="js/api-service.js"></script>
-  <script defer src="js/global-search-alpine.js"></script>
-  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
-</head></script>
+  <script defer src="/static/js/alpine.min.js"></script>
+  <script defer src="/static/js/api-service.js"></script>
+  <script defer src="/static/js/global-search-alpine.js"></script>
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
 
@@ -189,7 +186,7 @@
                 <div class="help-step">
                   <h4>Step 1: Enter a Search Term</h4>
                   <p>Enter an industry keyword in the search box (e.g., "oil", "manufacturing", "retail").</p>
-                  <img src="./search_explorer.png" alt="Search input example" class="help-image">
+                  <img src="/static/search_explorer.png" alt="Search input example" class="help-image">
                 </div>
                 
                 <div class="help-step">
@@ -425,7 +422,7 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
             </div>
             <p class="help-disclaimer">
               This software is provided as-is and without warranty or guarantee of support. 
-              © 2025 Mediumroast, Inc.
+              © 2026 Mediumroast, Inc.
             </p>
           </div>
         </div>
@@ -563,14 +560,12 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
 
     <!-- Fixed footer section -->
     <footer class="page-footer">
-      <p class="copyright">&copy; 2025 Mediumroast, Inc. All rights reserved.</p>
+      <p class="copyright">&copy; 2026 Mediumroast, Inc. All rights reserved.</p>
     </footer>
   </div>
 
-  <!-- Add this before your other scripts -->
-  <script src="hosts.js"></script>
-  <script src="functions.js"></script>
-  <script src="global-search.js"></script>
+  <!-- Core scripts -->
+  <script src="/static/js/functions.js"></script>
   <script>
     // Update the window.onload function
     window.onload = function () {

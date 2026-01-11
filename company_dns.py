@@ -525,8 +525,8 @@ async def general_query(company_name: str = Path(..., min_length=1, description=
 # BEGIN: Utility endpoints
 @app.get("/", include_in_schema=False)
 async def root():
-    """Redirect root to help documentation"""
-    return RedirectResponse(url="/help/", status_code=307)
+    """Serve the main UI"""
+    return FileResponse(get_abs_path('html/index.html'))
 
 @app.get("/health", tags=["System"])
 async def health_check():
@@ -541,8 +541,7 @@ async def health_check():
 
 # -------------------------------------------------------------- #
 # BEGIN: Mount static files
-# Serve help documentation and static assets
-app.mount("/help", StaticFiles(directory=get_abs_path('html'), html=True), name="help")
+# Serve static assets (CSS, JS, etc.)
 app.mount("/static", StaticFiles(directory=get_abs_path('html')), name="static")
 # -------------------------------------------------------------- #
 
