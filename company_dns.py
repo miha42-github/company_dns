@@ -21,7 +21,7 @@ from lib.eu_sic import EuSICQueries
 from lib.japan_sic import JapanSICQueries
 from lib.unified_sic import UnifiedSICQueries
 from lib.security_middleware import security_middleware
-from lib.logging_config import logging_middleware, logger, configure_logging
+from lib.logging_config import logging_middleware, logger
 from lib.rate_limiter import limiter, rate_limit_error_handler
 from lib.models import (
     SICResponse, DivisionResponse, UKSICResponse, ISICResponse,
