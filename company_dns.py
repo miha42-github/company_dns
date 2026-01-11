@@ -2,6 +2,7 @@ from fastapi import FastAPI, Path, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse, FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from slowapi.errors import RateLimitExceeded
 import uvicorn
 import logging
@@ -109,9 +110,16 @@ app.middleware("http")(logging_middleware)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
 
-# Add custom 404 handler (no more catch-all redirects)
-@app.exception_handler(404)
-async def not_found_handler(request: Request, exc):
+# Add custom 404 handler for HTTPExceptions
+@app.exception_handler(StarletteHTTPException)
+async def not_found_handler(request: Request, exc: StarletteHTTPException):
+    # Only handle 404 errors
+    if exc.status_code != 404:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
+    
     # Check Accept header to determine response format
     accept_header = request.headers.get("accept", "").lower()
     
