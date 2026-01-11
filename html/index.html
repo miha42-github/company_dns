@@ -702,7 +702,8 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
               <div class="explorer-input-group">
                 <input type="text" x-model="searchQuery" id="edgarSearchInput" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
                 <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
-                  <i class="explorer-action-icon"></i>
+                  <i class="explorer-action-icon" x-show="!isSearching"></i>
+                  <i class="spinner-icon" x-show="isSearching"></i>
                   <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
                 </button>
               </div>
@@ -720,7 +721,8 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                 <div class="explorer-input-group">
                   <input type="text" x-model="searchQuery" id="edgarSearchInputTop" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
                   <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
-                    <i class="explorer-action-icon"></i>
+                    <i class="explorer-action-icon" x-show="!isSearching"></i>
+                    <i class="spinner-icon" x-show="isSearching"></i>
                     <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
                   </button>
                 </div>
