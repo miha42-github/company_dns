@@ -6,7 +6,6 @@ Blocks malicious requests, validates paths, and implements security best practic
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
