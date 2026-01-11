@@ -1836,6 +1836,7 @@ label {
   flex-direction: column;
   gap: 0.6rem;
   margin-top: 1rem;
+  align-items: flex-end;
 }
 
 .edgar-pill {
@@ -1845,6 +1846,7 @@ label {
   width: 100%;
   max-width: 200px;
   text-align: center;
+  font-size: 0.85em;
 }
 
 .edgar-pill.recent {
