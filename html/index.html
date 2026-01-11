@@ -541,7 +541,17 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
               
               <div class="explorer-results-area">
                 <div class="explorer-header-section">
-                  <div id="globalSearchStatus" class="explorer-search-status" x-text="statusMessage"></div>
+                  <div class="results-status">
+                    <div class="status-top">
+                      <span class="status-title">Results</span>
+                      <span class="status-count" x-text="getResultsHeadline()"></span>
+                    </div>
+                    <div class="status-meta">
+                      <span x-text="getResultsRangeLabel()"></span>
+                      <span class="status-dot">•</span>
+                      <span x-text="getActiveFiltersLabel()"></span>
+                    </div>
+                  </div>
                   <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
                 </div>
                 
@@ -553,12 +563,102 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                         <template x-for="result in getCurrentPageResults()" :key="result.code + result.source_type">
                           <div class="explorer-result-card">
                             <div class="explorer-result-header">
-                              <span class="explorer-result-code" x-text="result.code"></span>
-                              <span class="explorer-result-source" x-text="result.source_type"></span>
+                              <div class="explorer-result-heading">
+                                <span class="explorer-result-code" x-text="result.code"></span>
+                                <span class="explorer-source-pill" :class="getSourceClass(result.source_type)" x-text="result.source_type"></span>
+                              </div>
+                              <div class="explorer-result-actions">
+                                <button @click="viewResultJson(result)" class="explorer-view-json-btn">View JSON</button>
+                              </div>
                             </div>
-                            <div class="explorer-result-description" x-text="result.description"></div>
-                            <div class="explorer-result-actions">
-                              <button @click="viewResultJson(result)" class="explorer-view-json-btn">View JSON</button>
+
+                            <p class="explorer-result-description" x-show="!isExpanded(result)" x-text="getTruncatedDescription(result)"></p>
+                            <p class="explorer-result-description" x-show="isExpanded(result)" x-text="result.description"></p>
+                            <button class="explorer-show-more" x-show="shouldShowToggle(result)" @click="toggleDescription(result)" type="button">
+                              <span x-text="isExpanded(result) ? 'Show less' : 'Show more'"></span>
+                            </button>
+
+                            <div class="explorer-result-meta" x-show="hasMetadata(result)">
+                              <template x-if="result.source_type === 'US SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.division">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.division_desc"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.major_group">
+                                    <div class="meta-label">Major Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.major_group"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.major_group_desc"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.industry_group">
+                                    <div class="meta-label">Industry Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.industry_group"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.industry_group_desc"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'EU NACE'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.section_code">
+                                    <div class="meta-label">Section</div>
+                                    <div class="meta-value" x-text="result.additional_data?.section_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'ISIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.section_code">
+                                    <div class="meta-label">Section</div>
+                                    <div class="meta-value" x-text="result.additional_data?.section_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'Japan SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.major_group_code">
+                                    <div class="meta-label">Major Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.major_group_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'UK SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="hasUkMetadata(result)">
+                                    <div class="meta-label">Code</div>
+                                    <div class="meta-value" x-text="result.additional_data?.code || result.code"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.description"></div>
+                                  </div>
+                                </div>
+                              </template>
                             </div>
                           </div>
                         </template>
@@ -567,31 +667,16 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                   </div>
                 </div>
                 
-                <div id="paginationContainer" class="explorer-pagination">
-                  <!-- Pagination will be added here by JavaScript -->
+                <div class="pagination-controls" x-show="hasResults && filteredResults.length">
+                  <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
+                  <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
+                  <template x-for="page in getVisiblePages()" :key="'page-' + page">
+                    <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
+                  </template>
+                  <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
+                  <button class="pagination-btn" @click="lastPage()" :disabled="currentPage === totalPages" aria-label="Last page">⏭</button>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-        
-        <!-- JSON Modal -->
-        <div x-show="showJsonModal" 
-             @click.self="closeJsonModal()" 
-             class="explorer-modal-overlay"
-             style="display: none;"
-             x-transition>
-          <div class="explorer-modal-content">
-            <div class="explorer-modal-header">
-              <h3>Result Details (JSON)</h3>
-              <button @click="closeJsonModal()" class="explorer-modal-close">&times;</button>
-            </div>
-            <div class="explorer-modal-body">
-              <pre x-text="JSON.stringify(selectedJsonResult, null, 2)"></pre>
-            </div>
-            <div class="explorer-modal-footer">
-              <button @click="copyJsonToClipboard()" class="dns-button">Copy to Clipboard</button>
-              <button @click="closeJsonModal()" class="dns-button">Close</button>
             </div>
           </div>
         </div>

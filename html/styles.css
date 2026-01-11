@@ -1049,7 +1049,245 @@ label {
   background-color: rgba(22, 150, 200, 0.1);
 }
 
+/* Status bar */
+.results-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0 0.6rem 1rem;
+}
+
+.status-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #ca703f;
+}
+
+.status-title {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.status-count {
+  color: #1696c8;
+  font-weight: 600;
+}
+
+.status-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(152, 144, 139);
+  font-size: 0.95rem;
+}
+
+.status-dot {
+  color: #3c3b3b;
+  font-weight: 700;
+}
+
+/* Pagination controls */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 1.25rem 0 0.5rem 0;
+  padding: 1rem;
+  border-top: 1px solid #3c3b3b;
+  flex-wrap: wrap;
+}
+
+.pagination-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgb(104, 95, 88);
+  background-color: #0F0D0E;
+  color: #1696c8;
+  cursor: pointer;
+  border-radius: 0.3rem;
+  transition: all 0.2s;
+  min-width: 2.5rem;
+  min-height: 40px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #1a1718;
+  border-color: #1696c8;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-btn.active {
+  border-color: #ca703f;
+  color: #ca703f;
+  font-weight: 600;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 1rem;
+  color: #ca703f;
+}
+
+.page-size-label {
+  color: #c7c1bb;
+  font-size: 0.95rem;
+}
+
+.page-size-selector {
+  margin-left: 0.2rem;
+  padding: 0.3rem 0.5rem;
+  background: #0F0D0E;
+  color: #e3dfdc;
+  border: 1px solid #3c3b3b;
+  border-radius: 0.35rem;
+}
+
+.pagination-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-jump-input {
+  width: 4rem;
+  padding: 0.3rem;
+  text-align: center;
+  background: #0F0D0E;
+  color: #e3dfdc;
+  border: 1px solid #3c3b3b;
+  border-radius: 0.3rem;
+}
+
+/* Result cards - enriched layout */
+.explorer-result-card {
+  border: 1px solid #2d2b2c;
+  border-radius: 0.6rem;
+  padding: 0.9rem 1rem;
+  background: #0f0d0e;
+  margin-bottom: 0.9rem;
+}
+
+.explorer-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.explorer-result-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.explorer-result-code {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ca703f;
+}
+
+.explorer-source-pill {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #3c3b3b;
+  font-size: 0.85rem;
+  color: #c7c1bb;
+}
+
+.pill-us_sic { border-color: #1696c8; color: #1696c8; }
+.pill-uk_sic { border-color: #ca703f; color: #ca703f; }
+.pill-eu_nace { border-color: #6fbf6f; color: #6fbf6f; }
+.pill-isic { border-color: #b28dd9; color: #b28dd9; }
+.pill-japan_sic { border-color: #f0c674; color: #f0c674; }
+
+.explorer-result-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.explorer-result-description {
+  color: #e0dbd6;
+  line-height: 1.45;
+  margin-bottom: 0.5rem;
+  max-height: none;
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+
+.explorer-result-description.is-collapsed {
+  max-height: 3.4rem;
+}
+
+.explorer-show-more {
+  background: none;
+  border: none;
+  color: #1696c8;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+
+.explorer-result-meta {
+  border-top: 1px solid #2d2b2c;
+  padding-top: 0.65rem;
+  margin-top: 0.4rem;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem 1rem;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.meta-label {
+  color: #8f8a86;
+  font-size: 0.85rem;
+}
+
+.meta-value {
+  color: #c7c1bb;
+  font-weight: 700;
+}
+
+.meta-sub {
+  color: #7c7570;
+  font-size: 0.85rem;
+}
+
+.dns-button.ghost {
+  background: transparent;
+  border: 1px solid #3c3b3b;
+  color: #c7c1bb;
+}
+
+.dns-button.ghost:hover {
+  border-color: #1696c8;
+  color: #1696c8;
+}
+
 /* Modal overlay */
+/* Alpine x-cloak directive to hide uninitialized elements */
+[x-cloak] {
+  display: none !important;
+}
+
 .explorer-modal-overlay {
   position: fixed;
   top: 0;
@@ -1063,6 +1301,7 @@ label {
   align-items: center;
 }
 
+/* Modal overlay base state - starts hidden by x-show, shows on toggle */
 .explorer-modal {
   background-color: #1a1718;
   border-radius: 0.5rem;
@@ -1117,20 +1356,22 @@ label {
   padding: 1rem;
   border-top: 1px solid #3c3b3b;
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
 }
 
 .explorer-copy-json-btn {
   background-color: #1696c8;
   color: #0F0D0E;
   border: none;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.5rem;
   border-radius: 0.5rem;
   cursor: pointer;
   font-weight: bold;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  min-width: 140px;
 }
 
 .explorer-copy-json-btn:hover {

@@ -12,6 +12,8 @@ function createGlobalSearchComponent() {
     totalPages: 1,
     filteredResults: [],
     allResults: [],
+    expandedCards: {},
+    pageSizes: [10, 25, 50, 100],
     
     // Filter states
     filters: {
@@ -38,18 +40,27 @@ function createGlobalSearchComponent() {
     errorMessage: '',
     statusMessage: '',
     showResults: false,
-    selectedJsonResult: null,
-    showJsonModal: false,
     jumpToPage: '',
     
     /**
      * Initialize the component
      */
     async init() {
+      // Create JSON modal on initialization
+      createJsonModal();
+
+      // Load any saved state from URL (query, page, page size, filters)
+      this.loadStateFromUrl();
+
       // Add keyboard navigation support
       document.addEventListener('keydown', (e) => this.handleKeyboard(e));
       console.log('[GlobalSearch] Component initialized with Alpine.js');
       console.log('[GlobalSearch] apiService available:', typeof apiService !== 'undefined');
+
+      // Auto-run search if query present
+      if (this.searchQuery) {
+        this.performSearch();
+      }
     },
     
     /**
@@ -91,6 +102,7 @@ function createGlobalSearchComponent() {
         this.statusMessage = `Found ${this.allResults.length} of ${data.data.total} results`;
         this.hasResults = true;
         console.log('[GlobalSearch] Search complete, hasResults:', this.hasResults);
+        this.updateUrlState();
         
       } catch (error) {
         this.errorMessage = `Error: ${error.message}`;
@@ -152,6 +164,8 @@ function createGlobalSearchComponent() {
       } else {
         this.statusMessage = `Showing ${this.getCurrentPageResults().length} of ${this.filteredResults.length} results`;
       }
+
+      this.updateUrlState();
     },
     
     /**
@@ -219,6 +233,7 @@ function createGlobalSearchComponent() {
       this.resultsPerPage = parseInt(newPageSize);
       this.currentPage = 1;
       this.totalPages = Math.max(1, Math.ceil(this.filteredResults.length / this.resultsPerPage));
+      this.updateUrlState();
     },
     
     /**
@@ -226,8 +241,10 @@ function createGlobalSearchComponent() {
      */
     goToPage(pageNum) {
       const num = parseInt(pageNum);
+      if (Number.isNaN(num)) return;
       if (num >= 1 && num <= this.totalPages && num !== this.currentPage) {
         this.currentPage = num;
+        this.updateUrlState();
         this.$nextTick(() => {
           document.getElementById('globalSearchResults')?.scrollIntoView({ behavior: 'smooth' });
         });
@@ -240,6 +257,7 @@ function createGlobalSearchComponent() {
     nextPage() {
       if (this.currentPage < this.totalPages) {
         this.currentPage++;
+        this.updateUrlState();
         this.scrollToResults();
       }
     },
@@ -247,19 +265,25 @@ function createGlobalSearchComponent() {
     /**
      * Go to previous page
      */
-    previousPage() {
+      previousPage() {
       if (this.currentPage > 1) {
         this.currentPage--;
+        this.updateUrlState();
         this.scrollToResults();
       }
     },
+
+      /**
+       * Alias for template usage
+       */
+      prevPage() {
+        this.previousPage();
+      },
     
     /**
      * Go to first page
-     */
-    firstPage() {
-      if (this.currentPage !== 1) {
-        this.currentPage = 1;
+      changeResultsPerPage(newPageSize) {
+        this.changePageSize(newPageSize);
         this.scrollToResults();
       }
     },
@@ -270,6 +294,7 @@ function createGlobalSearchComponent() {
     lastPage() {
       if (this.currentPage !== this.totalPages) {
         this.currentPage = this.totalPages;
+        this.updateUrlState();
         this.scrollToResults();
       }
     },
@@ -279,26 +304,26 @@ function createGlobalSearchComponent() {
      */
     handleKeyboard(event) {
       if (!this.showResults || !this.filteredResults.length) return;
-      
-      if (event.altKey) {
-        switch (event.key) {
-          case 'ArrowLeft':
-            event.preventDefault();
-            this.previousPage();
-            break;
-          case 'ArrowRight':
-            event.preventDefault();
-            this.nextPage();
-            break;
-          case 'Home':
-            event.preventDefault();
-            this.firstPage();
-            break;
-          case 'End':
-            event.preventDefault();
-            this.lastPage();
-            break;
-        }
+      const tag = event.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          this.previousPage();
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          this.nextPage();
+          break;
+        case 'Home':
+          event.preventDefault();
+          this.firstPage();
+          break;
+        case 'End':
+          event.preventDefault();
+          this.lastPage();
+          break;
       }
     },
     
@@ -318,35 +343,16 @@ function createGlobalSearchComponent() {
      * Show JSON modal for result
      */
     viewResultJson(result) {
-      this.selectedJsonResult = {
+      console.log('[GlobalSearch] viewResultJson called with:', result);
+      const resultJson = {
         source_type: result.source_type,
         code: result.code,
         description: result.description,
         additional_data: result.additional_data || {}
       };
-      this.showJsonModal = true;
+      showJsonModal(resultJson);
     },
-    
-    /**
-     * Close JSON modal
-     */
-    closeJsonModal() {
-      this.showJsonModal = false;
-      this.selectedJsonResult = null;
-    },
-    
-    /**
-     * Copy JSON to clipboard
-     */
-    copyJsonToClipboard() {
-      const jsonStr = JSON.stringify(this.selectedJsonResult, null, 2);
-      navigator.clipboard.writeText(jsonStr).then(() => {
-        alert('JSON copied to clipboard');
-      }).catch(() => {
-        alert('Failed to copy to clipboard');
-      });
-    },
-    
+
     /**
      * Get pagination button range
      */
@@ -415,6 +421,191 @@ function createGlobalSearchComponent() {
       }
       
       return pages;
+    },
+
+    /**
+     * Determine if a description should show a toggle
+     */
+    shouldShowToggle(result) {
+      return (result?.description || '').length > 200;
+    },
+
+    /**
+     * Get truncated description (collapsible)
+     */
+    getTruncatedDescription(result) {
+      const desc = result?.description || '';
+      if (desc.length <= 200) return desc;
+      return desc.slice(0, 200) + '...';
+    },
+
+    /**
+     * Toggle description expansion
+     */
+    toggleDescription(result) {
+      const key = this.getResultKey(result);
+      this.expandedCards[key] = !this.expandedCards[key];
+    },
+
+    /**
+     * Is description expanded
+     */
+    isExpanded(result) {
+      const key = this.getResultKey(result);
+      return !!this.expandedCards[key];
+    },
+
+    /**
+     * Build unique key for a result
+     */
+    getResultKey(result) {
+      return `${result.source_type}-${result.code}`;
+    },
+
+    /**
+     * Does this result have metadata to show
+     */
+    hasMetadata(result) {
+      const data = result.additional_data || {};
+      if (result.source_type === 'UK SIC') {
+        return this.hasUkMetadata(result);
+      }
+      return Object.values(data).some(value => value !== undefined && value !== null && `${value}`.trim() !== '');
+    },
+
+    /**
+     * UK metadata guard
+     */
+    hasUkMetadata(result) {
+      const data = result.additional_data || {};
+      return !!(data.code || data.description || data.section_code || data.division_code || data.group_code || data.class_code);
+    },
+
+    /**
+     * Source pill class helper
+     */
+    getSourceClass(source) {
+      return {
+        'pill-us_sic': source === 'US SIC',
+        'pill-uk_sic': source === 'UK SIC',
+        'pill-eu_nace': source === 'EU NACE',
+        'pill-isic': source === 'ISIC',
+        'pill-japan_sic': source === 'Japan SIC'
+      };
+    },
+
+    /**
+     * Results headline (total count)
+     */
+    getResultsHeadline() {
+      if (!this.hasResults || !this.filteredResults.length) return this.statusMessage || 'No results';
+      return `${this.filteredResults.length} results`;
+    },
+
+    /**
+     * Results range (Showing X-Y of N)
+     */
+    getResultsRangeLabel() {
+      if (!this.hasResults || !this.filteredResults.length) return 'Showing 0-0 of 0';
+      const start = (this.currentPage - 1) * this.resultsPerPage + 1;
+      const end = Math.min(this.filteredResults.length, start + this.resultsPerPage - 1);
+      return `Showing ${start}-${end} of ${this.filteredResults.length}`;
+    },
+
+    /**
+     * Active filters label
+     */
+    getActiveFiltersLabel() {
+      const active = this.getSelectedSources();
+      if (!active.length) return 'Filters: none selected';
+      if (active.length === Object.keys(this.filters).length - 1) return 'Filters: all systems';
+      return `Filters: ${active.join(', ')}`;
+    },
+
+    /**
+     * Sync state to URL
+     */
+    updateUrlState() {
+      try {
+        const params = new URLSearchParams();
+        if (this.searchQuery) params.set('q', this.searchQuery);
+        if (this.currentPage > 1) params.set('page', this.currentPage);
+        if (this.resultsPerPage && this.resultsPerPage !== 10) params.set('perPage', this.resultsPerPage);
+        const active = this.getSelectedSources();
+        const allSources = Object.keys(this.filters).filter(f => f !== 'all').length;
+        if (active.length && active.length !== allSources) params.set('filters', active.join(','));
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.replaceState({}, '', newUrl);
+      } catch (err) {
+        console.warn('[GlobalSearch] Failed to update URL state', err);
+      }
+    },
+
+    /**
+     * Load state from URL
+     */
+    loadStateFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q');
+      const page = parseInt(params.get('page'));
+      const per = parseInt(params.get('perPage'));
+      const filtersParam = params.get('filters');
+
+      if (q) this.searchQuery = q;
+      if (per && this.pageSizes.includes(per)) {
+        this.resultsPerPage = per;
+      }
+      if (page && page > 0) this.currentPage = page;
+
+      if (filtersParam) {
+        const active = filtersParam.split(',').map(f => f.trim()).filter(Boolean);
+        Object.keys(this.filters).forEach(key => {
+          if (key === 'all') return;
+          this.filters[key] = active.includes(key);
+        });
+        this.filters.all = active.length === Object.keys(this.filters).length - 1;
+      }
+    },
+
+    /**
+     * Visible pagination pages
+     */
+    getVisiblePages() {
+      const maxButtons = 5;
+      let start = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(this.totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) {
+        start = Math.max(1, end - maxButtons + 1);
+      }
+      const pages = [];
+      for (let p = start; p <= end; p++) {
+        pages.push(p);
+      }
+      return pages;
+    },
+
+    /**
+     * Change page size
+     */
+    changePageSize(newSize) {
+      const size = parseInt(newSize);
+      if (!this.pageSizes.includes(size)) return;
+      this.resultsPerPage = size;
+      this.totalPages = Math.max(1, Math.ceil(this.filteredResults.length / this.resultsPerPage));
+      if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+      this.updateUrlState();
+      this.scrollToResults();
+    },
+
+    /**
+     * Jump to a page (validated)
+     */
+    jumpToPageAction() {
+      const target = parseInt(this.jumpToPage);
+      if (Number.isNaN(target)) return;
+      const clamped = Math.min(Math.max(target, 1), this.totalPages);
+      this.jumpToPage = clamped;
+      this.goToPage(clamped);
     }
   };
 }
@@ -429,3 +620,136 @@ document.addEventListener('DOMContentLoaded', () => {
 // Expose the component factory globally for Alpine.js
 window.createGlobalSearchComponent = createGlobalSearchComponent;
 console.log('[GlobalSearch] Component registered globally');
+
+/**
+ * Create JSON modal for displaying result details
+ * Uses vanilla JavaScript - called during Alpine component initialization
+ */
+function createJsonModal() {
+  // Check if modal already exists
+  if (document.getElementById('explorerJsonModal')) {
+    return;
+  }
+  
+  // Create modal elements
+  const modalOverlay = document.createElement('div');
+  modalOverlay.className = 'explorer-modal-overlay';
+  modalOverlay.id = 'explorerJsonModalOverlay';
+  modalOverlay.style.display = 'none'; // Start hidden
+  
+  const modal = document.createElement('div');
+  modal.className = 'explorer-modal';
+  modal.id = 'explorerJsonModal';
+  
+  const modalHeader = document.createElement('div');
+  modalHeader.className = 'explorer-modal-header';
+  
+  const modalTitle = document.createElement('div');
+  modalTitle.className = 'explorer-modal-title';
+  modalTitle.textContent = 'Result Details (JSON)';
+  
+  const closeButton = document.createElement('button');
+  closeButton.className = 'explorer-modal-close';
+  closeButton.innerHTML = '&times;';
+  closeButton.addEventListener('click', hideJsonModal);
+
+  modalHeader.appendChild(modalTitle);
+  modalHeader.appendChild(closeButton);
+  
+  const modalContent = document.createElement('div');
+  modalContent.className = 'explorer-modal-content';
+  
+  const jsonDisplay = document.createElement('pre');
+  jsonDisplay.className = 'explorer-json-display';
+  jsonDisplay.id = 'explorerJsonDisplay';
+  
+  modalContent.appendChild(jsonDisplay);
+  
+  const modalFooter = document.createElement('div');
+  modalFooter.className = 'explorer-modal-footer';
+  
+  const copyButton = document.createElement('button');
+  copyButton.className = 'explorer-copy-json-btn dns-button';
+  copyButton.innerHTML = 'Copy to Clipboard';
+  copyButton.addEventListener('click', copyJsonToClipboard);
+  
+  modalFooter.appendChild(copyButton);
+  
+  modal.appendChild(modalHeader);
+  modal.appendChild(modalContent);
+  modal.appendChild(modalFooter);
+  
+  modalOverlay.appendChild(modal);
+  document.body.appendChild(modalOverlay);
+  
+  // Close modal when clicking outside
+  modalOverlay.addEventListener('click', function(event) {
+    if (event.target === modalOverlay) {
+      hideJsonModal();
+    }
+  });
+  
+  console.log('[JSON Modal] Modal created and appended to DOM');
+}
+
+/**
+ * Show JSON modal with the provided data
+ */
+function showJsonModal(jsonData) {
+  const modalOverlay = document.getElementById('explorerJsonModalOverlay');
+  const jsonDisplay = document.getElementById('explorerJsonDisplay');
+  
+  if (!modalOverlay || !jsonDisplay) {
+    createJsonModal();
+  }
+  
+  // Format JSON with indentation
+  const formattedJson = JSON.stringify(jsonData, null, 2);
+  document.getElementById('explorerJsonDisplay').textContent = formattedJson;
+  
+  // Show the modal
+  document.getElementById('explorerJsonModalOverlay').style.display = 'flex';
+  
+  // Prevent body scrolling while modal is open
+  document.body.style.overflow = 'hidden';
+  
+  console.log('[JSON Modal] Modal shown with data');
+}
+
+/**
+ * Hide the JSON modal
+ */
+function hideJsonModal() {
+  const modalOverlay = document.getElementById('explorerJsonModalOverlay');
+  if (modalOverlay) {
+    modalOverlay.style.display = 'none';
+  }
+  
+  // Restore body scrolling
+  document.body.style.overflow = '';
+  
+  console.log('[JSON Modal] Modal hidden');
+}
+
+/**
+ * Copy JSON to clipboard
+ */
+function copyJsonToClipboard() {
+  const jsonText = document.getElementById('explorerJsonDisplay').textContent;
+  
+  navigator.clipboard.writeText(jsonText).then(() => {
+    const copyButton = document.querySelector('.explorer-copy-json-btn');
+    const originalText = copyButton.textContent;
+    copyButton.textContent = 'Copied!';
+    copyButton.style.minWidth = '140px';
+    copyButton.style.textAlign = 'center';
+    setTimeout(() => {
+      copyButton.textContent = originalText;
+    }, 2000);
+    
+    console.log('[JSON Modal] JSON copied to clipboard');
+  }).catch(err => {
+    console.error('[JSON Modal] Failed to copy text:', err);
+    alert('Failed to copy to clipboard');
+  });
+}
