@@ -1800,3 +1800,48 @@ label {
     text-align: center;
   }
 }
+
+/* EDGAR Explorer specific card and pill styles */
+.explorer-card-columns {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.explorer-card-left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.explorer-card-right {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.edgar-pill-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.edgar-pill {
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  min-height: auto;
+  min-width: 8rem;
+}
+
+.edgar-pill.recent {
+  border-color: #41a6ce;
+  color: #41a6ce;
+}
+
+.edgar-pill.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

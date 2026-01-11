@@ -84,12 +84,41 @@ function createEdgarExplorerComponent() {
     transformDetailToItems(detailData) {
       const items = [];
       const companies = detailData?.data?.companies || {};
-      const today = new Date();
+
+      const computeLatest = (forms) => {
+        let latest10K = null;
+        let latest10Q = null;
+        const ninetyDaysAgo = new Date();
+        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+        for (const [key, f] of Object.entries(forms || {})) {
+          const [y, m, d] = key.split('-');
+          const dt = new Date(`${y}-${m}-${d}`);
+          const type = (f?.formType || '').toUpperCase();
+          if (type.startsWith('10-K')) {
+            if (!latest10K || dt > new Date(latest10K.date)) {
+              latest10K = { date: `${y}-${m}-${d}`, url: f?.filingIndex || '', accessionNumber: key.split('-')[3] || '' };
+            }
+          }
+          if (type.startsWith('10-Q')) {
+            const candidate = { date: `${y}-${m}-${d}`, url: f?.filingIndex || '', accessionNumber: key.split('-')[3] || '' };
+            if (!latest10Q || dt > new Date(latest10Q.date)) {
+              latest10Q = candidate;
+            }
+          }
+        }
+        if (latest10Q) {
+          latest10Q.isRecent = new Date(latest10Q.date) >= ninetyDaysAgo;
+        }
+        return { latest10K, latest10Q };
+      };
+
       for (const [companyName, info] of Object.entries(companies)) {
-        const cik = info?.cik || '';
+        const firmo = info?.data || info; // unwrap if wrapped
+        const cik = firmo?.cik || '';
         const forms = info?.forms || {};
+        const { latest10K, latest10Q } = computeLatest(forms);
+
         for (const [accessionKey, form] of Object.entries(forms)) {
-          // accessionKey format: YYYY-MM-DD-ACCESSION
           const [y, m, d, acc] = accessionKey.split('-');
           const filingDate = `${y}-${m}-${d}`;
           items.push({
@@ -99,7 +128,29 @@ function createEdgarExplorerComponent() {
             filingDate,
             accessionNumber: acc || '',
             documentUrl: form?.filingIndex || '',
-            raw: { company: info, form, accessionKey }
+            raw: { company: info, form, accessionKey },
+            latest10K,
+            latest10Q,
+            sic: {
+              code: firmo?.sic || '',
+              description: firmo?.sicDescription || '',
+              division: firmo?.division || '',
+              divisionDescription: firmo?.divisionDescription || '',
+              majorGroup: firmo?.majorGroup || '',
+              majorGroupDescription: firmo?.majorGroupDescription || '',
+              industryGroup: firmo?.industryGroup || '',
+              industryGroupDescription: firmo?.industryGroupDescription || ''
+            },
+            filerCategory: firmo?.category || '',
+            fiscalYearEnd: firmo?.fiscalYearEnd || '',
+            location: {
+              city: firmo?.city || '',
+              stateProvince: firmo?.stateProvince || '',
+              zipPostal: firmo?.zipPostal || '',
+              address: firmo?.address || ''
+            },
+            ticker: Array.isArray(firmo?.tickers) ? firmo.tickers[1] || '' : '',
+            exchange: Array.isArray(firmo?.exchanges) ? firmo.exchanges[0] || '' : ''
           });
         }
       }
