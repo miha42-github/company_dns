@@ -775,90 +775,84 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                                 <span class="explorer-source-pill">EDGAR</span>
                                 <span class="explorer-result-code" x-text="item.filingType"></span>
                               </div>
-                              <div class="explorer-result-heading">
+                              <div class="explorer-result-heading-right">
                                 <span class="explorer-result-code" x-text="item.filingDate"></span>
+                                <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
                               </div>
                             </div>
                             <div class="explorer-result-body">
-                              <div class="explorer-card-columns">
-                                <!-- Left: metadata -->
-                                <div class="explorer-card-left">
-                                  <div class="result-title" x-text="item.companyName"></div>
-                                  <div class="result-subtitle">
-                                    <span>CIK: </span><span x-text="item.cik"></span>
-                                  </div>
-                                  <div class="meta-grid">
-                                    <div class="meta-item">
-                                      <span class="meta-label">SIC</span>
-                                      <span class="meta-value" x-text="item.sic.code"></span>
-                                      <span class="meta-sub" x-text="item.sic.description"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Division</span>
-                                      <span class="meta-value" x-text="item.sic.division"></span>
-                                      <span class="meta-sub" x-text="item.sic.divisionDescription"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Major Group</span>
-                                      <span class="meta-value" x-text="item.sic.majorGroup"></span>
-                                      <span class="meta-sub" x-text="item.sic.majorGroupDescription"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Industry Group</span>
-                                      <span class="meta-value" x-text="item.sic.industryGroup"></span>
-                                      <span class="meta-sub" x-text="item.sic.industryGroupDescription"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Filer Category</span>
-                                      <span class="meta-value" x-text="item.filerCategory"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Fiscal Year End</span>
-                                      <span class="meta-value" x-text="item.fiscalYearEnd"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Location</span>
-                                      <span class="meta-value" x-text="item.location.city + ', ' + item.location.stateProvince"></span>
-                                      <span class="meta-sub" x-text="item.location.address"></span>
-                                    </div>
-                                    <div class="meta-item">
-                                      <span class="meta-label">Ticker/Exchange</span>
-                                      <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
-                                    </div>
-                                  </div>
-                                  <div class="explorer-result-actions">
-                                    <a :href="item.documentUrl" target="_blank" class="dns-button">Open Document</a>
-                                    <button class="dns-button" @click="viewItemJson(item)">View JSON</button>
-                                  </div>
+                              <!-- Metadata grid -->
+                              <div class="meta-grid">
+                                <div class="meta-item">
+                                  <span class="meta-label">Company</span>
+                                  <span class="meta-value" x-text="item.companyName"></span>
                                 </div>
-
-                                <!-- Right: latest filing pills -->
-                                <div class="explorer-card-right">
-                                  <div class="edgar-pill-group">
-                                    <template x-if="item.latest10K">
-                                      <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
-                                        <span>Latest 10‑K</span>
-                                        <span class="status-dot">•</span>
-                                        <span x-text="item.latest10K.date"></span>
-                                      </a>
-                                    </template>
-                                    <template x-if="!item.latest10K">
-                                      <button class="dns-button edgar-pill disabled" disabled>Latest 10‑K</button>
-                                    </template>
-
-                                    <template x-if="item.latest10Q">
-                                      <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
-                                        <span>Latest 10‑Q</span>
-                                        <span class="status-dot">•</span>
-                                        <span x-text="item.latest10Q.date"></span>
-                                        <span class="explorer-source-pill" x-show="item.latest10Q.isRecent">Recent</span>
-                                      </a>
-                                    </template>
-                                    <template x-if="!item.latest10Q">
-                                      <button class="dns-button edgar-pill disabled" disabled>Latest 10‑Q</button>
-                                    </template>
-                                  </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">CIK</span>
+                                  <span class="meta-value" x-text="item.cik"></span>
                                 </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">SIC</span>
+                                  <span class="meta-value" x-text="item.sic.code"></span>
+                                  <span class="meta-sub" x-text="item.sic.description"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Division</span>
+                                  <span class="meta-value" x-text="item.sic.division"></span>
+                                  <span class="meta-sub" x-text="item.sic.divisionDescription"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Major Group</span>
+                                  <span class="meta-value" x-text="item.sic.majorGroup"></span>
+                                  <span class="meta-sub" x-text="item.sic.majorGroupDescription"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Industry Group</span>
+                                  <span class="meta-value" x-text="item.sic.industryGroup"></span>
+                                  <span class="meta-sub" x-text="item.sic.industryGroupDescription"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Filer Category</span>
+                                  <span class="meta-value" x-text="item.filerCategory"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Fiscal Year End</span>
+                                  <span class="meta-value" x-text="item.fiscalYearEnd"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Location</span>
+                                  <span class="meta-value" x-text="item.location.city + ', ' + item.location.stateProvince"></span>
+                                  <span class="meta-sub" x-text="item.location.address"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Ticker/Exchange</span>
+                                  <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
+                                </div>
+                              </div>
+                              <!-- Latest filing pills -->
+                              <div class="edgar-pill-group">
+                                <template x-if="item.latest10K">
+                                  <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
+                                    <span>Latest 10‑K</span>
+                                    <span class="status-dot">•</span>
+                                    <span x-text="item.latest10K.date"></span>
+                                  </a>
+                                </template>
+                                <template x-if="!item.latest10K">
+                                  <button class="dns-button edgar-pill disabled" disabled>Latest 10‑K</button>
+                                </template>
+
+                                <template x-if="item.latest10Q">
+                                  <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
+                                    <span>Latest 10‑Q</span>
+                                    <span class="status-dot">•</span>
+                                    <span x-text="item.latest10Q.date"></span>
+                                    <span class="explorer-source-pill" x-show="item.latest10Q.isRecent">Recent</span>
+                                  </a>
+                                </template>
+                                <template x-if="!item.latest10Q">
+                                  <button class="dns-button edgar-pill disabled" disabled>Latest 10‑Q</button>
+                                </template>
                               </div>
                             </div>
                           </div>
