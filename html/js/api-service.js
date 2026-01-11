@@ -21,8 +21,8 @@ class APIService {
     }
 
     const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    return `${protocol}//${hostname}`;
+    const host = window.location.host; // includes port
+    return `${protocol}//${host}`;
   }
 
   /**
@@ -121,6 +121,8 @@ class APIService {
    * @returns {Promise<Object>} Search results
    */
   async searchIndustryCodes(query, options = {}) {
+    console.log('[APIService] searchIndustryCodes called with:', query);
+    
     if (!query || query.trim().length === 0) {
       throw new APIError('Query cannot be empty', 400, {
         detail: 'Please enter a search term'
@@ -128,11 +130,21 @@ class APIService {
     }
 
     const endpoint = `/V3.0/global/sic/description/${encodeURIComponent(query)}`;
-    return this.get(endpoint, {
-      useCache: true,
-      cacheDuration: 10 * 60 * 1000, // 10 minutes for search results
-      ...options
-    });
+    console.log('[APIService] Calling endpoint:', endpoint);
+    console.log('[APIService] Base URL:', this.baseUrl);
+    
+    try {
+      const result = await this.get(endpoint, {
+        useCache: true,
+        cacheDuration: 10 * 60 * 1000, // 10 minutes for search results
+        ...options
+      });
+      console.log('[APIService] Search results received:', result);
+      return result;
+    } catch (error) {
+      console.error('[APIService] Search error:', error);
+      throw error;
+    }
   }
 
   /**

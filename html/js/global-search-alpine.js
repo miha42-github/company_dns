@@ -16,11 +16,11 @@ function createGlobalSearchComponent() {
     // Filter states
     filters: {
       all: true,
-      'US SIC': false,
-      'UK SIC': false,
-      'EU NACE': false,
-      'ISIC': false,
-      'Japan SIC': false
+      'US SIC': true,
+      'UK SIC': true,
+      'EU NACE': true,
+      'ISIC': true,
+      'Japan SIC': true
     },
     
     filterCounts: {
@@ -49,14 +49,19 @@ function createGlobalSearchComponent() {
       // Add keyboard navigation support
       document.addEventListener('keydown', (e) => this.handleKeyboard(e));
       console.log('[GlobalSearch] Component initialized with Alpine.js');
+      console.log('[GlobalSearch] apiService available:', typeof apiService !== 'undefined');
     },
     
     /**
      * Perform global search for industry codes
      */
     async performSearch() {
+      console.log('[GlobalSearch] performSearch called with:', this.searchQuery);
       this.searchQuery = this.searchQuery.trim();
-      if (!this.searchQuery) return;
+      if (!this.searchQuery) {
+        console.warn('[GlobalSearch] Empty search query');
+        return;
+      }
       
       this.isSearching = true;
       this.hasResults = false;
@@ -67,20 +72,25 @@ function createGlobalSearchComponent() {
       this.filteredResults = [];
       
       try {
+        console.log('[GlobalSearch] Calling apiService.searchIndustryCodes');
         const data = await apiService.searchIndustryCodes(this.searchQuery);
+        console.log('[GlobalSearch] API response:', data);
         
         if (data.code !== 200 || !data.data?.results) {
+          console.warn('[GlobalSearch] No results in response');
           this.errorMessage = 'No results found.';
           this.statusMessage = '';
           this.isSearching = false;
           return;
         }
         
+        console.log('[GlobalSearch] Got results:', data.data.results.length);
         this.allResults = data.data.results;
         this.updateFilterCounts();
         this.applyFilters();
         this.statusMessage = `Found ${this.allResults.length} of ${data.data.total} results`;
         this.hasResults = true;
+        console.log('[GlobalSearch] Search complete, hasResults:', this.hasResults);
         
       } catch (error) {
         this.errorMessage = `Error: ${error.message}`;
@@ -111,6 +121,7 @@ function createGlobalSearchComponent() {
         }
       });
       
+      console.log('[GlobalSearch] Filter counts:', counts);
       this.filterCounts = counts;
     },
     
@@ -170,7 +181,7 @@ function createGlobalSearchComponent() {
      * Handle individual filter checkbox
      */
     toggleFilter(filterName) {
-      this.filters[filterName] = !this.filters[filterName];
+      // Note: x-model already updates the value, we just need to handle side effects
       
       // Update "all" checkbox state
       const anyChecked = Object.entries(this.filters)
@@ -180,6 +191,7 @@ function createGlobalSearchComponent() {
       
       this.currentPage = 1;
       this.applyFilters();
+      console.log('[GlobalSearch] Filter toggled:', filterName, 'New state:', this.filters[filterName]);
     },
     
     /**
@@ -188,6 +200,15 @@ function createGlobalSearchComponent() {
     getCurrentPageResults() {
       const startIndex = (this.currentPage - 1) * this.resultsPerPage;
       const endIndex = startIndex + this.resultsPerPage;
+      const pageResults = this.filteredResults.slice(startIndex, endIndex);
+      console.log('[GlobalSearch] getCurrentPageResults:', {
+        filteredResults: this.filteredResults.length,
+        currentPage: this.currentPage,
+        resultsPerPage: this.resultsPerPage,
+        startIndex,
+        endIndex,
+        pageResults: pageResults.length
+      });
       return this.filteredResults.slice(startIndex, endIndex);
     },
     
@@ -404,3 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('[GlobalSearch] Alpine.js detected, component ready');
   }
 });
+
+// Expose the component factory globally for Alpine.js
+window.createGlobalSearchComponent = createGlobalSearchComponent;
+console.log('[GlobalSearch] Component registered globally');

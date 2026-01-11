@@ -3,9 +3,11 @@
 <head>
   <link rel="stylesheet" type="text/css" href="/static/styles.css">
   <title>company_dns - data explorer</title>
+  <script src="/static/endpoint-data.js"></script>
+  <script src="/static/js/functions.js"></script>
+  <script src="/static/js/api-service.js"></script>
+  <script src="/static/js/global-search-alpine.js"></script>
   <script defer src="/static/js/alpine.min.js"></script>
-  <script defer src="/static/js/api-service.js"></script>
-  <script defer src="/static/js/global-search-alpine.js"></script>
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
 
@@ -429,9 +431,9 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
       </div>
 
       <!-- Global Search Tab Content -->
-      <div id="GlobalSearch" class="explorer-pagecontent">
+      <div id="GlobalSearch" class="explorer-pagecontent" x-data="createGlobalSearchComponent()" @load="init()">
         <!-- Initial centered search (shown before search) -->
-        <div id="initialSearchContainer" class="explorer-search-container">
+        <div id="initialSearchContainer" class="explorer-search-container" x-show="!showResults">
           <h1>Industry Code Explorer</h1>
           
           <div class="explorer-intro">
@@ -459,12 +461,12 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
           
           <div class="explorer-search-card">
             <h2>Enter an Industry Keyword</h2>
-            <form id="globalSearchForm">
+            <form id="globalSearchForm" @submit.prevent="performSearch()">
               <div class="explorer-input-group">
-                <input type="text" id="globalSearchInput" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
-                <button type="submit" class="dns-button explorer-button">
+                <input type="text" x-model="searchQuery" id="globalSearchInput" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                   <i class="explorer-action-icon"></i>
-                  Search
+                  <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
                 </button>
               </div>
               <div class="explorer-search-hint">Try broad terms like "computer" or "retail" for best results</div>
@@ -473,17 +475,17 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
         </div>
 
         <!-- Post-search layout (initially hidden) -->
-        <div id="searchResultsLayout" class="explorer-results-layout" style="display: none;">
+        <div id="searchResultsLayout" class="explorer-results-layout" x-show="showResults">
           <h1>Industry Code Explorer</h1>
           
           <div class="explorer-search-wrapper">
             <div class="explorer-top-container">
-              <form id="globalSearchFormTop">
+              <form id="globalSearchFormTop" @submit.prevent="performSearch()">
                 <div class="explorer-input-group">
-                  <input type="text" id="globalSearchInputTop" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
-                  <button type="submit" class="dns-button explorer-button">
+                  <input type="text" x-model="searchQuery" id="globalSearchInputTop" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                  <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                     <i class="explorer-action-icon"></i>
-                    Search
+                    <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
                   </button>
                 </div>
               </form>
@@ -499,28 +501,28 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                   <div class="explorer-filter-label">Classification System:</div>
                   <div class="explorer-filter-checkboxes">
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="All" checked id="filterAll"> All Results</label>
-                      <span class="explorer-filter-count" id="countAll">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="All" x-model="filters.all" @change="toggleAllFilters(filters.all)" id="filterAll"> All Results</label>
+                      <span class="explorer-filter-count" x-text="filterCounts.all">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="US SIC" checked> US SIC</label>
-                      <span class="explorer-filter-count" id="countUSSIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="US SIC" x-model="filters['US SIC']" @change="toggleFilter('US SIC')"> US SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['US SIC']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="UK SIC" checked> UK SIC</label>
-                      <span class="explorer-filter-count" id="countUKSIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="UK SIC" x-model="filters['UK SIC']" @change="toggleFilter('UK SIC')"> UK SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['UK SIC']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="EU NACE" checked> EU NACE</label>
-                      <span class="explorer-filter-count" id="countEUNACE">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="EU NACE" x-model="filters['EU NACE']" @change="toggleFilter('EU NACE')"> EU NACE</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['EU NACE']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="ISIC" checked> ISIC</label>
-                      <span class="explorer-filter-count" id="countISIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="ISIC" x-model="filters['ISIC']" @change="toggleFilter('ISIC')"> ISIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['ISIC']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="Japan SIC" checked> Japan SIC</label>
-                      <span class="explorer-filter-count" id="countJapanSIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="Japan SIC" x-model="filters['Japan SIC']" @change="toggleFilter('Japan SIC')"> Japan SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['Japan SIC']">0</span>
                     </div>
                   </div>
                 </div>
@@ -539,12 +541,29 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
               
               <div class="explorer-results-area">
                 <div class="explorer-header-section">
-                  <div id="globalSearchStatus" class="explorer-search-status"></div>
+                  <div id="globalSearchStatus" class="explorer-search-status" x-text="statusMessage"></div>
+                  <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
                 </div>
                 
                 <div class="explorer-container-wrapper">
                   <div id="globalSearchResults" class="explorer-results-container">
-                    <!-- Results will be populated via JavaScript -->
+                    <!-- Results will be populated via Alpine.js -->
+                    <template x-if="hasResults && getCurrentPageResults().length > 0">
+                      <div>
+                        <template x-for="result in getCurrentPageResults()" :key="result.code + result.source_type">
+                          <div class="explorer-result-card">
+                            <div class="explorer-result-header">
+                              <span class="explorer-result-code" x-text="result.code"></span>
+                              <span class="explorer-result-source" x-text="result.source_type"></span>
+                            </div>
+                            <div class="explorer-result-description" x-text="result.description"></div>
+                            <div class="explorer-result-actions">
+                              <button @click="viewResultJson(result)" class="explorer-view-json-btn">View JSON</button>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
                   </div>
                 </div>
                 
@@ -552,6 +571,27 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                   <!-- Pagination will be added here by JavaScript -->
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- JSON Modal -->
+        <div x-show="showJsonModal" 
+             @click.self="closeJsonModal()" 
+             class="explorer-modal-overlay"
+             style="display: none;"
+             x-transition>
+          <div class="explorer-modal-content">
+            <div class="explorer-modal-header">
+              <h3>Result Details (JSON)</h3>
+              <button @click="closeJsonModal()" class="explorer-modal-close">&times;</button>
+            </div>
+            <div class="explorer-modal-body">
+              <pre x-text="JSON.stringify(selectedJsonResult, null, 2)"></pre>
+            </div>
+            <div class="explorer-modal-footer">
+              <button @click="copyJsonToClipboard()" class="dns-button">Copy to Clipboard</button>
+              <button @click="closeJsonModal()" class="dns-button">Close</button>
             </div>
           </div>
         </div>
@@ -564,8 +604,6 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
     </footer>
   </div>
 
-  <!-- Core scripts -->
-  <script src="/static/js/functions.js"></script>
   <script>
     // Update the window.onload function
     window.onload = function () {
@@ -597,8 +635,10 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
     // Generate the tables
     const tableV3 = generateTable(endpointsData, 'V3.0');
     const tableV2 = generateTable(endpointsData, 'V2.0');
-    document.querySelector('#V3').innerHTML += tableV3; // Add the V3.0 table to the page
-    document.querySelector('#V2').innerHTML += tableV2; // Add the V2.0 table to the page
+    const v3Element = document.querySelector('#V3');
+    const v2Element = document.querySelector('#V2');
+    if (v3Element) v3Element.innerHTML += tableV3;
+    if (v2Element) v2Element.innerHTML += tableV2;
   </script>
 </body>
 
