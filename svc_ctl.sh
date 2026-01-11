@@ -226,10 +226,9 @@ function cleanup_server () {
             
             print_action "  Removing container ${container}"
             docker rm $container > /dev/null 2>&1
-            check_error $? "docker rm"
-            if [ $? -eq 0 ]; then
-                removed_count=$((removed_count+1))
-            fi
+            exit_status=$?
+            check_error $exit_status "docker rm"
+            removed_count=$((removed_count+1))
         done
         
         if [ $removed_count -eq 0 ]; then
