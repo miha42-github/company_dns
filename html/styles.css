@@ -311,8 +311,8 @@ select {
 }
 
 .dns-button {
-  margin-left: 4rem;
-  margin-right: 1rem;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
   padding: 0.5rem;
   border: var(--border-width) solid var(--border-color);
   color: var(--color-link-primary);
@@ -1822,7 +1822,7 @@ label {
 /* EDGAR Explorer specific card and pill styles */
 .edgar-meta-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.6rem 1rem;
   margin-bottom: 0.6rem;
 }
