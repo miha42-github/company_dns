@@ -774,24 +774,32 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                               <div class="edgar-pill-group-header">
                                 <template x-if="item.latest10K">
                                   <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
+                                    <i class="external-link-icon"></i>
                                     <span>10‑K</span>
                                     <span class="status-dot">•</span>
                                     <span x-text="item.latest10K.date"></span>
                                   </a>
                                 </template>
                                 <template x-if="!item.latest10K">
-                                  <button class="dns-button edgar-pill disabled" disabled>10‑K</button>
+                                  <button class="dns-button edgar-pill disabled" disabled>
+                                    <i class="external-link-icon"></i>
+                                    <span>10‑K</span>
+                                  </button>
                                 </template>
 
                                 <template x-if="item.latest10Q">
                                   <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
+                                    <i class="external-link-icon"></i>
                                     <span>10‑Q</span>
                                     <span class="status-dot">•</span>
                                     <span x-text="item.latest10Q.date"></span>
                                   </a>
                                 </template>
                                 <template x-if="!item.latest10Q">
-                                  <button class="dns-button edgar-pill disabled" disabled>10‑Q</button>
+                                  <button class="dns-button edgar-pill disabled" disabled>
+                                    <i class="external-link-icon"></i>
+                                    <span>10‑Q</span>
+                                  </button>
                                 </template>
                               </div>
                               <div class="explorer-result-heading-right">

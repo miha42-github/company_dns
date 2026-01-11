@@ -1826,6 +1826,26 @@ label {
   flex-direction: row;
   gap: 0.5rem;
   align-items: center;
+  flex: 1;
+}
+
+.edgar-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  min-height: auto;
+  width: auto;
+  min-width: 130px;
+  text-align: center;
+  font-size: 0.8em;
+}
+
+.external-link-icon::before {
+  content: "↗";
+  font-size: 0.75em;
+  margin-right: 0.2rem;
 }
 
 .explorer-result-heading-right {
@@ -1848,24 +1868,6 @@ label {
 
 .explorer-view-json-btn:hover {
   background-color: rgba(22, 150, 200, 0.1);
-}
-
-.edgar-pill-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  align-items: flex-end;
-}
-
-.edgar-pill {
-  border-radius: 999px;
-  padding: 0.3rem 0.7rem;
-  min-height: auto;
-  width: auto;
-  min-width: 130px;
-  text-align: center;
-  font-size: 0.8em;
 }
 
 .edgar-pill.recent {
