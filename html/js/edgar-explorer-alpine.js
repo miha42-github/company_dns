@@ -199,6 +199,7 @@ function createEdgarExplorerComponent() {
     prevPage() { if (this.currentPage > 1) this.currentPage--; },
     nextPage() { if (this.currentPage < this.totalPages) this.currentPage++; },
     lastPage() { if (this.currentPage !== this.totalPages) this.currentPage = this.totalPages; },
+    goToPage(page) { if (page >= 1 && page <= this.totalPages) this.currentPage = page; },
 
     // UI helpers
     getResultsHeadline() {

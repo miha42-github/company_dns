@@ -736,10 +736,10 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                 <h3 class="explorer-sidebar-title">Filter Results</h3>
                 <div class="explorer-filter-options">
                   <div class="explorer-filter-checkbox">
-                    <label><input type="checkbox" x-model="filters.has10K"> Has 10‑K</label>
+                    <label><input type="checkbox" x-model="filters.has10K" @change="applyFilters()"> Has 10‑K</label>
                   </div>
                   <div class="explorer-filter-checkbox">
-                    <label><input type="checkbox" x-model="filters.recent10Q"> Recent 10‑Q (≤ 90 days)</label>
+                    <label><input type="checkbox" x-model="filters.recent10Q" @change="applyFilters()"> Recent 10‑Q (≤ 90 days)</label>
                   </div>
                 </div>
                 <div class="explorer-filter-guide">
