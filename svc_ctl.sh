@@ -50,6 +50,24 @@ function check_error () {
     fi
 }
 
+# Validate environment and dependencies before proceeding
+function check_dependencies () {
+    FUNC="Checking dependencies"
+    print_header "${FUNC}"
+    if ! command -v docker &> /dev/null; then
+        print_detail "${ORANGE}Warning:${NC} Docker not found"
+    else
+        print_detail "Docker: ${GREEN}found${NC}"
+    fi
+    if [ ! -f "company_dns.py" ]; then
+        print_detail "${RED}Error:${NC} company_dns.py not found"
+        exit 1
+    else
+        print_detail "company_dns.py: ${GREEN}found${NC}"
+    fi
+    print_footer "${FUNC}"
+}
+
 function print_header () {
     HEADER="${1}"
     echo -e ">>>> ${ORANGE}BEGIN:${NC} ${BLUE}${HEADER}${NC}"
@@ -73,6 +91,16 @@ function print_footer () {
 
 function get_container_id () {
     docker ps -q --filter "ancestor=${FULL_IMAGE_NAME}"
+}
+
+# Execute docker run with standard parameters (background or foreground mode)
+function execute_docker_run () {
+    local MODE=$1
+    if [ "${MODE}" = "background" ]; then
+        docker run -d -m ${MEMORY_LIMIT} -p ${PORT}:8000 ${FULL_IMAGE_NAME}
+    else
+        docker run -m ${MEMORY_LIMIT} -p ${PORT}:8000 ${FULL_IMAGE_NAME}
+    fi
 }
 
 function bring_down_server () {
@@ -113,20 +141,17 @@ function stop_server () {
 
 function start_server () {
     FUNC="Start ${SERVICE} in the background"
-    STEP="start_server"
     print_header "${FUNC}"
     
-    # Check if already running
     docker_image=$(get_container_id)
     if [ ! -z "$docker_image" ]; then
-        print_step "Container ${FULL_IMAGE_NAME} is already running as ${docker_image}"
+        print_step "Container already running as ${docker_image}"
         echo -e "${ORANGE}skipped${NC}"
     else
         print_step "Starting ${FULL_IMAGE_NAME}"
-        docker run -d -m ${MEMORY_LIMIT} -p ${PORT}:8000 ${FULL_IMAGE_NAME} > /dev/null 2>&1
+        execute_docker_run "background" > /dev/null 2>&1
         check_error $? "docker run"
         
-        # Get the new container ID
         docker_image=$(get_container_id)
         print_detail "Container started as ${docker_image}"
     fi
@@ -180,7 +205,7 @@ function run_foreground () {
     
     print_step "Starting ${FULL_IMAGE_NAME} in foreground"
     echo ""
-    docker run -m ${MEMORY_LIMIT} -p ${PORT}:8000 ${FULL_IMAGE_NAME}
+    execute_docker_run "foreground"
     
     print_footer "${FUNC}"
 }
@@ -276,6 +301,7 @@ function print_help () {
     echo ""
     echo "COMMANDS:"
     echo "    help        - Display this help message"
+    echo "    check-deps  - Validate dependencies and files"
     echo "    start       - Start the service in the background"
     echo "    stop        - Stop the running container gracefully"
     echo "    kill        - Forcefully stop the running container"
@@ -295,40 +321,54 @@ function print_help () {
 ###
 ###################################
 
-if [ ! $1 ] || [ $1 == "help" ]; then
+if [ $# -eq 0 ]; then
     print_help
-
-elif [ $1 == "start" ]; then
-    start_server
-
-elif [ $1 == "stop" ]; then
-    stop_server
-
-elif [ $1 == "kill" ]; then
-    bring_down_server
-
-elif [ $1 == "build" ]; then
-    build_server
-
-elif [ $1 == "rebuild" ]; then
-    rebuild_server
-
-elif [ $1 == "foreground" ]; then
-    run_foreground
-
-elif [ $1 == "tail" ]; then
-    tail_backend
-
-elif [ $1 == "status" ]; then
-    status_server
-
-elif [ $1 == "cleanup" ]; then
-    cleanup_server
-
-else
-    echo "Unknown command: $1"
-    print_help
-
+    exit 0
 fi
+
+case "${1}" in
+    help)
+        print_help
+        ;;
+    check-deps)
+        check_dependencies
+        ;;
+    start)
+        check_dependencies
+        start_server
+        ;;
+    stop)
+        stop_server
+        ;;
+    kill)
+        bring_down_server
+        ;;
+    build)
+        check_dependencies
+        build_server
+        ;;
+    rebuild)
+        check_dependencies
+        rebuild_server
+        ;;
+    foreground)
+        check_dependencies
+        run_foreground
+        ;;
+    tail)
+        tail_backend
+        ;;
+    status)
+        status_server
+        ;;
+    cleanup)
+        cleanup_server
+        ;;
+    *)
+        echo -e "${RED}Error:${NC} Unknown command: ${1}"
+        echo ""
+        print_help
+        ;;
+esac
 
 exit 0
