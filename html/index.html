@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <link rel="stylesheet" type="text/css" href="styles.css">
-  <link rel="stylesheet" type="text/css" href="styles-explorer.css">
-  <link rel="stylesheet" type="text/css" href="styles-query.css">
-  <link rel="stylesheet" type="text/css" href="styles-help.css">
+  <link rel="stylesheet" type="text/css" href="/static/styles.css">
   <title>company_dns - data explorer</title>
-  <script src="endpoint-data.js"></script>
+  <script src="/static/endpoint-data.js"></script>
+  <script src="/static/js/functions.js"></script>
+  <script src="/static/js/api-service.js"></script>
+  <script src="/static/js/global-search-alpine.js"></script>
+  <script defer src="/static/js/alpine.min.js"></script>
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
 
@@ -15,9 +16,9 @@
     <!-- Fixed header section -->
     <header class="page-header">
       <div class="menu">
-        <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Code Explorer</button>
-        <button class="tabmenu" onclick="openTab(event, 'Query', 'query-pagecontent', 'tabmenu')">Query Explorer</button>
-        <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help</button>
+        <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Classification Explorer</button>
+        <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help & Documentation</button>
+        <a href="/docs" target="_blank" class="tabmenu" style="color: inherit; padding: 0.8rem 0.9rem; float: left;">API Reference</a>
       </div>
     </header>
 
@@ -61,8 +62,7 @@
             <div class="help-tabs">
               <button class="help-tab-button active" onclick="openHelpTab(event, 'help-overview')">Overview</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Code Explorer</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-query-help')">Query Explorer</button>
+              <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Classification Explorer</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-examples')">Code Examples</button>
             </div>
             
@@ -124,32 +124,36 @@
             <!-- API Documentation Tab -->
             <div id="help-api-docs" class="help-tab-content">
               <h2>API Documentation</h2>
-              <p>
-                All endpoints return JSON responses. If a request is successful, a status code of 200 is returned.
-                Otherwise, an error code and message are provided in the response.
-              </p>
               
-              <div class="help-endpoint-note">
-                <p><strong>Note:</strong> All query parameters should be URL-encoded. For example, spaces should be encoded as <code>%20</code>.</p>
+              <div class="help-section">
+                <h3>Interactive API Explorer</h3>
+                <p>
+                  The most comprehensive way to explore and test the API is through our interactive <strong>API Reference</strong> page,
+                  which provides real-time request/response testing, automatic schema validation, and detailed documentation.
+                </p>
+                <p>
+                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">Visit the API Reference →</a>
+                </p>
+                <p style="font-size: 0.9rem; color: rgb(104, 95, 88);">
+                  Also available: <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">Alternative ReDoc format →</a>
+                </p>
               </div>
               
-              <div class="help-api-version-tabs">
-                <div class="tab">
-                  <button class="tablinks active" onclick="openInnerTab(event, 'V3', 'tabcontent', 'tablinks')">V3.0 API</button>
-                  <button class="tablinks" onclick="openInnerTab(event, 'V2', 'tabcontent', 'tablinks')">V2.0 API</button>
-                </div>
-                <div id="V3" class="tabcontent" style="display: block;">
-                  <!-- V3 API content will be injected here by JavaScript -->
-                </div>
-                <div id="V2" class="tabcontent">
-                  <!-- V2 API content will be injected here by JavaScript -->
-                </div>
+              <div class="help-api-note" style="background-color: #1a1718; padding: 1rem; border-radius: 0.5rem; margin: 1.5rem 0; border-left: 3px solid #1696c8;">
+                <h4 style="margin-top: 0;">Why Use the API Reference?</h4>
+                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                  <li><strong>Live Testing:</strong> Try requests directly without writing code</li>
+                  <li><strong>Schema Validation:</strong> See request/response models in detail</li>
+                  <li><strong>Documentation:</strong> Full endpoint descriptions and parameter explanations</li>
+                  <li><strong>Request History:</strong> Keep track of recent API calls</li>
+                  <li><strong>OpenAPI Standard:</strong> Industry-standard REST API interface</li>
+                </ul>
               </div>
               
-              <div class="help-response-format">
-                <h3>Response Format</h3>
-                <div class="help-code-container">
-                  <pre><code>{
+              <h3>Response Format</h3>
+              <p>All endpoints return JSON responses with a consistent structure:</p>
+              <div class="help-code-container">
+                <pre><code>{
   "code": 200,                // HTTP status code
   "message": "Success",       // Status message
   "total": 5,                 // Total number of results
@@ -161,20 +165,22 @@
     ]
   }
 }</code></pre>
-                  <button class="help-copy-button" onclick="copyToClipboard(this)">
-                    <span class="help-copy-icon"></span>
-                    <span class="copy-text">Copy</span>
-                  </button>
-                </div>
+                <button class="help-copy-button" onclick="copyToClipboard(this)">
+                  <span class="help-copy-icon"></span>
+                  <span class="copy-text">Copy</span>
+                </button>
               </div>
+              
+              <h3>API Versions</h3>
+              <p>The company_dns API is available in two versions. See the code examples below for version-specific endpoints.</p>
             </div>
             
             <!-- Industry Code Explorer Tab -->
             <div id="help-explorer-help" class="help-tab-content">
-              <h2>Using the Industry Code Explorer</h2>
+              <h2>Using the Industry Classification Explorer</h2>
               
               <p>
-                The Industry Code Explorer allows you to search across multiple industry classification systems
+                The Industry Classification Explorer allows you to search across multiple industry classification systems
                 using keywords. This is useful for finding comparable industry codes across different standards.
               </p>
               
@@ -182,7 +188,7 @@
                 <div class="help-step">
                   <h4>Step 1: Enter a Search Term</h4>
                   <p>Enter an industry keyword in the search box (e.g., "oil", "manufacturing", "retail").</p>
-                  <img src="./search_explorer.png" alt="Search input example" class="help-image">
+                  <img src="/static/search_explorer.png" alt="Search input example" class="help-image">
                 </div>
                 
                 <div class="help-step">
@@ -326,7 +332,7 @@
                   </div>
                   
                   <div class="help-example">
-                    <h4>Search Industry Codes</h4>
+                    <h4>Search Industry Classification Systems</h4>
                     <div class="help-code-container">
                       <pre><code>// URL-encode the search term
 const searchTerm = encodeURIComponent('software');
@@ -418,130 +424,17 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
             </div>
             <p class="help-disclaimer">
               This software is provided as-is and without warranty or guarantee of support. 
-              © 2025 Mediumroast, Inc.
+              © 2026 Mediumroast, Inc.
             </p>
           </div>
         </div>
       </div>
 
-      <!-- Query Tab Content -->
-      <div id="Query" class="query-pagecontent">
-        <div class="query-container">
-          <h1>Query Explorer</h1>
-          
-          <div class="query-intro">
-            
-            <div class="query-features">
-              <div class="query-feature">
-                <i class="feature-icon api-icon"></i>
-                <span>Test API endpoints</span>
-              </div>
-              <div class="query-feature">
-                <i class="feature-icon search-icon"></i>
-                <span>Search company data</span>
-              </div>
-              <div class="query-feature">
-                <i class="feature-icon globe-icon"></i>
-                <span>Explore industry codes</span>
-              </div>
-            </div>
-          </div>
-          
-          <!-- Update the form header and structure -->
-          <div class="query-form-wrapper">
-            <div class="query-form-header">
-              <h2>API Request</h2>
-              <button type="button" class="query-button" id="executeRequestBtn">
-                <i class="query-execute-icon"></i>
-                Execute Request
-              </button>
-            </div>
-            
-            <form id="endpointForm" class="query-form">
-              <div class="query-form-row">
-                <div class="query-form-group">
-                  <label for="hostSelect">Host:</label>
-                  <select id="hostSelect" class="query-select">
-                    <option value="localhost:8000">localhost:8000</option>
-                    <option value="company-dns.mediumroast.io">company-dns.mediumroast.io</option>
-                  </select>
-                </div>
-                
-                <div class="query-form-group">
-                  <label for="endpointSelect">Endpoint:</label>
-                  <select id="endpointSelect" class="query-select">
-                    <!-- Options will be populated with JavaScript -->
-                  </select>
-                </div>
-              </div>
-              
-              <div class="query-form-row">
-                <div class="query-form-group full-width">
-                  <label for="queryInput">Query:</label>
-                  <input class="query-input" type="text" id="queryInput" name="queryInput" placeholder="Enter your query (e.g., IBM, oil, 7371)" required>
-                  <div class="query-hint">Enter a company name, keyword, or code</div>
-                </div>
-              </div>
-            </form>
-          </div>
-          
-          <div class="query-results-wrapper">
-            <h2>Response</h2>
-            
-            <div class="query-url-container">
-              <div class="query-url-label">Request URL:</div>
-              <div id="queryUrl" class="query-url-display">
-                <!-- URL will be populated with JavaScript -->
-              </div>
-              <button class="query-copy-button" onclick="copyToClipboard(this)" data-copy-target="queryUrl">
-                <span class="query-copy-icon"></span>
-                <span class="copy-text">Copy URL</span>
-              </button>
-            </div>
-            
-            <div class="query-results-container">
-              <div class="query-results-header">
-                <h3>Response Data</h3>
-                <button class="query-copy-button" onclick="copyResponseToClipboard()" id="copyResponseButton">
-                  <span class="query-copy-icon"></span>
-                  <span class="copy-text">Copy JSON</span>
-                </button>
-              </div>
-              <div id="queryResults" class="query-results-display">
-                <!-- Results will be populated with JavaScript -->
-                <div class="query-no-results">Execute a request to see results</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="query-help-section">
-            <h3>Quick Tips</h3>
-            <div class="tip-box">
-              <h4>Example Queries</h4>
-              <div class="query-examples-grid">
-                <div class="query-example">
-                  <div class="query-example-label">Company Search:</div>
-                  <div class="query-example-value">IBM, Apple, Microsoft</div>
-                </div>
-                <div class="query-example">
-                  <div class="query-example-label">Industry Keywords:</div>
-                  <div class="query-example-value">oil, retail, manufacturing</div>
-                </div>
-                <div class="query-example">
-                  <div class="query-example-label">SIC Codes:</div>
-                  <div class="query-example-value">7371, 2911, 5331</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- Global Search Tab Content -->
-      <div id="GlobalSearch" class="explorer-pagecontent">
+      <div id="GlobalSearch" class="explorer-pagecontent" x-data="createGlobalSearchComponent()" @load="init()">
         <!-- Initial centered search (shown before search) -->
-        <div id="initialSearchContainer" class="explorer-search-container">
-          <h1>Industry Code Explorer</h1>
+        <div id="initialSearchContainer" class="explorer-search-container" x-show="!showResults">
+          <h1>Industry Classification Explorer</h1>
           
           <div class="explorer-intro">
             <p>
@@ -568,12 +461,12 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
           
           <div class="explorer-search-card">
             <h2>Enter an Industry Keyword</h2>
-            <form id="globalSearchForm">
+            <form id="globalSearchForm" @submit.prevent="performSearch()">
               <div class="explorer-input-group">
-                <input type="text" id="globalSearchInput" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
-                <button type="submit" class="dns-button explorer-button">
+                <input type="text" x-model="searchQuery" id="globalSearchInput" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                   <i class="explorer-action-icon"></i>
-                  Search
+                  <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
                 </button>
               </div>
               <div class="explorer-search-hint">Try broad terms like "computer" or "retail" for best results</div>
@@ -582,17 +475,17 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
         </div>
 
         <!-- Post-search layout (initially hidden) -->
-        <div id="searchResultsLayout" class="explorer-results-layout" style="display: none;">
-          <h1>Industry Code Explorer</h1>
+        <div id="searchResultsLayout" class="explorer-results-layout" x-show="showResults">
+          <h1>Industry Classification Explorer</h1>
           
           <div class="explorer-search-wrapper">
             <div class="explorer-top-container">
-              <form id="globalSearchFormTop">
+              <form id="globalSearchFormTop" @submit.prevent="performSearch()">
                 <div class="explorer-input-group">
-                  <input type="text" id="globalSearchInputTop" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
-                  <button type="submit" class="dns-button explorer-button">
+                  <input type="text" x-model="searchQuery" id="globalSearchInputTop" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                  <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                     <i class="explorer-action-icon"></i>
-                    Search
+                    <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
                   </button>
                 </div>
               </form>
@@ -608,28 +501,28 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
                   <div class="explorer-filter-label">Classification System:</div>
                   <div class="explorer-filter-checkboxes">
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="All" checked id="filterAll"> All Results</label>
-                      <span class="explorer-filter-count" id="countAll">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="All" x-model="filters.all" @change="toggleAllFilters(filters.all)" id="filterAll"> All Results</label>
+                      <span class="explorer-filter-count" x-text="filterCounts.all">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="US SIC" checked> US SIC</label>
-                      <span class="explorer-filter-count" id="countUSSIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="US SIC" x-model="filters['US SIC']" @change="toggleFilter('US SIC')"> US SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['US SIC']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="UK SIC" checked> UK SIC</label>
-                      <span class="explorer-filter-count" id="countUKSIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="UK SIC" x-model="filters['UK SIC']" @change="toggleFilter('UK SIC')"> UK SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['UK SIC']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="EU NACE" checked> EU NACE</label>
-                      <span class="explorer-filter-count" id="countEUNACE">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="EU NACE" x-model="filters['EU NACE']" @change="toggleFilter('EU NACE')"> EU NACE</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['EU NACE']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="ISIC" checked> ISIC</label>
-                      <span class="explorer-filter-count" id="countISIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="ISIC" x-model="filters['ISIC']" @change="toggleFilter('ISIC')"> ISIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['ISIC']">0</span>
                     </div>
                     <div class="explorer-filter-checkbox">
-                      <label><input type="checkbox" name="sourceFilter" value="Japan SIC" checked> Japan SIC</label>
-                      <span class="explorer-filter-count" id="countJapanSIC">0</span>
+                      <label><input type="checkbox" name="sourceFilter" value="Japan SIC" x-model="filters['Japan SIC']" @change="toggleFilter('Japan SIC')"> Japan SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['Japan SIC']">0</span>
                     </div>
                   </div>
                 </div>
@@ -648,17 +541,140 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
               
               <div class="explorer-results-area">
                 <div class="explorer-header-section">
-                  <div id="globalSearchStatus" class="explorer-search-status"></div>
+                  <div class="results-status">
+                    <div class="status-top">
+                      <span class="status-title">Results</span>
+                      <span class="status-count" x-text="getResultsHeadline()"></span>
+                    </div>
+                    <div class="status-meta">
+                      <span x-text="getResultsRangeLabel()"></span>
+                      <span class="status-dot">•</span>
+                      <span x-text="getActiveFiltersLabel()"></span>
+                    </div>
+                  </div>
+                  <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
                 </div>
                 
                 <div class="explorer-container-wrapper">
                   <div id="globalSearchResults" class="explorer-results-container">
-                    <!-- Results will be populated via JavaScript -->
+                    <!-- Results will be populated via Alpine.js -->
+                    <template x-if="hasResults && getCurrentPageResults().length > 0">
+                      <div>
+                        <template x-for="result in getCurrentPageResults()" :key="result.code + result.source_type">
+                          <div class="explorer-result-card">
+                            <div class="explorer-result-header">
+                              <div class="explorer-result-heading">
+                                <span class="explorer-result-code" x-text="result.code"></span>
+                                <span class="explorer-source-pill" :class="getSourceClass(result.source_type)" x-text="result.source_type"></span>
+                              </div>
+                              <div class="explorer-result-actions">
+                                <button @click="viewResultJson(result)" class="explorer-view-json-btn">View JSON</button>
+                              </div>
+                            </div>
+
+                            <p class="explorer-result-description" x-show="!isExpanded(result)" x-text="getTruncatedDescription(result)"></p>
+                            <p class="explorer-result-description" x-show="isExpanded(result)" x-text="result.description"></p>
+                            <button class="explorer-show-more" x-show="shouldShowToggle(result)" @click="toggleDescription(result)" type="button">
+                              <span x-text="isExpanded(result) ? 'Show less' : 'Show more'"></span>
+                            </button>
+
+                            <div class="explorer-result-meta" x-show="hasMetadata(result)">
+                              <template x-if="result.source_type === 'US SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.division">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.division_desc"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.major_group">
+                                    <div class="meta-label">Major Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.major_group"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.major_group_desc"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.industry_group">
+                                    <div class="meta-label">Industry Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.industry_group"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.industry_group_desc"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'EU NACE'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.section_code">
+                                    <div class="meta-label">Section</div>
+                                    <div class="meta-value" x-text="result.additional_data?.section_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'ISIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.section_code">
+                                    <div class="meta-label">Section</div>
+                                    <div class="meta-value" x-text="result.additional_data?.section_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'Japan SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.major_group_code">
+                                    <div class="meta-label">Major Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.major_group_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'UK SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="hasUkMetadata(result)">
+                                    <div class="meta-label">Code</div>
+                                    <div class="meta-value" x-text="result.additional_data?.code || result.code"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.description"></div>
+                                  </div>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
                   </div>
                 </div>
                 
-                <div id="paginationContainer" class="explorer-pagination">
-                  <!-- Pagination will be added here by JavaScript -->
+                <div class="pagination-controls" x-show="hasResults && filteredResults.length">
+                  <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
+                  <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
+                  <template x-for="page in getVisiblePages()" :key="'page-' + page">
+                    <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
+                  </template>
+                  <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
+                  <button class="pagination-btn" @click="lastPage()" :disabled="currentPage === totalPages" aria-label="Last page">⏭</button>
                 </div>
               </div>
             </div>
@@ -669,15 +685,10 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
 
     <!-- Fixed footer section -->
     <footer class="page-footer">
-      <p class="copyright">&copy; 2025 Mediumroast, Inc. All rights reserved.</p>
+      <p class="copyright">&copy; 2026 Mediumroast, Inc. All rights reserved.</p>
     </footer>
   </div>
 
-  <!-- Add this before your other scripts -->
-  <script src="hosts.js"></script>
-  <script src="functions.js"></script>
-  <script src="query.js"></script>
-  <script src="global-search.js"></script>
   <script>
     // Update the window.onload function
     window.onload = function () {
@@ -709,8 +720,10 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
     // Generate the tables
     const tableV3 = generateTable(endpointsData, 'V3.0');
     const tableV2 = generateTable(endpointsData, 'V2.0');
-    document.querySelector('#V3').innerHTML += tableV3; // Add the V3.0 table to the page
-    document.querySelector('#V2').innerHTML += tableV2; // Add the V2.0 table to the page
+    const v3Element = document.querySelector('#V3');
+    const v2Element = document.querySelector('#V2');
+    if (v3Element) v3Element.innerHTML += tableV3;
+    if (v2Element) v2Element.innerHTML += tableV2;
   </script>
 </body>
 

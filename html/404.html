@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>404 - Page Not Found | company_dns</title>
+  <link rel="stylesheet" type="text/css" href="/static/styles.css">
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+  <style>
+    /* 404-specific error page styles */
+    .error-page {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 2rem;
+      text-align: center;
+    }
+    
+    .error-code {
+      font-size: 7rem;
+      font-weight: bold;
+      color: #924e29;
+      margin: 0;
+      line-height: 1;
+      text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+    
+    .error-title {
+      font-size: 1.8rem;
+      color: #ca703f;
+      margin: 1rem 0 0.5rem;
+      font-weight: bold;
+    }
+    
+    .error-subtitle {
+      font-size: 1rem;
+      color: rgb(104, 95, 88);
+      margin: 0.5rem 0 2rem;
+      line-height: 1.6;
+    }
+    
+    .error-details {
+      max-width: 600px;
+      background-color: #1a1718;
+      padding: 1.5rem;
+      border-radius: 0.5rem;
+      border-left: 4px solid #1696c8;
+      margin-bottom: 2rem;
+      text-align: left;
+    }
+    
+    .error-details h3 {
+      color: #1696c8;
+      margin-top: 0;
+      margin-bottom: 0.8rem;
+    }
+    
+    .error-details ul {
+      margin: 0;
+      padding-left: 1.5rem;
+      color: rgb(104, 95, 88);
+    }
+    
+    .error-details li {
+      margin-bottom: 0.4rem;
+    }
+    
+    .error-path {
+      background-color: #0F0D0E;
+      padding: 0.8rem;
+      border-radius: 0.3rem;
+      font-family: monospace;
+      font-size: 0.9rem;
+      color: #1696c8;
+      margin: 1rem 0;
+      word-break: break-all;
+    }
+    
+    .error-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 2rem;
+    }
+    
+    .error-button {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.8rem 1.5rem;
+      border: 1px solid rgb(104, 95, 88);
+      color: #1696c8;
+      background-color: #0F0D0E;
+      text-decoration: none;
+      border-radius: 0.5rem;
+      transition: all 0.2s ease;
+      font-size: 1rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    
+    .error-button:hover {
+      background-color: #1a1718;
+      border-color: #1696c8;
+      color: #82a7b6;
+    }
+    
+    .error-button:active {
+      transform: translateY(1px);
+    }
+    
+    .error-button-icon {
+      margin-right: 0.5rem;
+    }
+    
+    .error-footer {
+      margin-top: 3rem;
+      padding-top: 2rem;
+      border-top: 1px solid #3c3b3b;
+      font-size: 0.9rem;
+      color: rgb(104, 95, 88);
+    }
+    
+    .error-footer a {
+      color: #1696c8;
+      text-decoration: none;
+    }
+    
+    .error-footer a:hover {
+      text-decoration: underline;
+    }
+    
+    @media (max-width: 600px) {
+      .error-code {
+        font-size: 4rem;
+      }
+      
+      .error-title {
+        font-size: 1.3rem;
+      }
+      
+      .error-actions {
+        flex-direction: column;
+      }
+      
+      .error-button {
+        width: 100%;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="error-page">
+    <div class="error-code">404</div>
+    <div class="error-title">Page Not Found</div>
+    <div class="error-subtitle">The page you're looking for doesn't exist</div>
+    
+    <div class="error-details">
+      <h3>What happened?</h3>
+      <p>The requested path:</p>
+      <div class="error-path" id="requestedPath">/</div>
+      <p>does not exist. This could happen because:</p>
+      <ul>
+        <li>The page was moved or deleted</li>
+        <li>The URL was mistyped or modified</li>
+        <li>The API endpoint requires specific parameters</li>
+        <li>You followed an outdated link</li>
+      </ul>
+    </div>
+    
+    <div class="error-actions">
+      <a href="/docs" class="error-button">
+        <span class="error-button-icon">📖</span>
+        API Reference
+      </a>
+      <a href="/health" class="error-button">
+        <span class="error-button-icon">💚</span>
+        API Status
+      </a>
+      <a href="/" class="error-button">
+        <span class="error-button-icon">🏠</span>
+        Home
+      </a>
+    </div>
+    
+    <div class="error-footer">
+      <p>&copy; 2026 Mediumroast, Inc. All rights reserved.</p>
+      <p><a href="https://github.com/miha42-github/company_dns" target="_blank">Source Code</a></p>
+    </div>
+  </div>
+  
+  <script>
+    // Insert the requested path into the error message
+    const path = window.location.pathname;
+    document.getElementById('requestedPath').textContent = path;
+    
+    // Update page title with the path
+    document.title = `404 - ${path} Not Found | company_dns`;
+    
+    // Optional: Log to console for debugging
+    console.log(`404 Error: Path "${path}" not found`);
+  </script>
+</body>
+</html>

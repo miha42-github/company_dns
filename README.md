@@ -3,27 +3,35 @@ To enable a more automated approach to gathering information about companies `co
 
 # Changes
 
-## Introducing V3.1.0
-The V3.1.0 release of `company_dns` brings significant UI improvements to enhance usability and functionality:
+## Introducing V3.2.0
+The V3.2.0 release brings **comprehensive security hardening** and modernizes the web framework:
 
-1. Renamed sections to "[Industry Code Explorer](./IndustryCodeExplorer.md)" and "[Query Explorer](./QueryExplorer.md)" for consistent terminology
-2. Fixed cross-browser compatibility issues affecting Chrome and Safari
-3. Improved search results display with horizontal detail layout
-4. Added JSON viewer modal for search results with copy capability
-5. More compact layout for the Query Explorer to maximize screen real estate
-6. Enhanced pagination controls and scroll behavior
-7. Added proper DOCTYPE declaration to ensure modern rendering mode
+### Security Enhancements
+1. **Security Middleware**: Blocks 70+ known attack patterns including WordPress probes, PHP exploits, SQL injection, and XSS attempts
+2. **Rate Limiting**: IP-based rate limiting (100-1000 req/min by endpoint type) using SlowAPI
+3. **Structured Logging**: Severity-based logging with automatic request tracking and performance metrics
+4. **Input Validation**: Pydantic v2.10.0 provides strict request/response validation
 
-These changes improve the overall user experience while maintaining the core functionality of the service.
+### Framework & Architecture
+1. **FastAPI Migration**: Complete replacement of Starlette with modern FastAPI framework
+2. **Automatic API Docs**: Interactive Swagger UI at `/docs` and ReDoc at `/redoc`
+3. **Enhanced Type Safety**: All endpoints use Pydantic models with proper type hints
+4. **Python 3.13 Support**: Tested with Python 3.13 via Homebrew, uses `.venv` convention
 
-## Introducing V3.0.0
-The V3.0.0 release of the `company_dns` is a significant update to the service. The primary changes are:
-1. Shift from Flask to Starlette with Uvicorn.
-2. Automated monthly container builds, from the main branch of the repository, using GitHub Actions.
-3. Simplification of all aspects of the service including code structure, shift towards simpler Docker, and a more streamlined service control script.
-4. Vastly improved embedded help with a query console to test queries.
+### New Dependencies
+- `fastapi>=0.115.0`: Modern ASGI framework with automatic OpenAPI docs
+- `pydantic>=2.10.0`: Data validation and serialization
+- `slowapi>=0.1.9`: Rate limiting for API protection
+- `python-multipart>=0.0.9`: Multipart form data support
 
-We were motivated to make these changes to the service making it easier to improve, maintain and use.
+### Verified Security
+✅ Malicious paths (`/wp-login.php`, `xmlrpc.php`, etc.) return 403 Forbidden  
+✅ SQL injection patterns blocked before reaching business logic  
+✅ XSS attempts filtered at middleware level  
+✅ All endpoints enforce rate limits per IP address
+
+### Previous Releases
+For release notes prior to V3.2.0 (including V3.1.0 and V3.0.0), see the consolidated changelog: [CHANGELOG.md](CHANGELOG.md).
 
 
 # Installation & Setup
@@ -49,31 +57,32 @@ Assuming you have setup access to GitHub and a Linux or MacOS system of some kin
 Since the docker build process takes care of data cache creation, Python requirements installation and other items getting company_dns running is relatively straight forward.  To simplify the process further the `svc_ctl.sh` script is provided.
 
 #### Service Control Script
-`svc_ctl.sh` automates build, run, and log observations for company_dns removing many manual steps.  To start the system follow these steps:
-1. Assuming you've cloned the code into `~/dev/company_dns` run `cd ~/dev/company_dns`
-2. `./svc_ctl.sh build` to build the image
-3. `./svc_ctl.sh foreground` to run the image in the foreground or `svc_ctl.sh start` to run the image in the background
-   
-If the service is running in the background you can run `./svc_ctl.sh tail` to watch the image logs.  Finally, stopping the image when it is running the background can be achieved with `./svc_ctl.sh stop`.
+`svc_ctl.sh` automates build/run/log tasks for company_dns. Common workflows:
+
+1. From `~/dev/company_dns`: `./svc_ctl.sh build` then `./svc_ctl.sh start` (background) or `./svc_ctl.sh foreground` (interactive).
+2. Watch logs: `./svc_ctl.sh tail`.
+3. Stop or kill: `./svc_ctl.sh stop` (graceful) or `./svc_ctl.sh kill` (forceful).
+4. Rebuild and restart: `./svc_ctl.sh rebuild`.
+5. Check status or dependencies: `./svc_ctl.sh status` or `./svc_ctl.sh check-deps`.
+6. Cleanup stopped containers/images: `./svc_ctl.sh cleanup`.
 
 ##### Service control usage information
-Usage for the service control script follows:
 ```
 NAME:
     ./svc_ctl.sh <sub-command>
 
-DESCRIPTION:
-    Control functions to run the company_dns
-
 COMMANDS:
-    help start stop build foreground tail
-
-    help - call up this help text
-    start - start the service using docker-compose 
-    stop - stop the docker service
-    build - build the docker images for the server
-    foreground - run the server in the foreground to watch for output
-    tail - tail the logs for a server running in the background
+    help         - Display help
+    check-deps   - Validate docker and required files
+    start        - Start the service in the background
+    stop         - Stop the running container gracefully
+    kill         - Forcefully stop the running container
+    build        - Build the Docker image
+    rebuild      - Rebuild image and restart the service
+    foreground   - Run the service in the foreground
+    tail         - View logs of the running container
+    status       - Check container status and port
+    cleanup      - Remove stopped containers and dangling images
 ```
 
 ### Without docker

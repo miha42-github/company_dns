@@ -1,16 +1,15 @@
-from starlette.applications import Starlette
-from starlette.responses import JSONResponse, RedirectResponse, FileResponse
-from starlette.routing import Route
-from starlette.routing import Mount
-from starlette.staticfiles import StaticFiles
-from starlette.middleware import Middleware
-from starlette.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi import FastAPI, Path, HTTPException, Request
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from slowapi.errors import RateLimitExceeded
 import uvicorn
 import logging
 import asyncio
 import os
-from pathlib import Path
+from pathlib import Path as PathLib
+from datetime import datetime
 
 from lib.sic import SICQueries
 from lib.edgar import EdgarQueries
@@ -21,153 +20,48 @@ from lib.international_sic import InternationalSICQueries
 from lib.eu_sic import EuSICQueries
 from lib.japan_sic import JapanSICQueries
 from lib.unified_sic import UnifiedSICQueries
-    
-# -------------------------------------------------------------- #
-# BEGIN: Standard Idustry Classification (SIC) database cache functions
-async def sic_description(request):
-    return await _handle_request(request, sq, sq.get_all_sic_by_name, 'sic_desc')
-
-async def sic_code(request):
-    return await _handle_request(request, sq, sq.get_all_sic_by_no, 'sic_code')
-
-async def division_code(request):
-    return await _handle_request(request, sq, sq.get_division_desc_by_id, 'division_code')
-
-async def industry_code(request):
-    return await _handle_request(request, sq, sq.get_all_industry_group_by_no, 'industry_code')
-
-async def major_code(request):
-    return await _handle_request(request, sq, sq.get_all_major_group_by_no, 'major_code')
-# END: Standard Idustry Classification (SIC) database cache functions
-# -------------------------------------------------------------- #
+from lib.security_middleware import security_middleware
+from lib.logging_config import logging_middleware, logger
+from lib.rate_limiter import limiter, rate_limit_error_handler
+from lib.models import (
+    SICResponse, DivisionResponse, UKSICResponse, ISICResponse,
+    EUSICResponse, JapanSICResponse, UnifiedSICResponse,
+    EdgarCIKResponse, EdgarDetailResponse, WikipediaResponse,
+    MergedFirmographicsResponse
+)
 
 # -------------------------------------------------------------- #
-# BEGIN: UK Standard Industry Classification (SIC) database cache functions
-async def uk_sic_description(request):
-    return await _handle_request(request, uksq, uksq.get_uk_sic_by_name, 'uk_sic_desc')
-
-async def uk_sic_code(request):
-    return await _handle_request(request, uksq, uksq.get_uk_sic_by_code, 'uk_sic_code')
-# END: UK Standard Industry Classification (SIC) database cache functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: International Standard Industry Classification (ISIC) database cache functions
-async def international_sic_section(request):
-    return await _handle_request(request, isicsq, isicsq.get_section_by_code, 'section_code')
-
-async def international_sic_division(request):
-    return await _handle_request(request, isicsq, isicsq.get_division_by_code, 'division_code')
-
-async def international_sic_group(request):
-    return await _handle_request(request, isicsq, isicsq.get_group_by_code, 'group_code')
-
-async def international_sic_class(request):
-    return await _handle_request(request, isicsq, isicsq.get_class_by_code, 'class_code')
-
-async def international_sic_class_description(request):
-    return await _handle_request(request, isicsq, isicsq.get_class_by_description, 'class_desc')
-# END: International Standard Industry Classification (ISIC) database cache functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: EU Standard Industry Classification (NACE) database cache functions
-async def eu_sic_section(request):
-    return await _handle_request(request, eusicsq, eusicsq.get_section_by_code, 'section_code')
-
-async def eu_sic_division(request):
-    return await _handle_request(request, eusicsq, eusicsq.get_division_by_code, 'division_code')
-
-async def eu_sic_group(request):
-    return await _handle_request(request, eusicsq, eusicsq.get_group_by_code, 'group_code')
-
-async def eu_sic_class(request):
-    return await _handle_request(request, eusicsq, eusicsq.get_class_by_code, 'class_code')
-
-async def eu_sic_class_description(request):
-    return await _handle_request(request, eusicsq, eusicsq.get_class_by_description, 'class_desc')
-# END: EU Standard Industry Classification (NACE) database cache functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: Japan Standard Industry Classification database cache functions
-async def japan_sic_division(request):
-    return await _handle_request(request, japansicsq, japansicsq.get_division_by_code, 'division_code')
-
-async def japan_sic_major_group(request):
-    return await _handle_request(request, japansicsq, japansicsq.get_major_group_by_code, 'major_group_code')
-
-async def japan_sic_group(request):
-    return await _handle_request(request, japansicsq, japansicsq.get_group_by_code, 'group_code')
-
-async def japan_sic_industry_group(request):
-    return await _handle_request(request, japansicsq, japansicsq.get_industry_group_by_code, 'industry_code')
-
-async def japan_sic_industry_group_description(request):
-    return await _handle_request(request, japansicsq, japansicsq.get_industry_group_by_description, 'industry_desc')
-# END: Japan Standard Industry Classification database cache functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: Unified Standard Industry Classification database cache functions
-async def unified_sic_description(request):
-    return await _handle_request(request, unified_sic_q, unified_sic_q.search_all_descriptions, 'query_string')
-
-# END: Unified Standard Industry Classification database cache functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: EDGAR dabase cache functions
-async def edgar_detail(request):
-    return await _handle_request(request, eq, eq.get_all_details, 'company_name')
-
-async def edgar_summary(request):
-    return await _handle_request(request, eq, eq.get_all_details, 'company_name', firmographics=False)
-
-async def edgar_ciks(request):
-    return await _handle_request(request, eq, eq.get_all_ciks, 'company_name')
-
-async def edgar_firmographics(request):
-    return await _handle_request(request, eq, eq.get_firmographics, 'cik_no')
-# END: EDGAR dabase cache functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: Wikipedia functions
-async def wikipedia_firmographics(request):
-    return await _handle_request(request, wq, wq.get_firmographics, 'company_name')
-# END: Wikipedia functions
-# -------------------------------------------------------------- #
-
-# -------------------------------------------------------------- #
-# BEGIN: General query functions
-# 
-async def general_query(request):
-    return await _handle_request(request, gq, gq.get_firmographics, 'company_name')
-
-# END: General query functions
+# BEGIN: Define query objects
+sq = SICQueries()
+eq = EdgarQueries()
+wq = WikipediaQueries()
+gq = GeneralQueries()
+uksq = UKSICQueries()
+isicsq = InternationalSICQueries()
+eusicsq = EuSICQueries()
+japansicsq = JapanSICQueries()
+unified_sic_q = UnifiedSICQueries()
+# END: Define query objects
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
 # BEGIN: Helper functions
-# TODO: This function may not be needed as it is and the code could be moved into _handle_request.  Essentially we're checking for a 200 status code and returning the data that includes the error message.  The change would likely be to log the error message and return the data as is.  This would mean this funtion would be removed.
 def _check_status_and_return(result_data, resource_name):
+    """Check status code and return appropriate response"""
     return_code = result_data.get('code')
     result_count = result_data.get('total')
     return_msg = result_data.get('message')
     if return_code != 200:
-        # Log the error message
         logger.error(f'There were [{result_count}] results for resource [{resource_name}].')
-        # Return an error message that the data was not found using the resource name
-        return {'message': return_msg, 'code': return_code, 'data': result_data}
+        raise HTTPException(
+            status_code=return_code,
+            detail=return_msg or f"Error retrieving {resource_name}"
+        )
     return result_data
 
-def _prepare_logging(log_level=logging.INFO):
-    logging.basicConfig(format='%(levelname)s:\t%(asctime)s [module: %(name)s] %(message)s', level=log_level)
-    return logging.getLogger(__file__)
-
-async def _handle_request(request, handler, func, path_param, *args, **kwargs):
-    handler.query = request.path_params.get(path_param)
+async def _handle_request(handler, func, query_value, *args, **kwargs):
+    """Generic request handler for all endpoints"""
+    handler.query = query_value
     
     # If the function is async, await it, otherwise call it directly
     if asyncio.iscoroutinefunction(func):
@@ -175,183 +69,481 @@ async def _handle_request(request, handler, func, path_param, *args, **kwargs):
     else:
         data = func(*args, **kwargs)
         
-    checked_data = _check_status_and_return(data, path_param)
-    if 'error' in checked_data:
-        return JSONResponse(checked_data, status_code=checked_data['code'])
-    return JSONResponse(data)
+    checked_data = _check_status_and_return(data, query_value)
+    return checked_data
+
+def get_abs_path(relative_path):
+    """Convert relative paths to absolute paths based on script location"""
+    base_dir = PathLib(__file__).resolve().parent
+    return os.path.join(base_dir, relative_path)
 # END: Helper functions
 # -------------------------------------------------------------- #
 
 # -------------------------------------------------------------- #
-# BEGIN: Define query objects
-global sq
-sq = SICQueries()
+# BEGIN: Initialize FastAPI app
+app = FastAPI(
+    title="company_dns API",
+    description="Company firmographics and SIC code lookup service",
+    version="3.2.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+)
 
-global eq
-eq = EdgarQueries()
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+    allow_credentials=True,
+    expose_headers=["Content-Type", "X-Custom-Header"]
+)
 
-global wq
-wq = WikipediaQueries()
+# Add security middleware
+app.middleware("http")(security_middleware)
 
-global gq
-gq = GeneralQueries()
+# Add logging middleware
+app.middleware("http")(logging_middleware)
 
-global uksq
-uksq = UKSICQueries()
+# Add rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, rate_limit_error_handler)
 
-global isicsq
-isicsq = InternationalSICQueries()
-
-global eusicsq 
-eusicsq = EuSICQueries()
-
-global japansicsq
-japansicsq = JapanSICQueries()
-
-global unified_sic_q
-unified_sic_q = UnifiedSICQueries()
-# END: Define query objects
-# -------------------------------------------------------------- #
-
-
-# -------------------------------------------------------------- #
-# BEGIN: Define the Starlette app
-class CatchAllMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        response = await call_next(request)
-        
-        # Only redirect API 404s to help, not static content 404s
-        if response.status_code == 404 and not request.url.path.startswith(('/static', '/help')):
-            return RedirectResponse(url='/help')
-            
-        return response
-
-middleware = [
-    Middleware(CatchAllMiddleware),
-    Middleware(
-        CORSMiddleware, 
-        allow_origins=["*"],
-        allow_methods=["GET", "POST", "OPTIONS"],
-        allow_headers=["*"],
-        allow_credentials=True,
-        expose_headers=["Content-Type", "X-Custom-Header"]
-    )
-]
-
-global logger
-logger = _prepare_logging()
-
-# Add this function to handle the root route
-async def homepage(request):
-    """Serve the index.html from the root URL"""
-    return RedirectResponse(url='/help')
-
-# Add this function to get absolute paths
-def get_abs_path(relative_path):
-    """Convert relative paths to absolute paths based on script location"""
-    base_dir = Path(__file__).resolve().parent
-    return os.path.join(base_dir, relative_path)
-
-app = Starlette(debug=True, middleware=middleware, routes=[
-    # Add a direct route for the root URL
-    Route('/', homepage),
+# Add custom 404 handler for HTTPExceptions
+@app.exception_handler(StarletteHTTPException)
+async def not_found_handler(request: Request, exc: StarletteHTTPException):
+    # Only handle 404 errors
+    if exc.status_code != 404:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail}
+        )
     
-    # -------------------------------------------------------------- #
-    # SIC endpoints for V2.0
-    Route('/V2.0/sic/description/{sic_desc}', sic_description),
-    Route('/V2.0/sic/code/{sic_code}', sic_code),
-    Route('/V2.0/sic/division/{division_code}', division_code),
-    Route('/V2.0/sic/industry/{industry_code}', industry_code),
-    Route('/V2.0/sic/major/{major_code}', major_code),
-
-    # SIC endpoints for V3.0
-    Route('/V3.0/na/sic/description/{sic_desc}', sic_description),
-    Route('/V3.0/na/sic/code/{sic_code}', sic_code),
-    Route('/V3.0/na/sic/division/{division_code}', division_code),
-    Route('/V3.0/na/sic/industry/{industry_code}', industry_code),
-    Route('/V3.0/na/sic/major/{major_code}', major_code),
-    # -------------------------------------------------------------- #
-
-    # -------------------------------------------------------------- #
-    # EDGAR endpoints for V2.0
-    Route('/V2.0/companies/edgar/detail/{company_name}', edgar_detail),
-    Route('/V2.0/companies/edgar/summary/{company_name}', edgar_summary),
-    Route('/V2.0/companies/edgar/ciks/{company_name}', edgar_ciks),
-    Route('/V2.0/company/edgar/firmographics/{cik_no}', edgar_firmographics),
-
-    # EDGAR endpoints for V3.0
-    Route('/V3.0/na/companies/edgar/detail/{company_name}', edgar_detail),
-    Route('/V3.0/na/companies/edgar/summary/{company_name}', edgar_summary),
-    Route('/V3.0/na/companies/edgar/ciks/{company_name}', edgar_ciks),
-    Route('/V3.0/na/company/edgar/firmographics/{cik_no}', edgar_firmographics),
-    # -------------------------------------------------------------- #
-
-    # -------------------------------------------------------------- #
-    # Wikipedia endpoints for V2.0
-    Route('/V2.0/company/wikipedia/firmographics/{company_name}', wikipedia_firmographics),
-
-    # Wikipedia endpoints for V3.0
-    Route('/V3.0/global/company/wikipedia/firmographics/{company_name}', wikipedia_firmographics),
-    # -------------------------------------------------------------- #
-
-    # -------------------------------------------------------------- #
-    # General query endpoint for V2.0
-    Route('/V2.0/company/merged/firmographics/{company_name}', general_query),
-
-    # General query endpoint for V3.0
-    Route('/V3.0/global/company/merged/firmographics/{company_name}', general_query),
-    # -------------------------------------------------------------- #
-
-    # -------------------------------------------------------------- #
-    # UK SIC endpoints
-    Route('/V3.0/uk/sic/description/{uk_sic_desc}', uk_sic_description),
-    Route('/V3.0/uk/sic/code/{uk_sic_code}', uk_sic_code),
-    # -------------------------------------------------------------- #
-
-    # -------------------------------------------------------------- #
-    # International SIC endpoints
-    Route('/V3.0/international/sic/section/{section_code}', international_sic_section),
-    Route('/V3.0/international/sic/division/{division_code}', international_sic_division),
-    Route('/V3.0/international/sic/group/{group_code}', international_sic_group),
-    Route('/V3.0/international/sic/class/{class_code}', international_sic_class),
-    Route('/V3.0/international/sic/description/{class_desc}', international_sic_class_description),
-    # -------------------------------------------------------------- #
-
-     # -------------------------------------------------------------- #
-    # EU SIC endpoints
-    Route('/V3.0/eu/sic/section/{section_code}', eu_sic_section),
-    Route('/V3.0/eu/sic/division/{division_code}', eu_sic_division),
-    Route('/V3.0/eu/sic/group/{group_code}', eu_sic_group),
-    Route('/V3.0/eu/sic/class/{class_code}', eu_sic_class),
-    Route('/V3.0/eu/sic/description/{class_desc}', eu_sic_class_description),
-    # -------------------------------------------------------------- #
-
-
-    # -------------------------------------------------------------- #
-    # Japan SIC endpoints
-    Route('/V3.0/japan/sic/division/{division_code}', japan_sic_division),
-    Route('/V3.0/japan/sic/major_group/{major_group_code}', japan_sic_major_group),
-    Route('/V3.0/japan/sic/group/{group_code}', japan_sic_group),
-    Route('/V3.0/japan/sic/industry_group/{industry_code}', japan_sic_industry_group),
-    Route('/V3.0/japan/sic/description/{industry_desc}', japan_sic_industry_group_description),
-    # -------------------------------------------------------------- #
-
-
-    # -------------------------------------------------------------- #
-    # Unified SIC endpoints
-    Route('/V3.0/global/sic/description/{query_string}', unified_sic_description),
-    # -------------------------------------------------------------- #
-
-
-    # Serve the local directory ./html at the /help
-    Mount('/help', app=StaticFiles(directory=get_abs_path('html'), html=True)),
-    # Serve static files for direct asset access
-    Mount('/static', app=StaticFiles(directory=get_abs_path('html'))),
-])
-# END: Define the Starlette app
+    # Check Accept header to determine response format
+    accept_header = request.headers.get("accept", "").lower()
+    
+    # If browser requests HTML, serve custom 404 page
+    if "text/html" in accept_header:
+        try:
+            with open(get_abs_path('html/404.html'), 'r') as f:
+                html_content = f.read()
+            return HTMLResponse(
+                content=html_content,
+                status_code=404
+            )
+        except Exception as e:
+            logger.error(f"Failed to serve custom 404 page: {e}")
+            # Fallback to JSON if file not found
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "detail": "Endpoint not found",
+                    "code": 404,
+                    "path": str(request.url.path),
+                    "help": "Visit /docs for API documentation"
+                }
+            )
+    
+    # Otherwise return JSON for API clients
+    return JSONResponse(
+        status_code=404,
+        content={
+            "detail": "Endpoint not found",
+            "code": 404,
+            "path": str(request.url.path),
+            "help": "Visit /docs for API documentation"
+        }
+    )
+# END: Initialize FastAPI app
 # -------------------------------------------------------------- #
 
+# -------------------------------------------------------------- #
+# BEGIN: Standard Industry Classification (SIC) database cache functions
+@app.get(
+    "/V2.0/sic/description/{sic_desc}",
+    response_model=SICResponse,
+    tags=["SIC - US (V2.0)"],
+    summary="Get SIC codes by description"
+)
+@app.get(
+    "/V3.0/na/sic/description/{sic_desc}",
+    response_model=SICResponse,
+    tags=["SIC - US (V3.0)"],
+    summary="Get SIC codes by description"
+)
+async def sic_description(sic_desc: str = Path(..., min_length=2, description="SIC description to search")):
+    return await _handle_request(sq, sq.get_all_sic_by_name, sic_desc)
 
+@app.get(
+    "/V2.0/sic/code/{sic_code}",
+    response_model=SICResponse,
+    tags=["SIC - US (V2.0)"],
+    summary="Get SIC by code"
+)
+@app.get(
+    "/V3.0/na/sic/code/{sic_code}",
+    response_model=SICResponse,
+    tags=["SIC - US (V3.0)"],
+    summary="Get SIC by code"
+)
+async def sic_code(sic_code: str = Path(..., description="SIC code number")):
+    return await _handle_request(sq, sq.get_all_sic_by_no, sic_code)
+
+@app.get(
+    "/V2.0/sic/division/{division_code}",
+    response_model=DivisionResponse,
+    tags=["SIC - US (V2.0)"],
+    summary="Get division by code"
+)
+@app.get(
+    "/V3.0/na/sic/division/{division_code}",
+    response_model=DivisionResponse,
+    tags=["SIC - US (V3.0)"],
+    summary="Get division by code"
+)
+async def division_code(division_code: str = Path(..., description="Division code")):
+    return await _handle_request(sq, sq.get_division_desc_by_id, division_code)
+
+@app.get(
+    "/V2.0/sic/industry/{industry_code}",
+    response_model=SICResponse,
+    tags=["SIC - US (V2.0)"],
+    summary="Get industry group by code"
+)
+@app.get(
+    "/V3.0/na/sic/industry/{industry_code}",
+    response_model=SICResponse,
+    tags=["SIC - US (V3.0)"],
+    summary="Get industry group by code"
+)
+async def industry_code(industry_code: str = Path(..., description="Industry code")):
+    return await _handle_request(sq, sq.get_all_industry_group_by_no, industry_code)
+
+@app.get(
+    "/V2.0/sic/major/{major_code}",
+    response_model=SICResponse,
+    tags=["SIC - US (V2.0)"],
+    summary="Get major group by code"
+)
+@app.get(
+    "/V3.0/na/sic/major/{major_code}",
+    response_model=SICResponse,
+    tags=["SIC - US (V3.0)"],
+    summary="Get major group by code"
+)
+async def major_code(major_code: str = Path(..., description="Major group code")):
+    return await _handle_request(sq, sq.get_all_major_group_by_no, major_code)
+# END: Standard Industry Classification (SIC) database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: UK Standard Industry Classification (SIC) database cache functions
+@app.get(
+    "/V3.0/uk/sic/description/{uk_sic_desc}",
+    response_model=UKSICResponse,
+    tags=["SIC - UK (V3.0)"],
+    summary="Get UK SIC by description"
+)
+async def uk_sic_description(uk_sic_desc: str = Path(..., min_length=2, description="UK SIC description")):
+    return await _handle_request(uksq, uksq.get_uk_sic_by_name, uk_sic_desc)
+
+@app.get(
+    "/V3.0/uk/sic/code/{uk_sic_code}",
+    response_model=UKSICResponse,
+    tags=["SIC - UK (V3.0)"],
+    summary="Get UK SIC by code"
+)
+async def uk_sic_code(uk_sic_code: str = Path(..., description="UK SIC code")):
+    return await _handle_request(uksq, uksq.get_uk_sic_by_code, uk_sic_code)
+# END: UK Standard Industry Classification (SIC) database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: International Standard Industry Classification (ISIC) database cache functions
+@app.get(
+    "/V3.0/international/sic/section/{section_code}",
+    response_model=ISICResponse,
+    tags=["SIC - International (V3.0)"],
+    summary="Get ISIC section by code"
+)
+async def international_sic_section(section_code: str = Path(..., description="ISIC section code")):
+    return await _handle_request(isicsq, isicsq.get_section_by_code, section_code)
+
+@app.get(
+    "/V3.0/international/sic/division/{division_code}",
+    response_model=ISICResponse,
+    tags=["SIC - International (V3.0)"],
+    summary="Get ISIC division by code"
+)
+async def international_sic_division(division_code: str = Path(..., description="Division code")):
+    return await _handle_request(isicsq, isicsq.get_division_by_code, division_code)
+
+@app.get(
+    "/V3.0/international/sic/group/{group_code}",
+    response_model=ISICResponse,
+    tags=["SIC - International (V3.0)"],
+    summary="Get ISIC group by code"
+)
+async def international_sic_group(group_code: str = Path(..., description="Group code")):
+    return await _handle_request(isicsq, isicsq.get_group_by_code, group_code)
+
+@app.get(
+    "/V3.0/international/sic/class/{class_code}",
+    response_model=ISICResponse,
+    tags=["SIC - International (V3.0)"],
+    summary="Get ISIC class by code"
+)
+async def international_sic_class(class_code: str = Path(..., description="ISIC class code")):
+    return await _handle_request(isicsq, isicsq.get_class_by_code, class_code)
+
+@app.get(
+    "/V3.0/international/sic/description/{class_desc}",
+    response_model=ISICResponse,
+    tags=["SIC - International (V3.0)"],
+    summary="Get ISIC by description"
+)
+async def international_sic_class_description(class_desc: str = Path(..., min_length=2, description="Industry description")):
+    return await _handle_request(isicsq, isicsq.get_class_by_description, class_desc)
+# END: International Standard Industry Classification (ISIC) database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: EU Standard Industry Classification (NACE) database cache functions
+@app.get(
+    "/V3.0/eu/sic/section/{section_code}",
+    response_model=EUSICResponse,
+    tags=["SIC - EU/NACE (V3.0)"],
+    summary="Get EU NACE section by code"
+)
+async def eu_sic_section(section_code: str = Path(..., description="NACE section code")):
+    return await _handle_request(eusicsq, eusicsq.get_section_by_code, section_code)
+
+@app.get(
+    "/V3.0/eu/sic/division/{division_code}",
+    response_model=EUSICResponse,
+    tags=["SIC - EU/NACE (V3.0)"],
+    summary="Get EU NACE division by code"
+)
+async def eu_sic_division(division_code: str = Path(..., description="EU NACE division code")):
+    return await _handle_request(eusicsq, eusicsq.get_division_by_code, division_code)
+
+@app.get(
+    "/V3.0/eu/sic/group/{group_code}",
+    response_model=EUSICResponse,
+    tags=["SIC - EU/NACE (V3.0)"],
+    summary="Get EU NACE group by code"
+)
+async def eu_sic_group(group_code: str = Path(..., description="NACE group code")):
+    return await _handle_request(eusicsq, eusicsq.get_group_by_code, group_code)
+
+@app.get(
+    "/V3.0/eu/sic/class/{class_code}",
+    response_model=EUSICResponse,
+    tags=["SIC - EU/NACE (V3.0)"],
+    summary="Get EU NACE by class code"
+)
+async def eu_sic_class(class_code: str = Path(..., description="NACE class code")):
+    return await _handle_request(eusicsq, eusicsq.get_class_by_code, class_code)
+
+@app.get(
+    "/V3.0/eu/sic/description/{class_desc}",
+    response_model=EUSICResponse,
+    tags=["SIC - EU/NACE (V3.0)"],
+    summary="Get EU NACE by description"
+)
+async def eu_sic_class_description(class_desc: str = Path(..., min_length=2, description="Class description")):
+    return await _handle_request(eusicsq, eusicsq.get_class_by_description, class_desc)
+# END: EU Standard Industry Classification (NACE) database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: Japan Standard Industry Classification database cache functions
+@app.get(
+    "/V3.0/japan/sic/division/{division_code}",
+    response_model=JapanSICResponse,
+    tags=["SIC - Japan (V3.0)"],
+    summary="Get Japan SIC division by code"
+)
+async def japan_sic_division(division_code: str = Path(..., description="Division code")):
+    return await _handle_request(japansicsq, japansicsq.get_division_by_code, division_code)
+
+@app.get(
+    "/V3.0/japan/sic/major_group/{major_group_code}",
+    response_model=JapanSICResponse,
+    tags=["SIC - Japan (V3.0)"],
+    summary="Get Japan SIC major group by code"
+)
+async def japan_sic_major_group(major_group_code: str = Path(..., description="Major group code")):
+    return await _handle_request(japansicsq, japansicsq.get_major_group_by_code, major_group_code)
+
+@app.get(
+    "/V3.0/japan/sic/group/{group_code}",
+    response_model=JapanSICResponse,
+    tags=["SIC - Japan (V3.0)"],
+    summary="Get Japan SIC group by code"
+)
+async def japan_sic_group(group_code: str = Path(..., description="Group code")):
+    return await _handle_request(japansicsq, japansicsq.get_group_by_code, group_code)
+
+@app.get(
+    "/V3.0/japan/sic/industry_group/{industry_code}",
+    response_model=JapanSICResponse,
+    tags=["SIC - Japan (V3.0)"],
+    summary="Get Japan SIC industry group by code"
+)
+async def japan_sic_industry_group(industry_code: str = Path(..., description="Industry code")):
+    return await _handle_request(japansicsq, japansicsq.get_industry_group_by_code, industry_code)
+
+@app.get(
+    "/V3.0/japan/sic/description/{industry_desc}",
+    response_model=JapanSICResponse,
+    tags=["SIC - Japan (V3.0)"],
+    summary="Get Japan SIC industry by description"
+)
+async def japan_sic_industry_group_description(industry_desc: str = Path(..., min_length=2, description="Industry description")):
+    return await _handle_request(japansicsq, japansicsq.get_industry_group_by_description, industry_desc)
+# END: Japan Standard Industry Classification database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: Unified Standard Industry Classification database cache functions
+@app.get(
+    "/V3.0/global/sic/description/{query_string}",
+    response_model=UnifiedSICResponse,
+    tags=["SIC - Unified Global (V3.0)"],
+    summary="Search all SIC systems by description"
+)
+async def unified_sic_description(query_string: str = Path(..., min_length=2, description="Search query across all SIC systems")):
+    return await _handle_request(unified_sic_q, unified_sic_q.search_all_descriptions, query_string)
+# END: Unified Standard Industry Classification database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: EDGAR database cache functions
+@app.get(
+    "/V2.0/companies/edgar/detail/{company_name}",
+    response_model=EdgarDetailResponse,
+    tags=["EDGAR (V2.0)"],
+    summary="Get detailed EDGAR company information"
+)
+@app.get(
+    "/V3.0/na/companies/edgar/detail/{company_name}",
+    response_model=EdgarDetailResponse,
+    tags=["EDGAR (V3.0)"],
+    summary="Get detailed EDGAR company information"
+)
+async def edgar_detail(company_name: str = Path(..., min_length=1, description="Company name to search")):
+    return await _handle_request(eq, eq.get_all_details, company_name)
+
+@app.get(
+    "/V2.0/companies/edgar/summary/{company_name}",
+    response_model=EdgarDetailResponse,
+    tags=["EDGAR (V2.0)"],
+    summary="Get EDGAR company summary"
+)
+@app.get(
+    "/V3.0/na/companies/edgar/summary/{company_name}",
+    response_model=EdgarDetailResponse,
+    tags=["EDGAR (V3.0)"],
+    summary="Get EDGAR company summary"
+)
+async def edgar_summary(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(eq, eq.get_all_details, company_name, firmographics=False)
+
+@app.get(
+    "/V2.0/companies/edgar/ciks/{company_name}",
+    response_model=EdgarCIKResponse,
+    tags=["EDGAR (V2.0)"],
+    summary="Get CIK numbers for company"
+)
+@app.get(
+    "/V3.0/na/companies/edgar/ciks/{company_name}",
+    response_model=EdgarCIKResponse,
+    tags=["EDGAR (V3.0)"],
+    summary="Get CIK numbers for company"
+)
+async def edgar_ciks(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(eq, eq.get_all_ciks, company_name)
+
+@app.get(
+    "/V2.0/company/edgar/firmographics/{cik_no}",
+    response_model=EdgarDetailResponse,
+    tags=["EDGAR (V2.0)"],
+    summary="Get firmographics by CIK number"
+)
+@app.get(
+    "/V3.0/na/company/edgar/firmographics/{cik_no}",
+    response_model=EdgarDetailResponse,
+    tags=["EDGAR (V3.0)"],
+    summary="Get firmographics by CIK number"
+)
+async def edgar_firmographics(cik_no: str = Path(..., description="10-digit CIK number")):
+    return await _handle_request(eq, eq.get_firmographics, cik_no)
+# END: EDGAR database cache functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: Wikipedia functions
+@app.get(
+    "/V2.0/company/wikipedia/firmographics/{company_name}",
+    response_model=WikipediaResponse,
+    tags=["Wikipedia (V2.0)"],
+    summary="Get company firmographics from Wikipedia"
+)
+@app.get(
+    "/V3.0/global/company/wikipedia/firmographics/{company_name}",
+    response_model=WikipediaResponse,
+    tags=["Wikipedia (V3.0)"],
+    summary="Get company firmographics from Wikipedia"
+)
+async def wikipedia_firmographics(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(wq, wq.get_firmographics, company_name)
+# END: Wikipedia functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: General query functions (merged data from all sources)
+@app.get(
+    "/V2.0/company/merged/firmographics/{company_name}",
+    response_model=MergedFirmographicsResponse,
+    tags=["Merged Data (V2.0)"],
+    summary="Get merged firmographics from all sources"
+)
+@app.get(
+    "/V3.0/global/company/merged/firmographics/{company_name}",
+    response_model=MergedFirmographicsResponse,
+    tags=["Merged Data (V3.0)"],
+    summary="Get merged firmographics from all sources"
+)
+async def general_query(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(gq, gq.get_firmographics, company_name)
+# END: General query functions
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: Utility endpoints
+@app.get("/", include_in_schema=False)
+async def root():
+    """Serve the main UI"""
+    return FileResponse(get_abs_path('html/index.html'))
+
+@app.get("/health", tags=["System"])
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "version": "3.2.0",
+        "timestamp": datetime.utcnow().isoformat() + "Z"
+    }
+# END: Utility endpoints
+# -------------------------------------------------------------- #
+
+# -------------------------------------------------------------- #
+# BEGIN: Mount static files
+# Serve static assets (CSS, JS, etc.)
+app.mount("/static", StaticFiles(directory=get_abs_path('html')), name="static")
+# -------------------------------------------------------------- #
 
 if __name__ == "__main__": 
     try:

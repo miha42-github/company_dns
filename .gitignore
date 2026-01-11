@@ -58,3 +58,6 @@ logs/
 *.local.yml
 *.local.yaml
 .env
+
+# tmp
+tmp/
