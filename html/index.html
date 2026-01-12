@@ -7,6 +7,7 @@
   <script src="/static/js/functions.js"></script>
   <script src="/static/js/api-service.js"></script>
   <script src="/static/js/global-search-alpine.js"></script>
+  <script src="/static/js/edgar-explorer-alpine.js"></script>
   <script defer src="/static/js/alpine.min.js"></script>
   <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
@@ -16,18 +17,19 @@
     <!-- Fixed header section -->
     <header class="page-header">
       <div class="menu">
+        <button class="tabmenu" onclick="openTab(event, 'Home', 'help-pagecontent', 'tabmenu')">Home</button>
         <button class="tabmenu" onclick="openTab(event, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu')">Industry Classification Explorer</button>
-        <button class="tabmenu" onclick="openTab(event, 'Help', 'help-pagecontent', 'tabmenu')">Help & Documentation</button>
+        <button class="tabmenu" onclick="openTab(event, 'EdgarExplorer', 'explorer-pagecontent', 'tabmenu')">EDGAR Explorer</button>
         <a href="/docs" target="_blank" class="tabmenu" style="color: inherit; padding: 0.8rem 0.9rem; float: left;">API Reference</a>
       </div>
     </header>
 
     <!-- Scrollable main content area -->
     <main class="page-content">
-      <!-- Help Tab Content -->
-      <div id="Help" class="help-pagecontent">
+      <!-- Home Tab Content -->
+      <div id="Home" class="help-pagecontent">
         <div class="help-container">
-          <h1>Help for the company_dns</h1>
+          <h1>Introduction to the company_dns</h1>
           
           <div class="help-intro">
             <p>
@@ -60,10 +62,10 @@
           
           <div class="help-tabs-wrapper">
             <div class="help-tabs">
-              <button class="help-tab-button active" onclick="openHelpTab(event, 'help-overview')">Overview</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Classification Explorer</button>
-              <button class="help-tab-button" onclick="openHelpTab(event, 'help-examples')">Code Examples</button>
+              <button class="help-tab-button active" data-help-tab="help-overview" onclick="openHelpTab(event, 'help-overview')">Overview</button>
+              <button class="help-tab-button" data-help-tab="help-api-docs" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
+              <button class="help-tab-button" data-help-tab="help-explorer-help" onclick="openHelpTab(event, 'help-explorer-help')">Industry Classification Explorer</button>
+              <button class="help-tab-button" data-help-tab="help-edgar-explorer" onclick="openHelpTab(event, 'help-edgar-explorer')">EDGAR Explorer</button>
             </div>
             
             <!-- Overview Tab -->
@@ -132,10 +134,9 @@
                   which provides real-time request/response testing, automatic schema validation, and detailed documentation.
                 </p>
                 <p>
-                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">Visit the API Reference →</a>
-                </p>
-                <p style="font-size: 0.9rem; color: rgb(104, 95, 88);">
-                  Also available: <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">Alternative ReDoc format →</a>
+                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">[OpenAPI format]</a>
+                  &nbsp;|&nbsp;
+                  <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">[ReDoc format]</a>
                 </p>
               </div>
               
@@ -188,7 +189,15 @@
                 <div class="help-step">
                   <h4>Step 1: Enter a Search Term</h4>
                   <p>Enter an industry keyword in the search box (e.g., "oil", "manufacturing", "retail").</p>
-                  <img src="/static/search_explorer.png" alt="Search input example" class="help-image">
+                  <div class="help-example-queries">
+                    <h5>Example Searches:</h5>
+                    <ul>
+                      <li><code>oil</code></li>
+                      <li><code>computer</code></li>
+                      <li><code>retail</code></li>
+                      <li><code>manufacturing</code></li>
+                    </ul>
+                  </div>
                 </div>
                 
                 <div class="help-step">
@@ -221,189 +230,73 @@
               </div>
             </div>
             
-            <!-- Query Console Tab -->
-            <div id="help-query-help" class="help-tab-content">
-              <h2>Using the Query Explorer</h2>
+            <!-- EDGAR Explorer Tab -->
+            <div id="help-edgar-explorer" class="help-tab-content">
+              <h2>Using the EDGAR Explorer</h2>
               
               <p>
-                The Query Explorer provides a user-friendly interface to test API endpoints without writing code.
-                This is useful for exploring available data and testing queries before implementing them in your application.
+                The EDGAR Explorer provides a powerful interface to search SEC EDGAR filings by company name or CIK. 
+                It allows you to discover and explore annual reports (10-K) and quarterly reports (10-Q) filed with the SEC.
               </p>
               
               <div class="help-feature-walkthrough">
                 <div class="help-step">
-                  <h4>Step 1: Select Host</h4>
-                  <p>Choose between a local instance (<code>localhost:8000</code>) or the Mediumroast hosted instance (<code>company-dns.mediumroast.io</code>).</p>
-                </div>
-                
-                <div class="help-step">
-                  <h4>Step 2: Select Endpoint</h4>
-                  <p>Choose the API endpoint you want to query from the dropdown menu.</p>
-                </div>
-                
-                <div class="help-step">
-                  <h4>Step 3: Enter Query</h4>
-                  <p>Enter your search term or identifier in the query field.</p>
+                  <h4>Step 1: Search for a Company</h4>
+                  <p>Enter a company name (e.g., IBM, Apple) or a CIK number (e.g., 0000051143) in the search field.</p>
                   <div class="help-example-queries">
-                    <h5>Example Queries:</h5>
+                    <h5>Example Searches:</h5>
                     <ul>
-                      <li>Company name: <code>IBM</code>, <code>Apple</code>, <code>Google</code></li>
-                      <li>Industry keyword: <code>oil</code>, <code>manufacturing</code>, <code>retail</code></li>
-                      <li>SIC code: <code>7371</code>, <code>2911</code></li>
+                      <li>Company name: <code>IBM</code>, <code>Apple</code>, <code>Microsoft</code></li>
+                      <li>CIK: <code>0000051143</code>, <code>0000789019</code></li>
                     </ul>
                   </div>
                 </div>
                 
                 <div class="help-step">
-                  <h4>Step 4: View Results</h4>
-                  <p>The query URL and JSON response will appear below the form.</p>
+                  <h4>Step 2: Apply Filters (Optional)</h4>
+                  <p>Use the sidebar filters to narrow your results:</p>
+                  <ul>
+                    <li><strong>Has 10‑K</strong> — Show only companies with annual report filings</li>
+                    <li><strong>Recent 10‑Q</strong> — Show only quarterly reports filed within the last 90 days</li>
+                    <li><strong>Division</strong> — Filter by SIC division (dynamically populated from results)</li>
+                    <li><strong>Fiscal Year End</strong> — Filter by fiscal year end date (MM/YY format)</li>
+                  </ul>
                 </div>
+                
+                <div class="help-step">
+                  <h4>Step 3: Review Company Information</h4>
+                  <p>Results display comprehensive company data including:</p>
+                  <ul>
+                    <li>Company name and CIK</li>
+                    <li>SIC code and description</li>
+                    <li>Division classification</li>
+                    <li>Ticker symbol and exchange</li>
+                    <li>Fiscal year end</li>
+                    <li>Location (city, state, address)</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 4: Access Filings</h4>
+                  <p>Click the 10‑K or 10‑Q buttons to access the latest filings. The buttons display:</p>
+                  <ul>
+                    <li><code>10‑K • YYYY-MM-DD</code> — Latest annual report with filing date</li>
+                    <li><code>10‑Q • YYYY-MM-DD</code> — Latest quarterly report; highlighted if filed within 90 days</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 5: View Raw Data</h4>
+                  <p>Click <strong>View JSON</strong> in the top-right to see the raw API response for any filing result.</p>
+                </div>
+              </div>
+              
+              <div class="help-tip-box">
+                <strong>Pro Tip:</strong> Use broad company names for initial searches. For example, search for "Apple" instead of "Apple Inc." 
+                to get comprehensive results across different filings and entities.
               </div>
             </div>
             
-            <!-- Code Examples Tab -->
-            <div id="help-examples" class="help-tab-content">
-              <h2>Code Examples</h2>
-              
-              <div class="help-code-examples">
-                <div class="help-code-example">
-                  <h3>Using curl</h3>
-                  
-                  <div class="help-example">
-                    <h4>Get Company Information (US)</h4>
-                    <div class="help-code-container">
-                      <pre><code>curl http://localhost:8000/V3.0/na/company/merged/firmographics/IBM</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="help-example">
-                    <h4>Search US SIC Descriptions</h4>
-                    <div class="help-code-container">
-                      <
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="help-example">
-                    <h4>Search EU NACE Descriptions</h4>
-                    <div class="help-code-container">
-                      <pre><code>curl http://localhost:8000/V3.0/eu/sic/description/manufacturing</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="help-example">
-                    <h4>Search Across All Industry Classifications</h4>
-                    <div class="help-code-container">
-                      <pre><code>curl http://localhost:8000/V3.0/global/sic/description/oil</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="help-code-example">
-                  <h3>Using JavaScript (Fetch API)</h3>
-                  
-                  <div class="help-example">
-                    <h4>Get Company Information</h4>
-                    <div class="help-code-container">
-                      <pre><code>fetch('http://localhost:8000/V3.0/global/company/merged/firmographics/Apple')
-  .then(response => response.json())
-  .then(data => console.log(data))
-  .catch(error => console.error('Error:', error));</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="help-example">
-                    <h4>Search Industry Classification Systems</h4>
-                    <div class="help-code-container">
-                      <pre><code>// URL-encode the search term
-const searchTerm = encodeURIComponent('software');
-
-fetch(`http://localhost:8000/V3.0/global/sic/description/${searchTerm}`)
-  .then(response => response.json())
-  .then(data => {
-    if (data.code === 200) {
-      console.log(`Found ${data.total} results`);
-      data.data.results.forEach(result => {
-        console.log(`${result.source_type}: ${result.code} - ${result.description}`);
-      });
-    }
-  })
-  .catch(error => console.error('Error:', error));</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="help-code-example">
-                  <h3>Using Python (Requests)</h3>
-                  
-                  <div class="help-example">
-                    <h4>Get Company Information</h4>
-                    <div class="help-code-container">
-                      <pre><code>import requests
-import json
-
-response = requests.get('http://localhost:8000/V3.0/global/company/merged/firmographics/Microsoft')
-data = response.json()
-
-if data['code'] == 200:
-    print(json.dumps(data, indent=2))</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div class="help-example">
-                    <h4>Compare Industry Classifications</h4>
-                    <div class="help-code-container">
-                      <pre><code>import requests
-import urllib.parse
-
-# Search term
-term = urllib.parse.quote('retail')
-
-# Get results from multiple classification systems
-us_sic = requests.get(f'http://localhost:8000/V3.0/na/sic/description/{term}').json()
-uk_sic = requests.get(f'http://localhost:8000/V3.0/uk/sic/description/{term}').json()
-eu_nace = requests.get(f'http://localhost:8000/V3.0/eu/sic/description/{term}').json()
-
-# Print comparison
-print(f"US SIC results: {us_sic['total']}")
-print(f"UK SIC results: {uk_sic['total']}")
-print(f"EU NACE results: {eu_nace['total']}")</code></pre>
-                      <button class="help-copy-button" onclick="copyToClipboard(this)">
-                        <span class="help-copy-icon"></span>
-                        <span class="copy-text">Copy</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
           
           <div class="help-footer">
@@ -681,6 +574,215 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
           </div>
         </div>
       </div>
+
+      <!-- EDGAR Explorer Tab Content -->
+      <div id="EdgarExplorer" class="explorer-pagecontent" x-data="createEdgarExplorerComponent()" @load="init()" style="display: none;">
+        <!-- Initial centered search (shown before search) -->
+        <div id="initialEdgarSearchContainer" class="explorer-search-container" x-show="!showResults">
+          <h1>EDGAR Explorer</h1>
+          <div class="explorer-intro">
+            <p>
+              Search SEC EDGAR filings by company name or CIK. Use sidebar filters
+              to focus on key filings like annual reports (10‑K) or recent quarterly
+              reports (10‑Q within the last 90 days).
+            </p>
+          </div>
+          <div class="explorer-search-card">
+            <h2>Enter Company Name or CIK</h2>
+            <form id="edgarSearchForm" @submit.prevent="performSearch()">
+              <div class="explorer-input-group">
+                <input type="text" x-model="searchQuery" id="edgarSearchInput" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
+                <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                  <i class="explorer-action-icon" x-show="!isSearching"></i>
+                  <i class="spinner-icon" x-show="isSearching"></i>
+                  <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                </button>
+              </div>
+              <div class="explorer-search-hint">Tip: Use the official company name for broader results.</div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Post-search layout -->
+        <div id="edgarSearchResultsLayout" class="explorer-results-layout" x-show="showResults">
+          <h1>EDGAR Explorer</h1>
+          <div class="explorer-search-wrapper">
+            <div class="explorer-top-container">
+              <form id="edgarSearchFormTop" @submit.prevent="performSearch()">
+                <div class="explorer-input-group">
+                  <input type="text" x-model="searchQuery" id="edgarSearchInputTop" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
+                  <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                    <i class="explorer-action-icon" x-show="!isSearching"></i>
+                    <i class="spinner-icon" x-show="isSearching"></i>
+                    <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="explorer-content-wrapper">
+            <div class="explorer-results-filters">
+              <div class="explorer-sidebar">
+                <h3 class="explorer-sidebar-title">Filter Results</h3>
+                <div class="explorer-filter-options">
+                  <div class="explorer-filter-checkbox">
+                    <label><input type="checkbox" x-model="filters.has10K" @change="applyFilters()"> Has 10‑K</label>
+                  </div>
+                  <div class="explorer-filter-checkbox">
+                    <label><input type="checkbox" x-model="filters.recent10Q" @change="applyFilters()"> Recent 10‑Q (≤ 90 days)</label>
+                  </div>
+                </div>
+                
+                <div class="explorer-filter-options" x-show="availableDivisions.length > 0">
+                  <div class="explorer-filter-label">Division:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <select x-model="filters.division" @change="applyFilters()" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background-color: #0F0D0E; border: 1px solid #3c3b3b; color: #1696c8; border-radius: 0.3rem;">
+                      <option value="">-- All Divisions --</option>
+                      <template x-for="div in availableDivisions" :key="div">
+                        <option :value="div" x-text="div"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                
+                <div class="explorer-filter-options" x-show="availableFiscalYearEnds.length > 0">
+                  <div class="explorer-filter-label">Fiscal Year End:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <select x-model="filters.fiscalYearEnd" @change="applyFilters()" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background-color: #0F0D0E; border: 1px solid #3c3b3b; color: #1696c8; border-radius: 0.3rem;">
+                      <option value="">-- All Fiscal Year Ends --</option>
+                      <template x-for="fye in availableFiscalYearEnds" :key="fye">
+                        <option :value="fye" x-text="fye"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                <div class="explorer-filter-guide">
+                  <h4>About Filters</h4>
+                  <ul class="explorer-classification-guide">
+                    <li><strong>Has 10‑K</strong> — shows annual report filings</li>
+                    <li><strong>Recent 10‑Q</strong> — shows quarterly reports filed within 90 days</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="explorer-results-area">
+                <div class="explorer-header-section">
+                  <div class="results-status">
+                    <div class="status-top">
+                      <span class="status-title">Results</span>
+                      <span class="status-count" x-text="getResultsHeadline()"></span>
+                    </div>
+                    <div class="status-meta">
+                      <span x-text="getResultsRangeLabel()"></span>
+                      <span class="status-dot">•</span>
+                      <span x-text="getActiveFiltersLabel()"></span>
+                    </div>
+                  </div>
+                  <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
+                </div>
+
+                <div class="explorer-container-wrapper">
+                  <div id="edgarSearchResults" class="explorer-results-container">
+                    <template x-if="hasResults && getCurrentPageResults().length > 0">
+                      <div>
+                        <template x-for="item in getCurrentPageResults()" :key="item.accessionNumber + '-' + item.filingType">
+                          <div class="explorer-result-card">
+                            <div class="explorer-result-header">
+                              <div class="edgar-pill-group-header">
+                                <template x-if="item.latest10K">
+                                  <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
+                                    <i class="external-link-icon"></i>
+                                    <span>10‑K</span>
+                                    <span class="status-dot">•</span>
+                                    <span x-text="item.latest10K.date"></span>
+                                  </a>
+                                </template>
+                                <template x-if="!item.latest10K">
+                                  <button class="dns-button edgar-pill disabled" disabled>
+                                    <i class="external-link-icon"></i>
+                                    <span>10‑K</span>
+                                  </button>
+                                </template>
+
+                                <template x-if="item.latest10Q">
+                                  <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
+                                    <i class="external-link-icon"></i>
+                                    <span>10‑Q</span>
+                                    <span class="status-dot">•</span>
+                                    <span x-text="item.latest10Q.date"></span>
+                                  </a>
+                                </template>
+                                <template x-if="!item.latest10Q">
+                                  <button class="dns-button edgar-pill disabled" disabled>
+                                    <i class="external-link-icon"></i>
+                                    <span>10‑Q</span>
+                                  </button>
+                                </template>
+                              </div>
+                              <div class="explorer-result-heading-right">
+                                <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
+                              </div>
+                            </div>
+                            <div class="explorer-result-body">
+                              <!-- Row 1: Primary metadata -->
+                              <div class="edgar-meta-row">
+                                <div class="meta-item">
+                                  <span class="meta-label">Company</span>
+                                  <span class="meta-value" x-text="item.companyName"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">CIK</span>
+                                  <span class="meta-value" x-text="item.cik"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">SIC</span>
+                                  <span class="meta-value" x-text="item.sic.code"></span>
+                                  <span class="meta-sub" x-text="item.sic.description"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Division</span>
+                                  <span class="meta-value" x-text="item.sic.division"></span>
+                                  <span class="meta-sub" x-text="item.sic.divisionDescription"></span>
+                                </div>
+                              </div>
+                              <!-- Row 2: Secondary metadata -->
+                              <div class="edgar-meta-row">
+                                <div class="meta-item">
+                                  <span class="meta-label">Ticker/Exchange</span>
+                                  <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Fiscal Year End</span>
+                                  <span class="meta-value" x-text="displayFYE(item.fiscalYearEnd)"></span>
+                                </div>
+                                <div class="meta-item">
+                                  <span class="meta-label">Location</span>
+                                  <span class="meta-value" x-text="item.location.city + ', ' + item.location.stateProvince"></span>
+                                  <span class="meta-sub" x-text="item.location.address"></span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div class="pagination-controls" x-show="hasResults && filteredItems.length">
+                  <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
+                  <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
+                  <template x-for="page in getVisiblePages()" :key="'edgar-page-' + page">
+                    <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
+                  </template>
+                  <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
+                  <button class="pagination-btn" @click="lastPage()" :disabled="currentPage === totalPages" aria-label="Last page">⏭</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
 
     <!-- Fixed footer section -->
@@ -699,8 +801,8 @@ print(f"EU NACE results: {eu_nace['total']}")</code></pre>
 
       console.log("Setting initial tab state");
       
-      // Initialize the main tab (GlobalSearch)
-      openTab({ currentTarget: firstMenuLink }, 'GlobalSearch', 'explorer-pagecontent', 'tabmenu');
+      // Initialize the main tab (Home)
+      openTab({ currentTarget: firstMenuLink }, 'Home', 'help-pagecontent', 'tabmenu');
       
       // Initialize inner tabs (API documentation) if applicable
       const innerTabContent = document.getElementById('V3');

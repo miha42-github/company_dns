@@ -40,9 +40,19 @@ Status: Planning only (do not implement yet)
     - Optional future filters can be added here without changing the search form.
   - Results List (no table):
     - Card-style list items similar to the Classification Explorer.
-    - Prominent fields: Company, CIK, Filing Type, Filing Date.
-    - Minimal secondary info: Accession No. (optional), primary Document link.
-    - Actions: "View JSON" opens modal; "Open Document" in new tab.
+    - Left side (metadata): concise company facts:
+      - Company, CIK
+      - SIC and description (plus division/major/industry group titles)
+      - Filer category (e.g., Large accelerated filer)
+      - Fiscal year end
+      - Location: city, state, postal; address snapshot
+      - Ticker + exchange (first element)
+    - Right side (actions): pill-shaped buttons for latest filings:
+      - "Latest 10‑K" pill → links to most recent 10‑K `filingIndex`
+      - "Latest 10‑Q" pill → links to most recent 10‑Q `filingIndex`
+      - Pills include the filing date label; 10‑Q shows a "Recent" state if ≤90 days
+      - Disabled/ghost style if a company has no 10‑K or no 10‑Q
+    - Secondary actions under metadata: "Open Document" (current item) and "View JSON" (raw)
   - Status header: “N results” + active filters + range label.
   - Centered pagination controls (First, Prev, numbered pages, Next, Last) using the simplified pattern.
   - JSON Modal Viewer
@@ -68,6 +78,14 @@ Status: Planning only (do not implement yet)
 - `accessionNumber`: string (optional in list view)
 - `documentUrl`: string
 - `raw`: object (entire source for modal)
+ - `latest10K`: { date: string, url: string, accessionNumber: string } | null
+ - `latest10Q`: { date: string, url: string, accessionNumber: string, isRecent: boolean } | null
+ - `sic`: { code: string, description: string, division: string, divisionDescription: string, majorGroup: string, majorGroupDescription: string, industryGroup: string, industryGroupDescription: string }
+ - `filerCategory`: string (e.g., Large accelerated filer)
+ - `fiscalYearEnd`: string
+ - `location`: { city: string, stateProvince: string, zipPostal: string, address: string }
+ - `ticker`: string (first ticker)
+ - `exchange`: string (first exchange)
 
 ## API Contracts & Endpoint Selection
 - Source of truth: `endpoint-data.js`. Filter EDGAR‑related endpoints for:
@@ -79,6 +97,7 @@ Status: Planning only (do not implement yet)
   - Compose EDGAR endpoints primarily from Company/CIK lookup; filters like "Has 10‑K" and "Recent 10‑Q" are computed client‑side based on returned filings.
 - Response Handling
   - Normalize to `EdgarFiling` display model.
+  - Compute `latest10K` and `latest10Q` from `forms` by sorting on the accessionKey date; attach `isRecent` for 10‑Q if filing date ≤90 days.
   - Capture `total` and map pagination from server if provided; otherwise client‑side paginate.
 
 ## Interaction Flows
@@ -91,6 +110,11 @@ Status: Planning only (do not implement yet)
   - `has10K`: retain items where any filingType == "10‑K" for the company or item view.
   - `recent10Q`: retain items where filingType == "10‑Q" and `filingDate >= (today − 90 days)`.
   - Combine filters with AND logic when both are enabled.
+- Latest Filing Pills
+  - Derive two actions per card using computed fields:
+    - Latest 10‑K → link to `latest10K.url`; disabled if `latest10K` is null.
+    - Latest 10‑Q → link to `latest10Q.url`; visually marked as "Recent" when `latest10Q.isRecent` is true.
+  - Each pill shows the filing type and filing date; clicking opens in a new tab.
 - View JSON Modal
   - Set `modal.json = filing.raw`, `modal.title = "<Company> — <FilingType> (<Date>)"`, `modal.isOpen = true`
 - Pagination
@@ -111,7 +135,9 @@ Status: Planning only (do not implement yet)
         - Checkbox: Recent 10‑Q (≤90 days)
       - `.explorer-results-area` (list-only)
         - Status header + error message
-        - Results container: card-style items with Company, CIK, Filing Type, Filing Date, actions
+        - Results container: card-style items with two-column layout
+          - Left: metadata block (company, CIK, SIC + descriptions, filer category, fiscal year end, location, ticker/exchange)
+          - Right: action pills (Latest 10‑K, Latest 10‑Q) stacked or inline; below them secondary actions (Open Document, View JSON)
         - `.pagination-controls` (centered)
   - Modal elements (overlay + modal with header close + copy button)
 
@@ -120,6 +146,8 @@ Status: Planning only (do not implement yet)
 - Keep top border only for pagination container; center buttons.
 - Modal header: space-between layout; overlay restored as fixed.
 - List items use existing card/list styles from the Classification Explorer; avoid table-specific CSS.
+ - Add pill styles for EDGAR actions: rounded, medium padding, distinct color for "Recent" 10‑Q (e.g., accent hue), disabled state with reduced opacity.
+ - Card layout uses flex with `justify-content: space-between`; ensure consistent spacing and alignment to avoid formatting issues.
 
 ## Accessibility
 - Labels for inputs; `aria-label` on pagination buttons.
@@ -146,12 +174,12 @@ Status: Planning only (do not implement yet)
 2. Create `/static/js/edgar-explorer-alpine.js` with `createEdgarExplorerComponent()`.
 3. Wire initial and post‑search layouts; bind inputs and actions (search form with input only).
 4. Integrate `api-service.js` calls to EDGAR endpoints from `endpoint-data.js`.
-5. Normalize responses into `EdgarFiling` and render results in a list-only view.
+5. Normalize responses into `EdgarFiling`; compute `latest10K`/`latest10Q` (and `isRecent` for 10‑Q) and render results in a list-only view.
 6. Implement sidebar filters (`has10K`, `recent10Q`) with client-side logic (90-day window for 10‑Q).
 7. Implement modal viewer with copy action using `copyToClipboard()`.
 8. Add centered pagination using the simplified control set.
 9. Test across Chrome/Safari; validate keyboard and responsive behavior.
-10. Polish styles with existing design tokens and classes.
+10. Polish styles with existing design tokens and classes; add pill styles, fix card spacing/alignment.
 
 ## Non‑Goals
 - No backend changes; strictly frontend integration with existing endpoints.

@@ -84,33 +84,42 @@ function copyToClipboard(button) {
   });
 }
 
-// Function to switch between help tabs
+function activateHelpTabContent(tabName, buttonElement) {
+  const tabContents = document.querySelectorAll('.help-tab-content');
+  let targetContent = null;
+  tabContents.forEach((content) => {
+    const isTarget = content.id === tabName;
+    content.classList.toggle('active', isTarget);
+    content.style.display = isTarget ? 'block' : 'none';
+    if (isTarget) {
+      targetContent = content;
+    }
+  });
+
+  if (!targetContent) {
+    console.warn(`Help tab content not found: ${tabName}`);
+    return;
+  }
+
+  const tabButtons = document.querySelectorAll('.help-tab-button');
+  const activeButton = buttonElement || document.querySelector(`.help-tab-button[data-help-tab="${tabName}"]`);
+  tabButtons.forEach((button) => {
+    button.classList.toggle('active', button === activeButton);
+  });
+}
+
 function openHelpTab(evt, tabName) {
-  // Hide all tab content
-  const tabContents = document.getElementsByClassName('help-tab-content');
-  for (let i = 0; i < tabContents.length; i++) {
-    tabContents[i].classList.remove('active');
+  if (evt && typeof evt.preventDefault === 'function') {
+    evt.preventDefault();
   }
-  
-  // Remove active class from all tab buttons
-  const tabButtons = document.getElementsByClassName('help-tab-button');
-  for (let i = 0; i < tabButtons.length; i++) {
-    tabButtons[i].classList.remove('active');
-  }
-  
-  // Show the selected tab content and mark button as active
-  document.getElementById(tabName).classList.add('active');
-  evt.currentTarget.classList.add('active');
+  activateHelpTabContent(tabName, evt.currentTarget);
 }
 
 // Initialize the help section on page load
 document.addEventListener('DOMContentLoaded', function() {
-  // Ensure first help tab is active by default
-  const firstHelpTab = document.querySelector('.help-tab-button');
-  if (firstHelpTab) {
-    firstHelpTab.classList.add('active');
-    const firstTabId = firstHelpTab.getAttribute('onclick').match(/openHelpTab\(event, '(.+?)'\)/)[1];
-    document.getElementById(firstTabId).classList.add('active');
+  const initialHelpButton = document.querySelector('.help-tab-button[data-help-tab]');
+  if (initialHelpButton) {
+    activateHelpTabContent(initialHelpButton.dataset.helpTab, initialHelpButton);
   }
 });
 

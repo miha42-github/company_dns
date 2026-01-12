@@ -30,6 +30,10 @@ The V3.2.0 release brings **comprehensive security hardening** and modernizes th
 ✅ XSS attempts filtered at middleware level  
 ✅ All endpoints enforce rate limits per IP address
 
+### Known Issues in V3.2
+
+- Industry classification explorer's pagination structure will partially hide the title for the results view when a page is advanced. The reason for this is unknown at this time and the matter is being worked.
+
 ### Previous Releases
 For release notes prior to V3.2.0 (including V3.1.0 and V3.0.0), see the consolidated changelog: [CHANGELOG.md](CHANGELOG.md).
 
@@ -142,3 +146,5 @@ Since this code falls under a liberal Apache-V2 license it is provided as is, wi
 - [Uvicorn](https://www.uvicorn.org) - used to run the RESTful service
 - [GeoPy with ArcGIS](https://github.com/geopy/geopy) - Enables proper address formatting and reporting of lat-long pairs for companies
 - [wptools](https://github.com/siznax/wptools/) - provides access to MediaWiki data for company search
+
+
