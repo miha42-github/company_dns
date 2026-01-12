@@ -311,8 +311,8 @@ select {
 }
 
 .dns-button {
-  margin-left: 4rem;
-  margin-right: 1rem;
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
   padding: 0.5rem;
   border: var(--border-width) solid var(--border-color);
   color: var(--color-link-primary);
@@ -592,6 +592,24 @@ label {
   top: 1.5px;
 }
 
+.spinner-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 2px solid #1696c8;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Results layout redesign */
 .explorer-results-layout {
   display: flex;
@@ -620,16 +638,30 @@ label {
   background: transparent;
 }
 
+
 .explorer-content-wrapper {
-  flex: 1;
+  flex: 1 1 auto;
   background-color: #1a1718;
   border-radius: 0.5rem;
   border: 1px solid #3c3b3b;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  /* height: calc(100vh - 220px);
-  min-height: 400px; */
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+}
+
+/* Header section above results cards */
+.explorer-header-section {
+  padding: 0.7rem 1.2rem 0.7rem 1.2rem;
+  margin-top: 0;
+  position: relative;
+  z-index: 10;
+  background: #1a1718;
+  border-radius: 0.5rem 0.5rem 0 0;
+  box-shadow: 0 2px 6px 0 rgba(0,0,0,0.10);
+  min-height: unset;
+  overflow: visible;
 }
 
 /* Results with filters container */
@@ -637,7 +669,7 @@ label {
   display: flex;
   height: 100%; /* Take full height of parent */
   flex: 1; 
-  overflow: hidden;
+  overflow: visible; /* Avoid clipping top-of-content */
 }
 
 /* Filters sidebar redesign */
@@ -653,13 +685,14 @@ label {
 
 .explorer-sidebar-title {
   text-align: left;
-  margin-bottom: 1rem;
-  margin-top: 0;
+  margin-bottom: 1.2rem;
+  margin-top: 0.7rem;
   color: #1696c8;
-  font-size: 1.1em;
+  font-size: 1.15em;
   font-weight: bold;
   border-bottom: 1px solid #3c3b3b;
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.7rem;
+  padding-top: 0.2rem;
 }
 
 .explorer-filter-guide {
@@ -689,21 +722,22 @@ label {
 
 /* Make the results area take full height and distribute content correctly */
 .explorer-results-area {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  height: 100%; /* Take full height */
-  overflow: hidden;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
   position: relative;
 }
 
 /* Ensure the container wrapper expands but allows scrolling */
 .explorer-container-wrapper {
-  flex: 1;
-  overflow: hidden; /* Not auto - let inner container handle scrolling */
+  flex: 1 1 auto;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  /* min-height: 0; */
+  min-height: 0;
 }
 
 /* Fix the results container to properly scroll */
@@ -1036,13 +1070,11 @@ label {
   border: 1px solid #1696c8;
   color: #1696c8;
   cursor: pointer;
-  font-size: 0.9em;
+  font-size: 0.85em;
   padding: 0.3rem 0.6rem;
-  margin-top: 0.5rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
   border-radius: 0.3rem;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .explorer-view-json-btn:hover {
@@ -1176,12 +1208,19 @@ label {
   margin-bottom: 0.9rem;
 }
 
+
 .explorer-result-header {
   display: flex;
+  flex-direction: row;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  min-width: 0;
+  min-height: 48px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 .explorer-result-heading {
@@ -1799,4 +1838,83 @@ label {
     flex: 1 0 auto;
     text-align: center;
   }
+}
+
+/* EDGAR Explorer specific card and pill styles */
+.edgar-meta-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.edgar-meta-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.explorer-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.edgar-pill-group-header {
+  display: flex;
+  flex-direction: row;
+  gap: 0.1rem;
+  align-items: center;
+  flex: 1;
+}
+
+.edgar-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  min-height: auto;
+  width: auto;
+  min-width: 130px;
+  text-align: center;
+  font-size: 0.8em;
+}
+
+.external-link-icon::before {
+  content: "↗";
+  font-size: 0.75em;
+  margin-right: 0.2rem;
+}
+
+.explorer-result-heading-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.explorer-view-json-btn {
+  background: none;
+  border: 1px solid #1696c8;
+  color: #1696c8;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.3rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.explorer-view-json-btn:hover {
+  background-color: rgba(22, 150, 200, 0.1);
+}
+
+.edgar-pill.recent {
+  border-color: #41a6ce;
+  color: #41a6ce;
+}
+
+.edgar-pill.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
