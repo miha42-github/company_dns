@@ -29,7 +29,7 @@
       <!-- Home Tab Content -->
       <div id="Home" class="help-pagecontent">
         <div class="help-container">
-          <h1>Help for the company_dns</h1>
+          <h1>Introduction to the company_dns</h1>
           
           <div class="help-intro">
             <p>
@@ -65,6 +65,7 @@
               <button class="help-tab-button active" onclick="openHelpTab(event, 'help-overview')">Overview</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-explorer-help')">Industry Classification Explorer</button>
+              <button class="help-tab-button" onclick="openHelpTab(event, 'help-edgar-explorer')">EDGAR Explorer</button>
               <button class="help-tab-button" onclick="openHelpTab(event, 'help-examples')">Code Examples</button>
             </div>
             
@@ -134,10 +135,9 @@
                   which provides real-time request/response testing, automatic schema validation, and detailed documentation.
                 </p>
                 <p>
-                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">Visit the API Reference →</a>
-                </p>
-                <p style="font-size: 0.9rem; color: rgb(104, 95, 88);">
-                  Also available: <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">Alternative ReDoc format →</a>
+                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">[OpenAPI format]</a>
+                  &nbsp;|&nbsp;
+                  <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">[ReDoc format]</a>
                 </p>
               </div>
               
@@ -223,43 +223,70 @@
               </div>
             </div>
             
-            <!-- Query Console Tab -->
-            <div id="help-query-help" class="help-tab-content">
-              <h2>Using the Query Explorer</h2>
+            <!-- EDGAR Explorer Tab -->
+            <div id="help-edgar-explorer" class="help-tab-content">
+              <h2>Using the EDGAR Explorer</h2>
               
               <p>
-                The Query Explorer provides a user-friendly interface to test API endpoints without writing code.
-                This is useful for exploring available data and testing queries before implementing them in your application.
+                The EDGAR Explorer provides a powerful interface to search SEC EDGAR filings by company name or CIK. 
+                It allows you to discover and explore annual reports (10-K) and quarterly reports (10-Q) filed with the SEC.
               </p>
               
               <div class="help-feature-walkthrough">
                 <div class="help-step">
-                  <h4>Step 1: Select Host</h4>
-                  <p>Choose between a local instance (<code>localhost:8000</code>) or the Mediumroast hosted instance (<code>company-dns.mediumroast.io</code>).</p>
-                </div>
-                
-                <div class="help-step">
-                  <h4>Step 2: Select Endpoint</h4>
-                  <p>Choose the API endpoint you want to query from the dropdown menu.</p>
-                </div>
-                
-                <div class="help-step">
-                  <h4>Step 3: Enter Query</h4>
-                  <p>Enter your search term or identifier in the query field.</p>
+                  <h4>Step 1: Search for a Company</h4>
+                  <p>Enter a company name (e.g., IBM, Apple) or a CIK number (e.g., 0000051143) in the search field.</p>
                   <div class="help-example-queries">
-                    <h5>Example Queries:</h5>
+                    <h5>Example Searches:</h5>
                     <ul>
-                      <li>Company name: <code>IBM</code>, <code>Apple</code>, <code>Google</code></li>
-                      <li>Industry keyword: <code>oil</code>, <code>manufacturing</code>, <code>retail</code></li>
-                      <li>SIC code: <code>7371</code>, <code>2911</code></li>
+                      <li>Company name: <code>IBM</code>, <code>Apple</code>, <code>Microsoft</code></li>
+                      <li>CIK: <code>0000051143</code>, <code>0000789019</code></li>
                     </ul>
                   </div>
                 </div>
                 
                 <div class="help-step">
-                  <h4>Step 4: View Results</h4>
-                  <p>The query URL and JSON response will appear below the form.</p>
+                  <h4>Step 2: Apply Filters (Optional)</h4>
+                  <p>Use the sidebar filters to narrow your results:</p>
+                  <ul>
+                    <li><strong>Has 10‑K</strong> — Show only companies with annual report filings</li>
+                    <li><strong>Recent 10‑Q</strong> — Show only quarterly reports filed within the last 90 days</li>
+                    <li><strong>Division</strong> — Filter by SIC division (dynamically populated from results)</li>
+                    <li><strong>Fiscal Year End</strong> — Filter by fiscal year end date (MM/YY format)</li>
+                  </ul>
                 </div>
+                
+                <div class="help-step">
+                  <h4>Step 3: Review Company Information</h4>
+                  <p>Results display comprehensive company data including:</p>
+                  <ul>
+                    <li>Company name and CIK</li>
+                    <li>SIC code and description</li>
+                    <li>Division classification</li>
+                    <li>Ticker symbol and exchange</li>
+                    <li>Fiscal year end</li>
+                    <li>Location (city, state, address)</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 4: Access Filings</h4>
+                  <p>Click the 10‑K or 10‑Q buttons to access the latest filings. The buttons display:</p>
+                  <ul>
+                    <li><code>10‑K • YYYY-MM-DD</code> — Latest annual report with filing date</li>
+                    <li><code>10‑Q • YYYY-MM-DD</code> — Latest quarterly report; highlighted if filed within 90 days</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 5: View Raw Data</h4>
+                  <p>Click <strong>View JSON</strong> in the top-right to see the raw API response for any filing result.</p>
+                </div>
+              </div>
+              
+              <div class="help-tip-box">
+                <strong>Pro Tip:</strong> Use broad company names for initial searches. For example, search for "Apple" instead of "Apple Inc." 
+                to get comprehensive results across different filings and entities.
               </div>
             </div>
             
@@ -285,7 +312,7 @@
                   <div class="help-example">
                     <h4>Search US SIC Descriptions</h4>
                     <div class="help-code-container">
-                      <
+                      <pre><code>curl http://localhost:8000/V3.0/na/sic/description/manufacturing</code></pre>
                       <button class="help-copy-button" onclick="copyToClipboard(this)">
                         <span class="help-copy-icon"></span>
                         <span class="copy-text">Copy</span>
