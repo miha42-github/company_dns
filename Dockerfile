@@ -26,7 +26,7 @@ ENV ENVIRONMENT=production
 EXPOSE 8000
 
 # Use entrypoint script to configure hosts
-ENTRYPOINT ["/app/scripts/entrypoint.sh"]
+# ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 
 # Run the command to start the application
 CMD ["python", "company_dns.py"]
