@@ -1,36 +1,21 @@
 /**
  * EDGAR Explorer - Alpine.js Component
- * List-only results with sidebar filters (Has 10-K, Recent 10-Q ≤90 days)
+ * Extends ExplorerBase for shared pagination and UI logic
  */
 
 function createEdgarExplorerComponent() {
+  const base = new ExplorerBase({
+    searchContainer: 'edgar-initial-search',
+    resultsLayout: 'edgar-results-layout',
+    resultsContainer: 'edgar-search-results'
+  });
+  
   return {
-    // State
+    ...base,
+    // EDGAR-specific state (extends ExplorerBase)
     searchQuery: '',
-    isSearching: false,
-    errorMessage: '',
-    statusMessage: '',
-    showResults: false,
     hasResults: false,
-
-    // Filters
-    filters: {
-      has10K: false,
-      recent10Q: false,
-      division: '',
-      fiscalYearEnd: ''
-    },
-
-    // Dynamic filter options
-    availableDivisions: [],
-    availableFiscalYearEnds: [],
-
-    // Results & pagination
-    allItems: [],
-    filteredItems: [],
-    currentPage: 1,
-    resultsPerPage: 10,
-    totalPages: 1,
+    filteredResults: [],
 
     async init() {
       createJsonModal();
@@ -48,7 +33,7 @@ function createEdgarExplorerComponent() {
       this.hasResults = false;
       this.currentPage = 1;
       this.allItems = [];
-      this.filteredItems = [];
+      this.filteredResults = [];
 
       try {
         const isCIK = /^\d{1,10}$/.test(this.searchQuery);
@@ -73,9 +58,9 @@ function createEdgarExplorerComponent() {
         const items = this.transformDetailToItems(detailData);
         this.allItems = items;
         this.applyFilters();
-        this.hasResults = this.filteredItems.length > 0;
+        this.hasResults = this.filteredResults.length > 0;
         this.statusMessage = this.hasResults
-          ? `Found ${this.filteredItems.length} filings`
+          ? `Found ${this.filteredResults.length} filings`
           : 'No filings match the criteria.';
 
       } catch (error) {
@@ -187,9 +172,9 @@ function createEdgarExplorerComponent() {
         results = results.filter(item => this.formatFYE(item.fiscalYearEnd) === this.filters.fiscalYearEnd);
       }
 
-      this.filteredItems = results;
+      this.filteredResults = results;
       this.updateFilterOptions();
-      this.totalPages = Math.max(1, Math.ceil(this.filteredItems.length / this.resultsPerPage));
+      this.totalPages = Math.max(1, Math.ceil(this.filteredResults.length / this.resultsPerPage));
       if (this.currentPage > this.totalPages) this.currentPage = 1;
     },
 
@@ -197,7 +182,7 @@ function createEdgarExplorerComponent() {
       // Discover unique divisions and FYE from filtered results
       const divisionSet = new Set();
       const fyeSet = new Set();
-      this.filteredItems.forEach(item => {
+      this.filteredResults.forEach(item => {
         if (item.sic.division) divisionSet.add(item.sic.division);
         if (item.fiscalYearEnd) fyeSet.add(this.formatFYE(item.fiscalYearEnd));
       });
@@ -230,34 +215,11 @@ function createEdgarExplorerComponent() {
     getCurrentPageResults() {
       const start = (this.currentPage - 1) * this.resultsPerPage;
       const end = start + this.resultsPerPage;
-      return this.filteredItems.slice(start, end);
+      return this.filteredResults.slice(start, end);
     },
-    getVisiblePages() {
-      const maxButtons = 5;
-      let start = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
-      let end = Math.min(this.totalPages, start + maxButtons - 1);
-      if (end - start + 1 < maxButtons) start = Math.max(1, end - maxButtons + 1);
-      const pages = [];
-      for (let p = start; p <= end; p++) pages.push(p);
-      return pages;
-    },
-    firstPage() { if (this.currentPage !== 1) this.currentPage = 1; },
-    prevPage() { if (this.currentPage > 1) this.currentPage--; },
-    nextPage() { if (this.currentPage < this.totalPages) this.currentPage++; },
-    lastPage() { if (this.currentPage !== this.totalPages) this.currentPage = this.totalPages; },
-    goToPage(page) { if (page >= 1 && page <= this.totalPages) this.currentPage = page; },
-
-    // UI helpers
-    getResultsHeadline() {
-      if (!this.hasResults || !this.filteredItems.length) return this.statusMessage || 'No results';
-      return `${this.filteredItems.length} filings`;
-    },
-    getResultsRangeLabel() {
-      if (!this.hasResults || !this.filteredItems.length) return 'Showing 0-0 of 0';
-      const start = (this.currentPage - 1) * this.resultsPerPage + 1;
-      const end = Math.min(this.filteredItems.length, start + this.resultsPerPage - 1);
-      return `Showing ${start}-${end} of ${this.filteredItems.length}`;
-    },
+    /**
+     * Active filters label (override base class)
+     */
     getActiveFiltersLabel() {
       const active = [];
       if (this.filters.has10K) active.push('Has 10-K');

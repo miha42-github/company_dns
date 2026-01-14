@@ -4,9 +4,11 @@ Blocks malicious requests, validates paths, and implements security best practic
 """
 
 from fastapi import Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 import logging
 import re
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -147,16 +149,30 @@ async def security_middleware(request: Request, call_next):
     
     if not is_valid:
         logger.debug(f"Invalid path: {original_path} from {client_ip}")
-        # Return 404 instead of 403 to avoid leaking information about security rules
-        return JSONResponse(
-            status_code=status.HTTP_404_NOT_FOUND,
-            content={
-                "detail": "Not Found",
-                "code": 404,
-                "path": original_path,
-                "help": "Visit /docs for API documentation"
-            }
-        )
+        # Serve HTML 404 page for invalid paths
+        try:
+            # Get the parent directory (lib/) then go up to project root
+            base_dir = Path(__file__).resolve().parent.parent
+            html_404_path = os.path.join(base_dir, 'html', '404.html')
+            
+            with open(html_404_path, 'r') as f:
+                html_content = f.read()
+            return HTMLResponse(
+                content=html_content,
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Failed to serve 404.html from security middleware: {e}", exc_info=True)
+            # Fallback to JSON if HTML file can't be loaded
+            return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={
+                    "detail": "Not found, invalid endpoint, primary response",
+                    "code": 404,
+                    "path": original_path,
+                    "help": "Visit /docs for API documentation"
+                }
+            )
     
     # Process legitimate requests
     try:

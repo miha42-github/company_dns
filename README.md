@@ -103,19 +103,23 @@ Before you get started it is important to install all prequisites and then creat
 If everything above completed successfully then running company_dns can be performed via `python3 ./company_dns.py` this will run the service in the foreground.
 
 ## Verify that the service is working
-Regardless of the approach taken to run the company_dns checking to see if it is operating is important.  A quick way to check on service availability when running on localhost is to follow this link: [http://localhost:8000/help](http://localhost:8000/help). If this is successful the embedded help will display (see screenshot below) describing available endpoints, examples with `curl`, and some helpful links to the company_dns GitHub repository.  Additionally, new in V3.0.0 is the query console which can be used to test key functions of the system.
+Regardless of the approach taken to run the company_dns checking to see if it is operating is important.  A quick way to check on service availability when running on localhost is to follow this link: [http://localhost:8000/](http://localhost:8000/). If this is successful the embedded web interface will display (see screenshot below) describing core capabilities and function, examples with `curl`, and some helpful links to the company_dns GitHub repository.
 
-### Screenshot of the embedded help
+### Screenshot of the landing page
 
-<img width="1242" alt="company_dns - embedded_help" src="https://github.com/miha42-github/company_dns/assets/10818650/1f789771-bb55-47da-b21b-cea421921090">
+<img width="1242" alt="company_dns - landing page" src="https://github.com/miha42-github/company_dns/assets/10818650/1f789771-bb55-47da-b21b-cea421921090">
 
-### Screenshot of the query console
+### Screenshot of the Industry Classification Explorer
 
-<img width="1242" alt="company_dns - query_console" src="https://github.com/miha42-github/company_dns/assets/10818650/6f880d10-1143-4889-998f-9adae8d9717e">
+<img width="1242" alt="company_dns - industry classification explorer" src="https://github.com/miha42-github/company_dns/assets/10818650/6f880d10-1143-4889-998f-9adae8d9717e">
+
+### Screenshot of the EDGAR Explorer
+
+<img width="1242" alt="company_dns - edgar explorer" src="https://github.com/miha42-github/company_dns/assets/10818650/6f880d10-1143-4889-998f-9adae8d9717e">
 
 # Checkout a live system
 A live system is available for Mediuroast efforts and for anyone to try out, relevant links are below.
-- Embedded help and query console - [https://company-dns.mediumroast.io/help](https://company-dns.mediumroast.io/help)
+- Embedded background - [https://company-dns.mediumroast.io/](https://company-dns.mediumroast.io/)
 - Company search for IBM - [https://company-dns.mediumroast.io/V3.0/global/company/merged/firmographics/IBM](https://company-dns.mediumroast.io/V3.0/global/company/merged/firmographics/IBM)
 - Standard industry code search for `Oil` - [https://www.mediumroast.io/company_dns/V3.0/na/sic/description/oil](https://www.mediumroast.io/company_dns/V2.0/sic/description/oil)
 

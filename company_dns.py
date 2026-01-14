@@ -120,41 +120,28 @@ async def not_found_handler(request: Request, exc: StarletteHTTPException):
             content={"detail": exc.detail}
         )
     
-    # Check Accept header to determine response format
-    accept_header = request.headers.get("accept", "").lower()
-    
-    # If browser requests HTML, serve custom 404 page
-    if "text/html" in accept_header:
-        try:
-            with open(get_abs_path('html/404.html'), 'r') as f:
-                html_content = f.read()
-            return HTMLResponse(
-                content=html_content,
-                status_code=404
-            )
-        except Exception as e:
-            logger.error(f"Failed to serve custom 404 page: {e}")
-            # Fallback to JSON if file not found
-            return JSONResponse(
-                status_code=404,
-                content={
-                    "detail": "Endpoint not found",
-                    "code": 404,
-                    "path": str(request.url.path),
-                    "help": "Visit /docs for API documentation"
-                }
-            )
-    
-    # Otherwise return JSON for API clients
-    return JSONResponse(
-        status_code=404,
-        content={
-            "detail": "Endpoint not found",
-            "code": 404,
-            "path": str(request.url.path),
-            "help": "Visit /docs for API documentation"
-        }
-    )
+    # Always serve the HTML 404 page
+    try:
+        # Use relative path so get_abs_path resolves within the project
+        with open(get_abs_path('html/404.html'), 'r') as f:
+            html_content = f.read()
+        return HTMLResponse(
+            content=html_content,
+            status_code=404
+        )
+    except Exception as e:
+        # Log full stack trace so the server console shows the root cause
+        logger.error(f"Failed to serve custom 404 page: {e}", exc_info=True)
+        # Fallback to JSON if file not found
+        return JSONResponse(
+            status_code=404,
+            content={
+                "detail": "Not found, invalid endpoint, fallback response",
+                "code": 404,
+                "path": str(request.url.path),
+                "help": "Visit /docs for API documentation",
+            }
+        )
 # END: Initialize FastAPI app
 # -------------------------------------------------------------- #
 
