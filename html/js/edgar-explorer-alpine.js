@@ -11,7 +11,6 @@ function createEdgarExplorerComponent() {
   });
   
   const component = {
-    ...base,
     // EDGAR-specific state (extends ExplorerBase)
     searchQuery: '',
     hasResults: false,

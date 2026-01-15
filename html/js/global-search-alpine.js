@@ -11,7 +11,6 @@ function createGlobalSearchComponent() {
   });
   
   const component = {
-    ...base,
     // Industry-specific state (extends ExplorerBase)
     searchQuery: '',
     allResults: [],
