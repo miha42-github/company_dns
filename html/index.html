@@ -769,8 +769,6 @@
                     </template>
                   </div>
                 </div>
-
-                <div class="pagination-controls" x-show="hasResults && filteredResults.length">
                   <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
                   <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
                   <template x-for="page in getVisiblePages()" :key="'edgar-page-' + page">
