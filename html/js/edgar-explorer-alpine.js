@@ -19,8 +19,11 @@ function createEdgarExplorerComponent() {
 
     async init() {
       createJsonModal();
-      // No query param preloading for now; keep simple like Classification Explorer
-      console.log('[EdgarExplorer] Initialized');
+      // Load any saved state from URL (query, page, filters)
+      this.loadStateFromUrl();
+      // Add keyboard navigation support
+      document.addEventListener('keydown', (e) => this.handleKeyboard(e));
+      console.log('[EdgarExplorer] Initialized with keyboard navigation and URL state');
     },
 
     async performSearch() {
@@ -62,6 +65,8 @@ function createEdgarExplorerComponent() {
         this.statusMessage = this.hasResults
           ? `Found ${this.filteredResults.length} filings`
           : 'No filings match the criteria.';
+        // Scroll to results after search
+        this.scrollToResults('edgar-search-results');
 
       } catch (error) {
         console.error('[EdgarExplorer] Search error:', error);
@@ -229,6 +234,73 @@ function createEdgarExplorerComponent() {
 
     viewItemJson(item) {
       showJsonModal(item.raw);
+    },
+
+    /**
+     * Scroll to results container after pagination
+     */
+    scrollToResults() {
+      const resultsDiv = document.getElementById('edgar-search-results');
+      if (resultsDiv) {
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    },
+
+    /**
+     * Sync state to URL for bookmarkable searches
+     */
+    updateUrlState() {
+      try {
+        const params = new URLSearchParams();
+        if (this.searchQuery) params.set('q', this.searchQuery);
+        if (this.currentPage > 1) params.set('page', this.currentPage);
+        if (this.resultsPerPage && this.resultsPerPage !== 10) params.set('perPage', this.resultsPerPage);
+        
+        // Add active filters
+        const activeFilters = [];
+        if (this.filters.has10K) activeFilters.push('has10K');
+        if (this.filters.recent10Q) activeFilters.push('recent10Q');
+        if (this.filters.division) activeFilters.push(`division:${this.filters.division}`);
+        if (this.filters.fiscalYearEnd) activeFilters.push(`fye:${this.filters.fiscalYearEnd}`);
+        
+        if (activeFilters.length) params.set('filters', activeFilters.join(','));
+        
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        window.history.replaceState({}, '', newUrl);
+      } catch (err) {
+        console.warn('[EdgarExplorer] Failed to update URL state', err);
+      }
+    },
+
+    /**
+     * Load state from URL parameters
+     */
+    loadStateFromUrl() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const q = params.get('q');
+        const page = parseInt(params.get('page'));
+        const per = parseInt(params.get('perPage'));
+        const filtersParam = params.get('filters');
+
+        if (q) this.searchQuery = q;
+        if (per && [10, 25, 50, 100].includes(per)) { // Valid page sizes
+          this.resultsPerPage = per;
+        }
+        if (page && page > 0) this.currentPage = page;
+
+        if (filtersParam) {
+          const filterParts = filtersParam.split(',').map(f => f.trim());
+          filterParts.forEach(filter => {
+            if (filter === 'has10K') this.filters.has10K = true;
+            else if (filter === 'recent10Q') this.filters.recent10Q = true;
+            else if (filter.startsWith('division:')) this.filters.division = filter.substring(9);
+            else if (filter.startsWith('fye:')) this.filters.fiscalYearEnd = filter.substring(4);
+          });
+        }
+      } catch (err) {
+        console.warn('[EdgarExplorer] Failed to load URL state', err);
+      }
     }
   };
 }
