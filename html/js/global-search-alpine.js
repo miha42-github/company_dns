@@ -10,7 +10,7 @@ function createGlobalSearchComponent() {
     resultsContainer: 'industry-search-results'
   });
   
-  return {
+  const component = {
     ...base,
     // Industry-specific state (extends ExplorerBase)
     searchQuery: '',
@@ -471,6 +471,9 @@ function createGlobalSearchComponent() {
       this.goToPage(clamped);
     }
   };
+  
+  // Return the component with base class methods properly merged
+  return Object.assign(component, base);
 }
 
 // Initialize the component when DOM is ready

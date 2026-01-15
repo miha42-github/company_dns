@@ -774,7 +774,7 @@ label {
   display: flex;
   flex-direction: column;
   min-height: 300px; /* Minimum reasonable height */
-  height: calc(100vh - 300px); /* Better height calculation */
+  height: calc(90vh - 300px); /* Better height calculation */
   max-height: none; /* Remove max height restriction causing cutoff */
   overflow: hidden;
 }

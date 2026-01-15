@@ -10,7 +10,7 @@ function createEdgarExplorerComponent() {
     resultsContainer: 'edgar-search-results'
   });
   
-  return {
+  const component = {
     ...base,
     // EDGAR-specific state (extends ExplorerBase)
     searchQuery: '',
@@ -303,6 +303,9 @@ function createEdgarExplorerComponent() {
       }
     }
   };
+  
+  // Return the component with base class methods properly merged
+  return Object.assign(component, base);
 }
 
 // Expose globally
