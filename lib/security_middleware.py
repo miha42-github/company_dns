@@ -167,7 +167,7 @@ async def security_middleware(request: Request, call_next):
             return JSONResponse(
                 status_code=status.HTTP_404_NOT_FOUND,
                 content={
-                    "detail": "Not found, invalid endpoint, primary response",
+                    "detail": "Resource not found",
                     "code": 404,
                     "path": original_path,
                     "help": "Visit /docs for API documentation"
