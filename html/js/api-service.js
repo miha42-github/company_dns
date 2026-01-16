@@ -35,7 +35,8 @@ class APIService {
     const {
       useCache = false,
       cacheDuration = 5 * 60 * 1000, // 5 minutes default
-      signal = null
+      signal = null,
+      timeout = null // Allow custom timeout per request
     } = options;
 
     // Check cache first
@@ -51,12 +52,13 @@ class APIService {
     }
 
     const url = `${this.baseUrl}${endpoint}`;
+    const effectiveTimeout = timeout !== null ? timeout : this.timeout;
     
     try {
       const controller = signal ? null : new AbortController();
       const timeoutId = signal ? null : setTimeout(
         () => controller?.abort(),
-        this.timeout
+        effectiveTimeout
       );
 
       const response = await fetch(url, {

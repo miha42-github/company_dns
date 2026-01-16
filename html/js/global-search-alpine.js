@@ -4,17 +4,23 @@
  */
 
 function createGlobalSearchComponent() {
-  const base = new ExplorerBase({
-    searchContainer: 'industry-initial-search',
-    resultsLayout: 'industry-results-layout',
-    resultsContainer: 'industry-search-results'
-  });
-  
   return {
-    ...base,
+    // Pagination state
+    currentPage: 1,
+    totalPages: 1,
+    resultsPerPage: 10,
+    
+    // UI state
+    isSearching: false,
+    hasResults: false,
+    errorMessage: '',
+    statusMessage: '',
+    showResults: false,
+    
     // Industry-specific state (extends ExplorerBase)
     searchQuery: '',
     allResults: [],
+    filteredResults: [],
     expandedCards: {},
     pageSizes: [10, 25, 50, 100],
     
@@ -469,6 +475,113 @@ function createGlobalSearchComponent() {
       const clamped = Math.min(Math.max(target, 1), this.totalPages);
       this.jumpToPage = clamped;
       this.goToPage(clamped);
+    },
+
+    // ========== Pagination Methods ==========
+    firstPage() {
+      if (this.currentPage !== 1) {
+        this.currentPage = 1;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    lastPage() {
+      if (this.currentPage !== this.totalPages) {
+        this.currentPage = this.totalPages;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    goToPage(pageNum) {
+      if (pageNum >= 1 && pageNum <= this.totalPages) {
+        this.currentPage = pageNum;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+
+    // ========== UI Helpers ==========
+    getVisiblePages() {
+      const maxButtons = 5;
+      let start = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(this.totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) {
+        start = Math.max(1, end - maxButtons + 1);
+      }
+      const pages = [];
+      for (let p = start; p <= end; p++) {
+        pages.push(p);
+      }
+      return pages;
+    },
+
+    getResultsHeadline() {
+      if (!this.hasResults) {
+        return this.statusMessage || 'No results';
+      }
+      return `${this.filteredResults?.length || 0} results`;
+    },
+
+    getResultsRangeLabel() {
+      if (!this.hasResults || !this.filteredResults?.length) {
+        return 'Showing 0-0 of 0';
+      }
+      const start = (this.currentPage - 1) * this.resultsPerPage + 1;
+      const end = Math.min(this.filteredResults.length, start + this.resultsPerPage - 1);
+      return `Showing ${start}-${end} of ${this.filteredResults.length}`;
+    },
+
+    getCurrentPageResults() {
+      const start = (this.currentPage - 1) * this.resultsPerPage;
+      const end = start + this.resultsPerPage;
+      return this.filteredResults.slice(start, end);
+    },
+
+    // ========== Navigation & Scroll ==========
+    handleKeyboard(event) {
+      if (!this.showResults || !this.filteredResults?.length) return;
+      const tag = event.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          this.prevPage();
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          this.nextPage();
+          break;
+        case 'Home':
+          event.preventDefault();
+          this.firstPage();
+          break;
+        case 'End':
+          event.preventDefault();
+          this.lastPage();
+          break;
+      }
+    },
+
+    scrollToResults(containerId) {
+      const resultsDiv = document.getElementById(containerId || 'industry-search-results');
+      if (resultsDiv) {
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
 }

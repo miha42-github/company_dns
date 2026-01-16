@@ -1,6 +1,10 @@
 # Motivation for the company_dns
 To enable a more automated approach to gathering information about companies `company_dns` was created.  This release enables the synthesis of data from the [SEC EDGAR repository](https://www.sec.gov/edgar/searchedgar/companysearch.html) and [Wikipedia](https://wikipedia.org).  A [Medium](https://medium.com) article entitled "[A case for API based open company firmographics](https://medium.com/@michaelhay_90395/a-case-for-api-based-open-company-firmographics-145e4baf121b)" is available discussing the process and motivation behind the creation of this service.
 
+## Web Application Documentation
+
+The embedded web interface is a modern single-page application for exploring SEC EDGAR filings and industry classifications. For detailed documentation on features, architecture, and usage, see [html/README.md](html/README.md).
+
 # Changes
 
 ## Introducing V3.2.0
@@ -30,13 +34,8 @@ The V3.2.0 release brings **comprehensive security hardening** and modernizes th
 ✅ XSS attempts filtered at middleware level  
 ✅ All endpoints enforce rate limits per IP address
 
-### Known Issues in V3.2
-
-- Industry classification explorer's pagination structure will partially hide the title for the results view when a page is advanced. The reason for this is unknown at this time and the matter is being worked.
-
 ### Previous Releases
 For release notes prior to V3.2.0 (including V3.1.0 and V3.0.0), see the consolidated changelog: [CHANGELOG.md](CHANGELOG.md).
-
 
 # Installation & Setup
 The install and setup process is either for users or developers.  Instructions for both are provided below.
@@ -105,18 +104,6 @@ If everything above completed successfully then running company_dns can be perfo
 ## Verify that the service is working
 Regardless of the approach taken to run the company_dns checking to see if it is operating is important.  A quick way to check on service availability when running on localhost is to follow this link: [http://localhost:8000/](http://localhost:8000/). If this is successful the embedded web interface will display (see screenshot below) describing core capabilities and function, examples with `curl`, and some helpful links to the company_dns GitHub repository.
 
-### Screenshot of the landing page
-
-<img width="1242" alt="company_dns - landing page" src="https://github.com/miha42-github/company_dns/assets/10818650/1f789771-bb55-47da-b21b-cea421921090">
-
-### Screenshot of the Industry Classification Explorer
-
-<img width="1242" alt="company_dns - industry classification explorer" src="https://github.com/miha42-github/company_dns/assets/10818650/6f880d10-1143-4889-998f-9adae8d9717e">
-
-### Screenshot of the EDGAR Explorer
-
-<img width="1242" alt="company_dns - edgar explorer" src="https://github.com/miha42-github/company_dns/assets/10818650/6f880d10-1143-4889-998f-9adae8d9717e">
-
 # Checkout a live system
 A live system is available for Mediuroast efforts and for anyone to try out, relevant links are below.
 - Embedded background - [https://company-dns.mediumroast.io/](https://company-dns.mediumroast.io/)
@@ -146,7 +133,7 @@ Since this code falls under a liberal Apache-V2 license it is provided as is, wi
 # Key Dependencies
 - [PyEdgar](https://github.com/gaulinmp/pyedgar) - used to interface with the SEC's EDGAR repository
 - [SQLite](https://www.sqlite.org/index.html) - helps all utilities and the RESTful service quickly and expressively respond to interactions with the other elements to find appropriate company data
-- [Starlette](https://www.starlette.io) - used to create the RESTful service
+- [FastAPI](https://fastapi.tiangolo.com) - used to create the RESTful service
 - [Uvicorn](https://www.uvicorn.org) - used to run the RESTful service
 - [GeoPy with ArcGIS](https://github.com/geopy/geopy) - Enables proper address formatting and reporting of lat-long pairs for companies
 - [wptools](https://github.com/siznax/wptools/) - provides access to MediaWiki data for company search
