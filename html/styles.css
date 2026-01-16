@@ -616,13 +616,18 @@ label {
 .explorer-results-layout {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 140px); /* Allow growth beyond viewport */
-  max-height: calc(100vh - 140px); /* Cap at viewport height */
-  margin-bottom: 10px; /* Add a small margin */
+  flex: 1 1 auto;         /* CHANGED: Grow to fill parent, not beyond */
+  min-height: 0;          /* CHANGED: Critical for flex scrolling */
+  margin-bottom: 10px;    /* Add a small margin */
   padding: 0 1rem 10px 1rem; /* Add bottom padding */
   box-sizing: border-box;
   gap: 1rem;
-  overflow: hidden; /* Contain children, don't escape */
+  overflow: hidden;       /* Contain children, don't escape */
+}
+
+.explorer-results-layout h1 {
+  margin-top: 0; /* Let flex gap handle spacing */
+  margin-bottom: 0;
 }
 
 .explorer-search-wrapper {
@@ -650,7 +655,8 @@ label {
   display: flex;
   flex-direction: column;
   min-height: 0; /* Critical for flex scrolling */
-  overflow: hidden; /* Contain children */
+  max-height: calc(100vh - 330px); /* Constrain to parent */
+  overflow-y: auto; /* Allow scrolling within container */
 }
 
 /* Header section above results cards */
@@ -664,14 +670,17 @@ label {
   box-shadow: 0 2px 6px 0 rgba(0,0,0,0.10);
   min-height: unset;
   overflow: visible;
+  flex: 0 0 auto;           /* NEW: Fixed height, don't grow/shrink */
+  min-height: 50px;         /* NEW: Explicit minimum space */
 }
 
 /* Results with filters container */
 .explorer-results-filters {
   display: flex;
-  height: 100%; /* Take full height of parent */
-  flex: 1; 
-  overflow: visible; /* Avoid clipping top-of-content */
+  flex: 1 1 auto;         /* CHANGED: Use flex instead of height: 100% */
+  min-height: 0;  
+  height: calc(100vh - 290);           /* NEW: Critical for flex scrolling */
+  overflow: hidden;      /* Avoid clipping top-of-content */
 }
 
 /* Filters sidebar redesign */
@@ -679,7 +688,7 @@ label {
   width: 220px;
   padding: 1rem;
   border-right: 1px solid #3c3b3b;
-  height: 100%;
+  height: calc(100vh-290px);
   overflow-y: auto;
   flex-shrink: 0;
   background-color: transparent;
@@ -728,86 +737,35 @@ label {
   display: flex;
   flex-direction: column;
   min-height: 0; /* Critical for nested flex scroll */
-  overflow: hidden; /* Contain children */
+  max-height: 100%; /* Constrain to parent */
+  overflow-y: auto; /* Allow scrolling of results */
+  overflow-x: hidden;
   position: relative;
 }
 
 /* Ensure the container wrapper expands but allows scrolling */
 .explorer-container-wrapper {
   flex: 1 1 auto;
-  overflow: auto; /* Allow scrolling */
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: calc(100vh-290px);
+  overflow: hidden; /* Children stay within bounds */
 }
 
 /* Fix the results container to properly scroll */
 .explorer-results-container {
   padding: 1rem;
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1;
+  overflow-x: hidden; /* Don't scroll, parent handles it */
+  overflow-y: auto ;
+  flex: 1 1 auto;
   margin: 0;
   border: none;
-  /* Remove the conflicting height definitions */
-  /* height: auto; */
   position: relative;
+  min-height: 0;
+  height: calc(100vh - 360px);
 }
 
-/* Ensure pagination stays visible */
-.explorer-pagination {
-  flex: 0 0 50px; /* Fixed height, don't grow or shrink */
-  height: 50px;
-  border-top: 1px solid #3c3b3b;
-  background-color: #1a1718;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative; /* Not sticky - that's causing issues */
-  z-index: 10;
-  width: 100%;
-  margin-top: auto; /* Push to bottom of flex container */
-}
-
-/* Ensure content wrapper doesn't overflow */
-.explorer-content-wrapper {
-  display: flex;
-  flex-direction: column;
-  min-height: 300px; /* Minimum reasonable height */
-  height: calc(100vh - 300px); /* Better height calculation */
-  max-height: none; /* Remove max height restriction causing cutoff */
-  overflow: hidden;
-}
-
-/* Modified search status specific to Explorer */
-.explorer-search-status {
-  padding: 0;
-  padding-left: 1rem;
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.1;
-  overflow: hidden;
-  color: #1696c8;
-  font-weight: bold;
-}
-
-.explorer-container-wrapper {
-  flex: 1;
-  overflow: hidden;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Explorer-specific results container */
-.explorer-results-container {
-  padding: 1rem;
-  height: auto;
-  flex: 1;
-  overflow-y: auto !important; /* Force scrolling */
-  margin: 0;
-  border: none;
-}
 
 /* Result card redesign */
 .explorer-result-card {
@@ -816,6 +774,116 @@ label {
   border-radius: 0.5rem;
   margin-bottom: 1rem;
   padding: 1rem;
+}
+
+/* Compact EDGAR Card Styles */
+.edgar-company-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid #3c3b3b;
+  gap: 1rem;
+}
+
+.edgar-company-info {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: 0.95em;
+  color: #f0f0f0;
+}
+
+.edgar-company-info strong {
+  color: #ca703f;
+  margin-right: 0.5rem;
+}
+
+.edgar-meta {
+  color: #ca703f;
+  font-size: 0.95em;
+}
+
+.edgar-meta span {
+  color: #f0f0f0;
+}
+
+.edgar-recent-forms-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0.8rem 0;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+}
+
+.edgar-forms-label {
+  font-weight: bold;
+  color: #ca703f;
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+.edgar-pill-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.edgar-pill {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  background-color: transparent;
+  border: 1px solid #1696c8;
+  color: #1696c8;
+  text-decoration: none;
+  border-radius: 20px;
+  font-size: 0.9em;
+  white-space: nowrap;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.edgar-pill:hover {
+  background-color: #1696c8;
+  color: #0F0D0E;
+}
+
+.edgar-quick-links {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #3c3b3b;
+}
+
+.edgar-quick-link {
+  padding: 0.4rem 0.8rem;
+  background-color: transparent;
+  border: 1px solid #924e29;
+  color: #924e29 !important;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.9em;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.edgar-quick-link:link {
+  color: #924e29 !important;
+}
+
+.edgar-quick-link:visited {
+  color: #924e29 !important;
+}
+
+.edgar-quick-link:hover {
+  background-color: #924e29;
+  color: #fff !important;
+  text-decoration: none;
 }
 
 .explorer-result-title-container {
@@ -1057,10 +1125,14 @@ label {
 /* Style the tab content */
 .explorer-pagecontent {
   box-sizing: border-box;
-  display: none;
+  display: flex;            /* NEW: Flex container */
+  flex-direction: column;    /* NEW: Vertical layout */
+  height: 100%;             /* NEW: Take parent height */
+  max-height: calc(100vh - 100px);  /* HARD CAP: Prevent unbounded growth */
+  min-height: 0;            /* NEW: Critical for flex */
   /* height: calc(100vh - 90px); */
   padding: 0;
-  overflow: visible;
+  overflow: hidden;         /* CHANGED: Contain overflow */
 }
 
 /* Add these styles for the JSON modal viewer */
@@ -1128,10 +1200,13 @@ label {
   align-items: center;
   justify-content: center;
   gap: 0.6rem;
-  margin: 1.25rem 0 0.5rem 0;
-  padding: 1rem;
+  margin: 0;                /* CHANGED: Remove margin */
+  padding: 0.75rem 1rem;
   border-top: 1px solid #3c3b3b;
   flex-wrap: wrap;
+  flex: 0 0 auto;           /* NEW: Fixed height, don't grow/shrink */
+  min-height: 50px;         /* NEW: Ensure visible height */
+  background-color: #1a1718;
 }
 
 .pagination-btn {
@@ -1922,4 +1997,50 @@ label {
 .edgar-pill.disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Recent forms list styling for EDGAR summary view */
+.recent-forms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(22, 150, 200, 0.05);
+  border-left: 3px solid #1696c8;
+  border-radius: 0.3rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.form-item {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.form-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #1696c8;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.form-link:hover {
+  color: #41a6ce;
+  text-decoration: underline;
+}
+
+.form-type {
+  font-weight: 600;
+  min-width: 60px;
+  color: #1696c8;
+}
+
+.form-date {
+  font-size: 0.85rem;
+  color: #999;
 }

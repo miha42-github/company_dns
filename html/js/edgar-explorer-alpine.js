@@ -1,28 +1,39 @@
 /**
  * EDGAR Explorer - Alpine.js Component
- * Extends ExplorerBase for shared pagination and UI logic
  */
 
 function createEdgarExplorerComponent() {
-  const base = new ExplorerBase({
-    searchContainer: 'edgar-initial-search',
-    resultsLayout: 'edgar-results-layout',
-    resultsContainer: 'edgar-search-results'
-  });
-  
-  const component = {
-    // EDGAR-specific state (extends ExplorerBase)
-    searchQuery: '',
+  return {
+    // Pagination state
+    currentPage: 1,
+    resultsPerPage: 10,
+    totalPages: 1,
+    
+    // UI state
+    isSearching: false,
     hasResults: false,
+    errorMessage: '',
+    statusMessage: '',
+    showResults: false,
+    
+    // EDGAR-specific state
+    searchQuery: '',
+    allItems: [],
     filteredResults: [],
+    filters: {
+      has10K: false,
+      recent10Q: false,
+      division: '',
+      fiscalYearEnd: ''
+    },
+    availableDivisions: [],
+    availableFiscalYearEnds: [],
 
     async init() {
       createJsonModal();
-      // Load any saved state from URL (query, page, filters)
       this.loadStateFromUrl();
-      // Add keyboard navigation support
       document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-      console.log('[EdgarExplorer] Initialized with keyboard navigation and URL state');
+      console.log('[EdgarExplorer] Initialized');
     },
 
     async performSearch() {
@@ -39,31 +50,32 @@ function createEdgarExplorerComponent() {
 
       try {
         const isCIK = /^\d{1,10}$/.test(this.searchQuery);
+        const edgarTimeout = 60000; // 60 seconds - summary endpoint should be much faster (SQLite cache only)
 
-        // If CIK, fetch firmographics then fetch detail via company name to get forms
-        let detailData = null;
+        // Use summary endpoint for faster results (SQLite cache only, no REST calls)
+        let summaryData = null;
         if (isCIK) {
-          const firmo = await apiService.get(`/V3.0/na/company/edgar/firmographics/${encodeURIComponent(this.searchQuery)}`);
+          const firmo = await apiService.get(`/V3.0/na/company/edgar/firmographics/${encodeURIComponent(this.searchQuery)}`, { timeout: edgarTimeout });
           const companyName = firmo?.data?.name || '';
           if (companyName) {
-            detailData = await apiService.get(`/V3.0/na/companies/edgar/detail/${encodeURIComponent(companyName)}`);
+            summaryData = await apiService.get(`/V3.0/na/companies/edgar/summary/${encodeURIComponent(companyName)}`, { timeout: edgarTimeout });
           } else {
             // Fall back: show firmographics only (no filings)
-            detailData = null;
+            summaryData = null;
             this.allItems = [];
             this.errorMessage = 'No filings found for provided CIK.';
           }
         } else {
-          detailData = await apiService.get(`/V3.0/na/companies/edgar/detail/${encodeURIComponent(this.searchQuery)}`);
+          summaryData = await apiService.get(`/V3.0/na/companies/edgar/summary/${encodeURIComponent(this.searchQuery)}`, { timeout: edgarTimeout });
         }
 
-        const items = this.transformDetailToItems(detailData);
+        const items = this.transformSummaryToItems(summaryData);
         this.allItems = items;
         this.applyFilters();
         this.hasResults = this.filteredResults.length > 0;
         this.statusMessage = this.hasResults
-          ? `Found ${this.filteredResults.length} filings`
-          : 'No filings match the criteria.';
+          ? `Found ${this.filteredResults.length} companies with filings`
+          : 'No companies found in database.';
         // Scroll to results after search
         this.scrollToResults('edgar-search-results');
 
@@ -76,104 +88,106 @@ function createEdgarExplorerComponent() {
       }
     },
 
-    transformDetailToItems(detailData) {
+    transformSummaryToItems(summaryData) {
       const items = [];
-      const companies = detailData?.data?.companies || {};
-
-      const computeLatest = (forms) => {
-        let latest10K = null;
-        let latest10Q = null;
-        const ninetyDaysAgo = new Date();
-        ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-        for (const [key, f] of Object.entries(forms || {})) {
-          const [y, m, d] = key.split('-');
-          const dt = new Date(`${y}-${m}-${d}`);
-          const type = (f?.formType || '').toUpperCase();
-          if (type.startsWith('10-K')) {
-            if (!latest10K || dt > new Date(latest10K.date)) {
-              latest10K = { date: `${y}-${m}-${d}`, url: f?.filingIndex || '', accessionNumber: key.split('-')[3] || '' };
-            }
-          }
-          if (type.startsWith('10-Q')) {
-            const candidate = { date: `${y}-${m}-${d}`, url: f?.filingIndex || '', accessionNumber: key.split('-')[3] || '' };
-            if (!latest10Q || dt > new Date(latest10Q.date)) {
-              latest10Q = candidate;
-            }
-          }
-        }
-        if (latest10Q) {
-          latest10Q.isRecent = new Date(latest10Q.date) >= ninetyDaysAgo;
-        }
-        return { latest10K, latest10Q };
-      };
+      const companies = summaryData?.data?.companies || {};
 
       for (const [companyName, info] of Object.entries(companies)) {
-        const firmo = info?.data || info; // unwrap if wrapped
-        const cik = firmo?.cik || '';
+        const cik = info?.cik || '';
         const forms = info?.forms || {};
-        const { latest10K, latest10Q } = computeLatest(forms);
-
-        for (const [accessionKey, form] of Object.entries(forms)) {
-          const [y, m, d, acc] = accessionKey.split('-');
+        
+        // Build list of recent forms (10-K and 10-Q)
+        const recentForms = [];
+        const formsByType = { '10-K': [], '10-Q': [] };
+        
+        for (const [formKey, form] of Object.entries(forms)) {
+          const [y, m, d] = formKey.split('-');
           const filingDate = `${y}-${m}-${d}`;
-          items.push({
-            companyName,
-            cik,
-            filingType: form?.formType || '',
-            filingDate,
-            accessionNumber: acc || '',
-            documentUrl: form?.filingIndex || '',
-            raw: { company: info, form, accessionKey },
-            latest10K,
-            latest10Q,
-            sic: {
-              code: firmo?.sic || '',
-              description: firmo?.sicDescription || '',
-              division: firmo?.division || '',
-              divisionDescription: firmo?.divisionDescription || '',
-              majorGroup: firmo?.majorGroup || '',
-              majorGroupDescription: firmo?.majorGroupDescription || '',
-              industryGroup: firmo?.industryGroup || '',
-              industryGroupDescription: firmo?.industryGroupDescription || ''
-            },
-            filerCategory: firmo?.category || '',
-            fiscalYearEnd: firmo?.fiscalYearEnd || '',
-            location: {
-              city: firmo?.city || '',
-              stateProvince: firmo?.stateProvince || '',
-              zipPostal: firmo?.zipPostal || '',
-              address: firmo?.address || ''
-            },
-            ticker: Array.isArray(firmo?.tickers) ? firmo.tickers[1] || '' : '',
-            exchange: Array.isArray(firmo?.exchanges) ? firmo.exchanges[0] || '' : ''
-          });
+          const formType = (form?.formType || '').toUpperCase();
+          
+          if (formType.startsWith('10-K') || formType.startsWith('10-Q')) {
+            recentForms.push({
+              type: formType,
+              date: filingDate,
+              url: form?.filingIndex || '',
+              key: formKey
+            });
+            
+            // Track by type for quick access
+            const baseType = formType.startsWith('10-K') ? '10-K' : '10-Q';
+            formsByType[baseType].push({
+              type: formType,
+              date: filingDate,
+              url: form?.filingIndex || '',
+              key: formKey
+            });
+          }
         }
+        
+        // Sort forms by date descending
+        recentForms.sort((a, b) => new Date(b.date) - new Date(a.date));
+        
+        // Get latest 10-K and 10-Q
+        let latest10K = null;
+        let latest10Q = null;
+        
+        if (formsByType['10-K'].length > 0) {
+          formsByType['10-K'].sort((a, b) => new Date(b.date) - new Date(a.date));
+          latest10K = formsByType['10-K'][0];
+        }
+        
+        if (formsByType['10-Q'].length > 0) {
+          formsByType['10-Q'].sort((a, b) => new Date(b.date) - new Date(a.date));
+          latest10Q = formsByType['10-Q'][0];
+          
+          // Check if recent (within 90 days)
+          const ninetyDaysAgo = new Date();
+          ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+          latest10Q.isRecent = new Date(latest10Q.date) >= ninetyDaysAgo;
+        }
+
+        // Build EDGAR URLs for this company
+        const edgarUrls = this.buildEdgarUrls(cik);
+        
+        // Create one item per company
+        items.push({
+          companyName,
+          cik,
+          latest10K,
+          latest10Q,
+          recentForms: recentForms.slice(0, 10), // Show up to 10 most recent forms
+          totalForms: Object.keys(forms).length,
+          edgarUrls, // Add URLs object
+          raw: info
+        });
       }
-      // Sort by date desc
-      items.sort((a, b) => new Date(b.filingDate) - new Date(a.filingDate));
+      
+      // Sort by company name
+      items.sort((a, b) => a.companyName.localeCompare(b.companyName));
       return items;
+    },
+
+    buildEdgarUrls(cik) {
+      // Pad CIK to 10 digits as per SEC format
+      const paddedCik = String(cik).padStart(10, '0');
+      
+      return {
+        browse: `https://www.sec.gov/cgi-bin/browse-edgar?CIK=${cik}&action=getcompany`,
+        facts: `https://data.sec.gov/api/xbrl/companyfacts/CIK${paddedCik}.json`,
+        issuerTransactions: `https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK=${cik}`,
+        ownerTransactions: `https://www.sec.gov/cgi-bin/own-disp?action=getowner&CIK=${cik}`
+      };
     },
 
     applyFilters() {
       let results = [...this.allItems];
-      const ninetyDaysAgo = new Date();
-      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-
+      
+      // For summary data, we filter by presence of filing types
       if (this.filters.has10K) {
-        results = results.filter(item => (item.filingType || '').toUpperCase().startsWith('10-K'));
+        results = results.filter(item => item.latest10K);
       }
       if (this.filters.recent10Q) {
-        results = results.filter(item => {
-          if (!(item.filingType || '').toUpperCase().startsWith('10-Q')) return false;
-          const dt = new Date(item.filingDate);
-          return dt >= ninetyDaysAgo;
-        });
-      }
-      if (this.filters.division) {
-        results = results.filter(item => item.sic.division === this.filters.division);
-      }
-      if (this.filters.fiscalYearEnd) {
-        results = results.filter(item => this.formatFYE(item.fiscalYearEnd) === this.filters.fiscalYearEnd);
+        results = results.filter(item => item.latest10Q && item.latest10Q.isRecent);
       }
 
       this.filteredResults = results;
@@ -183,36 +197,9 @@ function createEdgarExplorerComponent() {
     },
 
     updateFilterOptions() {
-      // Discover unique divisions and FYE from filtered results
-      const divisionSet = new Set();
-      const fyeSet = new Set();
-      this.filteredResults.forEach(item => {
-        if (item.sic.division) divisionSet.add(item.sic.division);
-        if (item.fiscalYearEnd) fyeSet.add(this.formatFYE(item.fiscalYearEnd));
-      });
-      this.availableDivisions = Array.from(divisionSet).sort();
-      this.availableFiscalYearEnds = Array.from(fyeSet).sort();
-    },
-
-    formatFYE(fyeString) {
-      // Convert "MMDD" or "MM/DD" to "MM/YY" format with current year
-      if (!fyeString) return '';
-      const cleaned = fyeString.replace(/\D/g, '');
-      if (cleaned.length < 4) return fyeString;
-      const mm = cleaned.substring(0, 2);
-      const dd = cleaned.substring(2, 4);
-      const yy = new Date().getFullYear().toString().slice(-2);
-      return `${mm}/${yy}`;
-    },
-
-    displayFYE(fyeString) {
-      // For display in the UI, use MM/DD format
-      if (!fyeString) return '';
-      const cleaned = fyeString.replace(/\D/g, '');
-      if (cleaned.length < 4) return fyeString;
-      const mm = cleaned.substring(0, 2);
-      const dd = cleaned.substring(2, 4);
-      return `${mm}/${dd}`;
+      // No additional filter discovery needed for company-level summary data
+      this.availableDivisions = [];
+      this.availableFiscalYearEnds = [];
     },
 
     // Pagination helpers
@@ -300,11 +287,115 @@ function createEdgarExplorerComponent() {
       } catch (err) {
         console.warn('[EdgarExplorer] Failed to load URL state', err);
       }
+    },
+
+    // ========== Pagination Methods ==========
+    firstPage() {
+      if (this.currentPage !== 1) {
+        this.currentPage = 1;
+        this.updateUrlState?.();
+        this.scrollToResults();
+      }
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+        this.updateUrlState?.();
+        this.scrollToResults();
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.updateUrlState?.();
+        this.scrollToResults();
+      }
+    },
+    lastPage() {
+      if (this.currentPage !== this.totalPages) {
+        this.currentPage = this.totalPages;
+        this.updateUrlState?.();
+        this.scrollToResults();
+      }
+    },
+    goToPage(pageNum) {
+      if (pageNum >= 1 && pageNum <= this.totalPages) {
+        this.currentPage = pageNum;
+        this.updateUrlState?.();
+        this.scrollToResults();
+      }
+    },
+
+    // ========== UI Helpers ==========
+    getVisiblePages() {
+      const maxButtons = 5;
+      let start = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
+      let end = Math.min(this.totalPages, start + maxButtons - 1);
+      if (end - start + 1 < maxButtons) {
+        start = Math.max(1, end - maxButtons + 1);
+      }
+      const pages = [];
+      for (let p = start; p <= end; p++) {
+        pages.push(p);
+      }
+      return pages;
+    },
+
+    getResultsHeadline() {
+      if (!this.hasResults) {
+        return this.statusMessage || 'No results';
+      }
+      return `${this.filteredResults?.length || 0} results`;
+    },
+
+    getResultsRangeLabel() {
+      if (!this.hasResults || !this.filteredResults?.length) {
+        return 'Showing 0-0 of 0';
+      }
+      const start = (this.currentPage - 1) * this.resultsPerPage + 1;
+      const end = Math.min(this.filteredResults.length, start + this.resultsPerPage - 1);
+      return `Showing ${start}-${end} of ${this.filteredResults.length}`;
+    },
+
+    getCurrentPageResults() {
+      const start = (this.currentPage - 1) * this.resultsPerPage;
+      const end = start + this.resultsPerPage;
+      return this.filteredResults.slice(start, end);
+    },
+
+    // ========== Navigation & Scroll ==========
+    handleKeyboard(event) {
+      if (!this.showResults || !this.filteredResults?.length) return;
+      const tag = event.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          this.prevPage();
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          this.nextPage();
+          break;
+        case 'Home':
+          event.preventDefault();
+          this.firstPage();
+          break;
+        case 'End':
+          event.preventDefault();
+          this.lastPage();
+          break;
+      }
+    },
+
+    scrollToResults() {
+      const resultsDiv = document.getElementById('edgar-search-results');
+      if (resultsDiv) {
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
-  
-  // Return the component with base class methods properly merged
-  return Object.assign(component, base);
 }
 
 // Expose globally
