@@ -1,21 +1,30 @@
 /**
  * Global Industry Code Search - Alpine.js Version
- * Refactored to use Alpine.js for better state management and reduced code duplication
+ * Extends ExplorerBase for shared pagination and UI logic
  */
 
 function createGlobalSearchComponent() {
   return {
-    // State
-    searchQuery: '',
+    // Pagination state
     currentPage: 1,
-    resultsPerPage: 10,
     totalPages: 1,
-    filteredResults: [],
+    resultsPerPage: 10,
+    
+    // UI state
+    isSearching: false,
+    hasResults: false,
+    errorMessage: '',
+    statusMessage: '',
+    showResults: false,
+    
+    // Industry-specific state (extends ExplorerBase)
+    searchQuery: '',
     allResults: [],
+    filteredResults: [],
     expandedCards: {},
     pageSizes: [10, 25, 50, 100],
     
-    // Filter states
+    // Filter states (Industry-specific)
     filters: {
       all: true,
       'US SIC': true,
@@ -33,14 +42,6 @@ function createGlobalSearchComponent() {
       'ISIC': 0,
       'Japan SIC': 0
     },
-    
-    // UI states
-    isSearching: false,
-    hasResults: false,
-    errorMessage: '',
-    statusMessage: '',
-    showResults: false,
-    jumpToPage: '',
     
     /**
      * Initialize the component
@@ -239,104 +240,17 @@ function createGlobalSearchComponent() {
     /**
      * Navigate to page
      */
-    goToPage(pageNum) {
-      const num = parseInt(pageNum);
-      if (Number.isNaN(num)) return;
-      if (num >= 1 && num <= this.totalPages && num !== this.currentPage) {
-        this.currentPage = num;
-        this.updateUrlState();
-        this.$nextTick(() => {
-          document.getElementById('globalSearchResults')?.scrollIntoView({ behavior: 'smooth' });
-        });
-      }
-    },
-    
     /**
-     * Go to next page
+     * Change page size (Industry-specific)
      */
-    nextPage() {
-      if (this.currentPage < this.totalPages) {
-        this.currentPage++;
-        this.updateUrlState();
-        this.scrollToResults();
-      }
-    },
-    
-    /**
-     * Go to previous page
-     */
-      previousPage() {
-      if (this.currentPage > 1) {
-        this.currentPage--;
-        this.updateUrlState();
-        this.scrollToResults();
-      }
-    },
-
-      /**
-       * Alias for template usage
-       */
-      prevPage() {
-        this.previousPage();
-      },
-    
-    /**
-     * Go to first page
-      changeResultsPerPage(newPageSize) {
-        this.changePageSize(newPageSize);
-        this.scrollToResults();
-      }
-    },
-    
-    /**
-     * Go to last page
-     */
-    lastPage() {
-      if (this.currentPage !== this.totalPages) {
-        this.currentPage = this.totalPages;
-        this.updateUrlState();
-        this.scrollToResults();
-      }
-    },
-    
-    /**
-     * Handle keyboard shortcuts
-     */
-    handleKeyboard(event) {
-      if (!this.showResults || !this.filteredResults.length) return;
-      const tag = event.target?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-
-      switch (event.key) {
-        case 'ArrowLeft':
-          event.preventDefault();
-          this.previousPage();
-          break;
-        case 'ArrowRight':
-          event.preventDefault();
-          this.nextPage();
-          break;
-        case 'Home':
-          event.preventDefault();
-          this.firstPage();
-          break;
-        case 'End':
-          event.preventDefault();
-          this.lastPage();
-          break;
-      }
-    },
-    
-    /**
-     * Scroll results into view
-     */
-    scrollToResults() {
-      this.$nextTick(() => {
-        const resultsDiv = document.getElementById('globalSearchResults');
-        if (resultsDiv) {
-          resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      });
+    changePageSize(newSize) {
+      const size = parseInt(newSize);
+      if (!this.pageSizes.includes(size)) return;
+      this.resultsPerPage = size;
+      this.totalPages = Math.max(1, Math.ceil(this.filteredResults.length / this.resultsPerPage));
+      if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
+      this.updateUrlState();
+      this.scrollToResults('industry-search-results');
     },
     
     /**
@@ -497,23 +411,8 @@ function createGlobalSearchComponent() {
     /**
      * Results headline (total count)
      */
-    getResultsHeadline() {
-      if (!this.hasResults || !this.filteredResults.length) return this.statusMessage || 'No results';
-      return `${this.filteredResults.length} results`;
-    },
-
     /**
-     * Results range (Showing X-Y of N)
-     */
-    getResultsRangeLabel() {
-      if (!this.hasResults || !this.filteredResults.length) return 'Showing 0-0 of 0';
-      const start = (this.currentPage - 1) * this.resultsPerPage + 1;
-      const end = Math.min(this.filteredResults.length, start + this.resultsPerPage - 1);
-      return `Showing ${start}-${end} of ${this.filteredResults.length}`;
-    },
-
-    /**
-     * Active filters label
+     * Active filters label (override base class)
      */
     getActiveFiltersLabel() {
       const active = this.getSelectedSources();
@@ -568,8 +467,54 @@ function createGlobalSearchComponent() {
     },
 
     /**
-     * Visible pagination pages
+     * Jump to a page (validated)
      */
+    jumpToPageAction() {
+      const target = parseInt(this.jumpToPage);
+      if (Number.isNaN(target)) return;
+      const clamped = Math.min(Math.max(target, 1), this.totalPages);
+      this.jumpToPage = clamped;
+      this.goToPage(clamped);
+    },
+
+    // ========== Pagination Methods ==========
+    firstPage() {
+      if (this.currentPage !== 1) {
+        this.currentPage = 1;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    prevPage() {
+      if (this.currentPage > 1) {
+        this.currentPage--;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    nextPage() {
+      if (this.currentPage < this.totalPages) {
+        this.currentPage++;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    lastPage() {
+      if (this.currentPage !== this.totalPages) {
+        this.currentPage = this.totalPages;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+    goToPage(pageNum) {
+      if (pageNum >= 1 && pageNum <= this.totalPages) {
+        this.currentPage = pageNum;
+        this.updateUrlState?.();
+        this.scrollToResults('industry-search-results');
+      }
+    },
+
+    // ========== UI Helpers ==========
     getVisiblePages() {
       const maxButtons = 5;
       let start = Math.max(1, this.currentPage - Math.floor(maxButtons / 2));
@@ -584,28 +529,59 @@ function createGlobalSearchComponent() {
       return pages;
     },
 
-    /**
-     * Change page size
-     */
-    changePageSize(newSize) {
-      const size = parseInt(newSize);
-      if (!this.pageSizes.includes(size)) return;
-      this.resultsPerPage = size;
-      this.totalPages = Math.max(1, Math.ceil(this.filteredResults.length / this.resultsPerPage));
-      if (this.currentPage > this.totalPages) this.currentPage = this.totalPages;
-      this.updateUrlState();
-      this.scrollToResults();
+    getResultsHeadline() {
+      if (!this.hasResults) {
+        return this.statusMessage || 'No results';
+      }
+      return `${this.filteredResults?.length || 0} results`;
     },
 
-    /**
-     * Jump to a page (validated)
-     */
-    jumpToPageAction() {
-      const target = parseInt(this.jumpToPage);
-      if (Number.isNaN(target)) return;
-      const clamped = Math.min(Math.max(target, 1), this.totalPages);
-      this.jumpToPage = clamped;
-      this.goToPage(clamped);
+    getResultsRangeLabel() {
+      if (!this.hasResults || !this.filteredResults?.length) {
+        return 'Showing 0-0 of 0';
+      }
+      const start = (this.currentPage - 1) * this.resultsPerPage + 1;
+      const end = Math.min(this.filteredResults.length, start + this.resultsPerPage - 1);
+      return `Showing ${start}-${end} of ${this.filteredResults.length}`;
+    },
+
+    getCurrentPageResults() {
+      const start = (this.currentPage - 1) * this.resultsPerPage;
+      const end = start + this.resultsPerPage;
+      return this.filteredResults.slice(start, end);
+    },
+
+    // ========== Navigation & Scroll ==========
+    handleKeyboard(event) {
+      if (!this.showResults || !this.filteredResults?.length) return;
+      const tag = event.target?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      
+      switch (event.key) {
+        case 'ArrowLeft':
+          event.preventDefault();
+          this.prevPage();
+          break;
+        case 'ArrowRight':
+          event.preventDefault();
+          this.nextPage();
+          break;
+        case 'Home':
+          event.preventDefault();
+          this.firstPage();
+          break;
+        case 'End':
+          event.preventDefault();
+          this.lastPage();
+          break;
+      }
+    },
+
+    scrollToResults(containerId) {
+      const resultsDiv = document.getElementById(containerId || 'industry-search-results');
+      if (resultsDiv) {
+        resultsDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
   };
 }

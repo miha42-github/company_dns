@@ -37,10 +37,10 @@
             </p>
             
             <ul class="help-features">
-              <li><i class="help-feature-icon help-search-icon"></i> <strong>Search industry codes</strong> across multiple classification systems</li>
-              <li><i class="help-feature-icon help-company-icon"></i> <strong>Retrieve company information</strong> from Wikipedia and EDGAR</li>
-              <li><i class="help-feature-icon help-api-icon"></i> <strong>Access standardized data</strong> through a consistent RESTful API</li>
-              <li><i class="help-feature-icon help-globe-icon"></i> <strong>Compare industry classifications</strong> across different international standards</li>
+              <li><i data-feather="search" class="help-feature-icon"></i> <strong>Search industry codes</strong> across multiple classification systems</li>
+              <li><i data-feather="briefcase" class="help-feature-icon"></i> <strong>Retrieve company information</strong> from Wikipedia and EDGAR</li>
+              <li><i data-feather="monitor" class="help-feature-icon"></i> <strong>Access standardized data</strong> through a consistent RESTful API</li>
+              <li><i data-feather="globe" class="help-feature-icon"></i> <strong>Compare industry classifications</strong> across different international standards</li>
             </ul>
             
             <div class="help-deployment-info">
@@ -303,15 +303,15 @@
             <h2>Additional Resources</h2>
             <div class="help-resource-links">
               <a href="https://github.com/miha42-github/company_dns/issues" target="_blank" class="help-resource-link">
-                <i class="help-resource-icon help-issue-icon"></i>
+                <i data-feather="alert-circle" class="help-resource-icon"></i>
                 <span>Report Issues</span>
               </a>
               <a href="https://github.com/miha42-github/company_dns" target="_blank" class="help-resource-link">
-                <i class="help-resource-icon help-github-icon"></i>
+                <i data-feather="github" class="help-resource-icon"></i>
                 <span>Source Repository</span>
               </a>
               <a href="http://www.apache.org/licenses/" target="_blank" class="help-resource-link">
-                <i class="help-resource-icon help-license-icon"></i>
+                <i data-feather="file" class="help-resource-icon"></i>
                 <span>Apache 2.0 License</span>
               </a>
             </div>
@@ -326,7 +326,7 @@
       <!-- Global Search Tab Content -->
       <div id="GlobalSearch" class="explorer-pagecontent" x-data="createGlobalSearchComponent()" @load="init()">
         <!-- Initial centered search (shown before search) -->
-        <div id="initialSearchContainer" class="explorer-search-container" x-show="!showResults">
+        <div id="industry-initial-search" class="explorer-search-container" x-show="!showResults">
           <h1>Industry Classification Explorer</h1>
           
           <div class="explorer-intro">
@@ -335,28 +335,13 @@
               for various business activities. This tool helps you identify equivalent categories
               across different standards.
             </p>
-            
-            <div class="explorer-features">
-              <div class="explorer-feature">
-                <i class="feature-icon search-icon"></i>
-                <span>Search by keyword or description</span>
-              </div>
-              <div class="explorer-feature">
-                <i class="feature-icon globe-icon"></i>
-                <span>Compare international standards</span>
-              </div>
-              <div class="explorer-feature">
-                <i class="feature-icon company-icon"></i>
-                <span>Find industry categories</span>
-              </div>
-            </div>
           </div>
           
           <div class="explorer-search-card">
             <h2>Enter an Industry Keyword</h2>
-            <form id="globalSearchForm" @submit.prevent="performSearch()">
+            <form id="industry-search-form" @submit.prevent="performSearch()">
               <div class="explorer-input-group">
-                <input type="text" x-model="searchQuery" id="globalSearchInput" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                <input type="text" x-model="searchQuery" id="industry-search-input" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
                 <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                   <i class="explorer-action-icon"></i>
                   <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
@@ -368,14 +353,14 @@
         </div>
 
         <!-- Post-search layout (initially hidden) -->
-        <div id="searchResultsLayout" class="explorer-results-layout" x-show="showResults">
+        <div id="industry-results-layout" class="explorer-results-layout" x-show="showResults">
           <h1>Industry Classification Explorer</h1>
           
           <div class="explorer-search-wrapper">
             <div class="explorer-top-container">
-              <form id="globalSearchFormTop" @submit.prevent="performSearch()">
+            <form id="industry-search-form-top" @submit.prevent="performSearch()">
                 <div class="explorer-input-group">
-                  <input type="text" x-model="searchQuery" id="globalSearchInputTop" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                  <input type="text" x-model="searchQuery" id="industry-search-input-top" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
                   <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                     <i class="explorer-action-icon"></i>
                     <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
@@ -449,7 +434,7 @@
                 </div>
                 
                 <div class="explorer-container-wrapper">
-                  <div id="globalSearchResults" class="explorer-results-container">
+                  <div id="industry-search-results" class="explorer-results-container">
                     <!-- Results will be populated via Alpine.js -->
                     <template x-if="hasResults && getCurrentPageResults().length > 0">
                       <div>
@@ -563,7 +548,7 @@
                 <div class="pagination-controls" x-show="hasResults && filteredResults.length">
                   <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
                   <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
-                  <template x-for="page in getVisiblePages()" :key="'page-' + page">
+                  <template x-for="page in getVisiblePages()" :key="'industry-page-' + page">
                     <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
                   </template>
                   <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
@@ -578,7 +563,7 @@
       <!-- EDGAR Explorer Tab Content -->
       <div id="EdgarExplorer" class="explorer-pagecontent" x-data="createEdgarExplorerComponent()" @load="init()" style="display: none;">
         <!-- Initial centered search (shown before search) -->
-        <div id="initialEdgarSearchContainer" class="explorer-search-container" x-show="!showResults">
+        <div id="edgar-initial-search" class="explorer-search-container" x-show="!showResults">
           <h1>EDGAR Explorer</h1>
           <div class="explorer-intro">
             <p>
@@ -589,9 +574,9 @@
           </div>
           <div class="explorer-search-card">
             <h2>Enter Company Name or CIK</h2>
-            <form id="edgarSearchForm" @submit.prevent="performSearch()">
+            <form id="edgar-search-form" @submit.prevent="performSearch()">
               <div class="explorer-input-group">
-                <input type="text" x-model="searchQuery" id="edgarSearchInput" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
+                <input type="text" x-model="searchQuery" id="edgar-search-input" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
                 <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                   <i class="explorer-action-icon" x-show="!isSearching"></i>
                   <i class="spinner-icon" x-show="isSearching"></i>
@@ -604,13 +589,13 @@
         </div>
 
         <!-- Post-search layout -->
-        <div id="edgarSearchResultsLayout" class="explorer-results-layout" x-show="showResults">
+        <div id="edgar-results-layout" class="explorer-results-layout" x-show="showResults">
           <h1>EDGAR Explorer</h1>
           <div class="explorer-search-wrapper">
             <div class="explorer-top-container">
-              <form id="edgarSearchFormTop" @submit.prevent="performSearch()">
+              <form id="edgar-search-form-top" @submit.prevent="performSearch()">
                 <div class="explorer-input-group">
-                  <input type="text" x-model="searchQuery" id="edgarSearchInputTop" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
+                  <input type="text" x-model="searchQuery" id="edgar-search-input-top" class="dns-textfield explorer-input" placeholder="e.g., IBM or 0000051143" required>
                   <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
                     <i class="explorer-action-icon" x-show="!isSearching"></i>
                     <i class="spinner-icon" x-show="isSearching"></i>
@@ -682,85 +667,45 @@
                 </div>
 
                 <div class="explorer-container-wrapper">
-                  <div id="edgarSearchResults" class="explorer-results-container">
+                  <div id="edgar-search-results" class="explorer-results-container">
                     <template x-if="hasResults && getCurrentPageResults().length > 0">
                       <div>
-                        <template x-for="item in getCurrentPageResults()" :key="item.accessionNumber + '-' + item.filingType">
+                        <template x-for="item in getCurrentPageResults()" :key="item.cik">
                           <div class="explorer-result-card">
-                            <div class="explorer-result-header">
-                              <div class="edgar-pill-group-header">
-                                <template x-if="item.latest10K">
-                                  <a :href="item.latest10K.url" target="_blank" class="dns-button edgar-pill" :title="'Latest 10-K (' + item.latest10K.date + ')'">
-                                    <i class="external-link-icon"></i>
-                                    <span>10‑K</span>
-                                    <span class="status-dot">•</span>
-                                    <span x-text="item.latest10K.date"></span>
-                                  </a>
-                                </template>
-                                <template x-if="!item.latest10K">
-                                  <button class="dns-button edgar-pill disabled" disabled>
-                                    <i class="external-link-icon"></i>
-                                    <span>10‑K</span>
-                                  </button>
-                                </template>
-
-                                <template x-if="item.latest10Q">
-                                  <a :href="item.latest10Q.url" target="_blank" class="dns-button edgar-pill" :class="{ 'recent': item.latest10Q.isRecent }" :title="'Latest 10-Q (' + item.latest10Q.date + ')'">
-                                    <i class="external-link-icon"></i>
-                                    <span>10‑Q</span>
-                                    <span class="status-dot">•</span>
-                                    <span x-text="item.latest10Q.date"></span>
-                                  </a>
-                                </template>
-                                <template x-if="!item.latest10Q">
-                                  <button class="dns-button edgar-pill disabled" disabled>
-                                    <i class="external-link-icon"></i>
-                                    <span>10‑Q</span>
-                                  </button>
-                                </template>
+                            <!-- Company Header Line -->
+                            <div class="edgar-company-header">
+                              <div class="edgar-company-info">
+                                <strong>Company:</strong>
+                                <span x-text="item.companyName"></span>
+                                <span class="edgar-meta">CIK: <span x-text="item.cik"></span></span>
+                                <span class="edgar-meta">Total Filings: <span x-text="item.totalForms"></span></span>
                               </div>
-                              <div class="explorer-result-heading-right">
-                                <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
+                              <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
+                            </div>
+
+                            <!-- Top 3 Recent Forms as Pills -->
+                            <div class="edgar-recent-forms-compact">
+                              <span class="edgar-forms-label">Recent Forms:</span>
+                              <div class="edgar-pill-group">
+                                <template x-if="item.recentForms.length > 0">
+                                  <template x-for="form in item.recentForms.slice(0, 3)" :key="form.key">
+                                    <a :href="form.url" target="_blank" class="edgar-pill">
+                                      <i class="external-link-icon"></i>
+                                      <span x-text="form.type + ' ' + form.date"></span>
+                                    </a>
+                                  </template>
+                                </template>
+                                <template x-if="item.recentForms.length === 0">
+                                  <span style="color: #888; font-size: 0.9em;">No filings in database</span>
+                                </template>
                               </div>
                             </div>
-                            <div class="explorer-result-body">
-                              <!-- Row 1: Primary metadata -->
-                              <div class="edgar-meta-row">
-                                <div class="meta-item">
-                                  <span class="meta-label">Company</span>
-                                  <span class="meta-value" x-text="item.companyName"></span>
-                                </div>
-                                <div class="meta-item">
-                                  <span class="meta-label">CIK</span>
-                                  <span class="meta-value" x-text="item.cik"></span>
-                                </div>
-                                <div class="meta-item">
-                                  <span class="meta-label">SIC</span>
-                                  <span class="meta-value" x-text="item.sic.code"></span>
-                                  <span class="meta-sub" x-text="item.sic.description"></span>
-                                </div>
-                                <div class="meta-item">
-                                  <span class="meta-label">Division</span>
-                                  <span class="meta-value" x-text="item.sic.division"></span>
-                                  <span class="meta-sub" x-text="item.sic.divisionDescription"></span>
-                                </div>
-                              </div>
-                              <!-- Row 2: Secondary metadata -->
-                              <div class="edgar-meta-row">
-                                <div class="meta-item">
-                                  <span class="meta-label">Ticker/Exchange</span>
-                                  <span class="meta-value" x-text="(item.ticker || '') + (item.exchange ? ' @ ' + item.exchange : '')"></span>
-                                </div>
-                                <div class="meta-item">
-                                  <span class="meta-label">Fiscal Year End</span>
-                                  <span class="meta-value" x-text="displayFYE(item.fiscalYearEnd)"></span>
-                                </div>
-                                <div class="meta-item">
-                                  <span class="meta-label">Location</span>
-                                  <span class="meta-value" x-text="item.location.city + ', ' + item.location.stateProvince"></span>
-                                  <span class="meta-sub" x-text="item.location.address"></span>
-                                </div>
-                              </div>
+
+                            <!-- Quick Action Links -->
+                            <div class="edgar-quick-links">
+                              <a :href="item.edgarUrls.browse" target="_blank" class="edgar-quick-link" title="Browse all filings for this company">Browse EDGAR</a>
+                              <a :href="item.edgarUrls.issuerTransactions" target="_blank" class="edgar-quick-link" title="View insider transactions filed by issuer">Issuer Transactions</a>
+                              <a :href="item.edgarUrls.ownerTransactions" target="_blank" class="edgar-quick-link" title="View insider transactions by beneficial owner">Insider Trades</a>
                             </div>
                           </div>
                         </template>
@@ -768,8 +713,8 @@
                     </template>
                   </div>
                 </div>
-
-                <div class="pagination-controls" x-show="hasResults && filteredItems.length">
+                
+                <div class="pagination-controls" x-show="hasResults && filteredResults.length">
                   <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
                   <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
                   <template x-for="page in getVisiblePages()" :key="'edgar-page-' + page">
@@ -791,6 +736,8 @@
     </footer>
   </div>
 
+  <!-- Feather Icons local script -->
+  <script src="/static/js/feather.min.js"></script>
   <script>
     // Update the window.onload function
     window.onload = function () {
@@ -817,6 +764,15 @@
       }
       
       console.log("Application initialization complete");
+
+      // Replace any Feather icons if present
+      try {
+        if (window.feather && typeof feather.replace === 'function') {
+          feather.replace();
+        }
+      } catch (e) {
+        console.warn('Feather icon replacement failed:', e);
+      }
     }
 
     // Generate the tables

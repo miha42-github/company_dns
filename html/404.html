@@ -173,15 +173,15 @@
     
     <div class="error-actions">
       <a href="/docs" class="error-button">
-        <span class="error-button-icon">📖</span>
+        <i data-feather="file-text" class="error-button-icon"></i>
         API Reference
       </a>
       <a href="/health" class="error-button">
-        <span class="error-button-icon">💚</span>
+        <i data-feather="check" class="error-button-icon"></i>
         API Status
       </a>
       <a href="/" class="error-button">
-        <span class="error-button-icon">🏠</span>
+        <i data-feather="home" class="error-button-icon"></i>
         Home
       </a>
     </div>
@@ -192,6 +192,8 @@
     </div>
   </div>
   
+  <!-- Feather Icons local script -->
+  <script src="/static/js/feather.min.js"></script>
   <script>
     // Insert the requested path into the error message
     const path = window.location.pathname;
@@ -202,6 +204,15 @@
     
     // Optional: Log to console for debugging
     console.log(`404 Error: Path "${path}" not found`);
+
+    // Replace any Feather icons if present
+    try {
+      if (window.feather && typeof feather.replace === 'function') {
+        feather.replace();
+      }
+    } catch (e) {
+      console.warn('Feather icon replacement failed:', e);
+    }
   </script>
 </body>
 </html>
