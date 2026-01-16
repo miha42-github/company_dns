@@ -679,7 +679,7 @@ label {
   display: flex;
   flex: 1 1 auto;         /* CHANGED: Use flex instead of height: 100% */
   min-height: 0;  
-  height: calc(100vh - 290);           /* NEW: Critical for flex scrolling */
+  height: calc(100vh - 290px);           /* NEW: Critical for flex scrolling */
   overflow: hidden;      /* Avoid clipping top-of-content */
 }
 
@@ -688,7 +688,7 @@ label {
   width: 220px;
   padding: 1rem;
   border-right: 1px solid #3c3b3b;
-  height: calc(100vh-290px);
+  height: calc(100vh - 290px);
   overflow-y: auto;
   flex-shrink: 0;
   background-color: transparent;
