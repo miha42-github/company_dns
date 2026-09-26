@@ -87,8 +87,14 @@ class EdgarQueries:
         flat_return=False,
         description='A module and simple CLI too to search for company data in EDGAR.'):
 
-        # The SQLite database connection and cursor
-        self.e_conn = sqlite3.connect(db_file)
+        # The SQLite database connection and cursor.
+        # check_same_thread=False: this instance is constructed on the event
+        # loop thread (company_dns.py's _handle_request) but its query
+        # methods run in FastAPI's threadpool (via run_in_threadpool) on a
+        # different thread. Safe here because a fresh instance - and its own
+        # connection - exists only for the one request that created it; no
+        # other request/thread ever touches this connection.
+        self.e_conn = sqlite3.connect(db_file, check_same_thread=False)
         self.ec = self.e_conn.cursor()
         self.db_file = db_file
         self.flat_return = flat_return
