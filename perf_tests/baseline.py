@@ -28,6 +28,7 @@ standard library.
 import argparse
 import json
 import statistics
+import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -328,6 +329,46 @@ def print_concurrency_summary(results: list[CallResult], sequential_results: lis
 # --------------------------------------------------------------------- #
 
 
+def capture_provenance(namespace: str = "company-dns", deployment: str = "company-dns") -> dict:
+    """Best-effort record of what code was actually running when a
+    measurement was taken, so a report from next month can be matched back
+    to the PR(s) live at the time instead of relying on memory. Never
+    raises - a run against a host with no git checkout or no kubectl access
+    should still produce a usable report, just with these fields as null.
+    """
+    provenance = {"git_commit": None, "deployed_image": None}
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=Path(__file__).resolve().parent,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            provenance["git_commit"] = result.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    try:
+        result = subprocess.run(
+            [
+                "kubectl", "-n", namespace, "get", "deployment", deployment,
+                "-o", "jsonpath={.spec.template.spec.containers[0].image}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            provenance["deployed_image"] = result.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    return provenance
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help=f"default: {DEFAULT_BASE_URL}")
@@ -348,6 +389,12 @@ def main():
         print(f"\n{len(calls)} sequential calls total.")
         return
 
+    provenance = capture_provenance()
+    print(
+        f"==> Provenance: git_commit={provenance['git_commit'] or '(unavailable)'} "
+        f"deployed_image={provenance['deployed_image'] or '(unavailable)'}"
+    )
+
     print(f"==> Verifying endpoints against {args.base_url}/openapi.json")
     verify_endpoints_exist(args.base_url, args.timeout)
 
@@ -366,6 +413,8 @@ def main():
     report = {
         "base_url": args.base_url,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "git_commit": provenance["git_commit"],
+        "deployed_image": provenance["deployed_image"],
         "concurrency_levels": args.concurrency,
         "repeat": args.repeat,
         "sequential_results": [r.__dict__ for r in sequential_results],

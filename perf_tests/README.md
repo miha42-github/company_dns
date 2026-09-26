@@ -37,7 +37,41 @@ python3 perf_tests/baseline.py --concurrency 1 2 4 8 16 --repeat 3
 
 Full results (every call: endpoint, company, URL, status, latency) are
 written as JSON to `perf_tests/results/<timestamp>.json` by default, or
-wherever `--out` points. Console output is a human-readable summary.
+wherever `--out` points. Console output is a human-readable summary. Each
+report also stamps `git_commit` (best-effort, from whatever checkout the
+script is run from) and `deployed_image` (best-effort, shelled out to
+`kubectl -n company-dns get deployment company-dns -o jsonpath=...` when
+`kubectl` is available) — so a report can be matched back to exactly what
+code was live when it was taken, without relying on memory or reconstructing
+it from PR merge times later.
+
+## Comparing two runs
+
+```bash
+python3 perf_tests/compare.py perf_tests/results/before.json perf_tests/results/after.json
+
+# Write the diff out as JSON too, and/or tune the flagging thresholds
+python3 perf_tests/compare.py before.json after.json --out diff.json
+python3 perf_tests/compare.py before.json after.json --regression-pct 15 --improvement-pct 25
+```
+
+Prints both reports' provenance, then a per-endpoint sequential latency
+delta (median/p95, before vs. after) and a per-`(endpoint, concurrency
+level)` concurrency delta (wall time, speedup-vs-serial, before vs. after),
+flagging anything that got meaningfully worse as **REGRESSION** and
+meaningfully better as **IMPROVED** (thresholds configurable, default 10%
+worse / 20% better) so the interesting rows don't require reading every
+line.
+
+**Caveat, worth internalizing before trusting a flag**: `edgar_ciks`,
+`edgar_detail`, `edgar_firmographics_by_cik`, `health`, and `sic_lookup` are
+either local-only or a single direct SEC call — clean signal for whatever
+code change you're testing. `wikipedia_firmographics` and
+`merged_firmographics` carry real variance from Wikipedia/Wikidata's own
+response times and upstream caching that has nothing to do with
+`company_dns` code — a flag on those two when your change didn't touch the
+Wikipedia path at all is noise, not signal. `compare.py`'s docstring repeats
+this; it's easy to forget mid-investigation.
 
 Requires only `requests` (already a `company_dns` dependency) - no new
 project dependencies.
