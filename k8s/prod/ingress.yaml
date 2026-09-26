@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: company-dns
+  namespace: company-dns
+  labels:
+    app.kubernetes.io/name: company-dns
+  annotations:
+    # TLS certificate managed by cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Force HTTPS via Traefik entrypoint routing
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  # Traefik ingress controller (see docs/plans/onprem-k8s-migration.md,
+  # "Survey results" for why this is `traefik` and not `public`/`nginx`)
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - company-dns.mediumroast.io
+      secretName: company-dns-io-tls
+
+  rules:
+    - host: company-dns.mediumroast.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: company-dns
+                port:
+                  number: 80
+---
+# HTTP ingress — catches port 31103 traffic and redirects to HTTPS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: company-dns-http
+  namespace: company-dns
+  labels:
+    app.kubernetes.io/name: company-dns
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # NOTE: Traefik's Kubernetes-Ingress-annotation Middleware reference is
+    # namespace-prefixed: <namespace>-<name>@kubernetescrd, not <name>@kubernetescrd
+    # (confirmed against the live mediumroast-web ingress). The Middleware
+    # itself (middleware-redirect.yaml) is named "redirect-https" in this
+    # same "company-dns" namespace.
+    traefik.ingress.kubernetes.io/router.middlewares: company-dns-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: company-dns.mediumroast.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: company-dns
+                port:
+                  number: 80
