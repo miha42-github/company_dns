@@ -19,6 +19,11 @@ RUN chmod +x /app/scripts/entrypoint.sh
 # Run makedb.py to create the database cache
 RUN python makedb.py
 
+# Run as a non-root user (k8s deployment sets runAsNonRoot: true)
+RUN addgroup -S company_dns && adduser -S -G company_dns company_dns \
+    && chown -R company_dns:company_dns /app
+USER company_dns
+
 # Set environment variable for production
 ENV ENVIRONMENT=production
 
