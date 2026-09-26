@@ -19,10 +19,14 @@ RUN chmod +x /app/scripts/entrypoint.sh
 # Run makedb.py to create the database cache
 RUN python makedb.py
 
-# Run as a non-root user (k8s deployment sets runAsNonRoot: true)
-RUN addgroup -S company_dns && adduser -S -G company_dns company_dns \
+# Run as a non-root user (k8s deployment sets runAsNonRoot: true).
+# USER must be a numeric UID, not a name: Kubernetes' runAsNonRoot admission
+# check verifies the UID without executing anything in the image, so a named
+# user (USER company_dns) is unresolvable to it and fails closed with
+# "cannot verify user is non-root". A numeric UID here fixes that.
+RUN addgroup -S -g 10001 company_dns && adduser -S -u 10001 -G company_dns company_dns \
     && chown -R company_dns:company_dns /app
-USER company_dns
+USER 10001
 
 # Set environment variable for production
 ENV ENVIRONMENT=production
