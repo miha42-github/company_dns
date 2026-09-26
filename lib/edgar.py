@@ -17,6 +17,16 @@ UKN = "Unknown"
 # Determine how we output when executed as a CLI
 DEBUG = None
 
+# Shared across all EdgarQueries instances (and safe to share across
+# threads - urllib3's connection pool handles concurrent use): reuses a
+# pooled, keep-alive connection to data.sec.gov instead of paying a fresh
+# TCP+TLS handshake on every get_firmographics() call. Deliberately module-
+# level rather than per-instance so it survives however EdgarQueries
+# instances themselves end up being constructed (see
+# docs/plans/performance-improvements.md, item 2, for the separate,
+# unrelated question of whether EdgarQueries instances should be shared).
+_session = requests.Session()
+
 # Fields from the SQL Select results
 COMPANY = 1
 CIK = 0
@@ -367,8 +377,8 @@ class EdgarQueries:
         }
 
         # TODO need try/except
-        # Get the object via REST
-        resp_obj = requests.get(my_url, headers=self.headers)
+        # Get the object via REST - via the shared Session for connection reuse
+        resp_obj = _session.get(my_url, headers=self.headers)
 
         # Raw firmographics which need to be massaged
         raw_firmographics = resp_obj.json()

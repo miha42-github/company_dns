@@ -9,6 +9,16 @@ import datetime
 
 
 class ExtractEdgarData:
+    # Must match EdgarQueries.form_type in lib/edgar.py - the only form
+    # prefix ever queried against the companies table. Filtering here at
+    # ingest time, rather than loading every form type and filtering at
+    # query time, keeps the table to roughly 3% of SEC's full filing index
+    # (measured against a real quarter of the index: ~8,800 of ~288,000
+    # rows match '10-%'), which is what actually made the `companies`
+    # table's LIKE-based name search slow - see
+    # docs/plans/performance-improvements.md, item 1.
+    FORM_TYPE_FILTER = '10-'
+
     def __init__(self, **kwargs):
         global logger
         logging.basicConfig(format='%(asctime)s | %(levelname)s | %(name)s | %(message)s', level=kwargs.get('verbose', logging.WARNING))
@@ -81,10 +91,12 @@ class ExtractEdgarData:
             for entry in csv_reader:
                 if header_re.match(entry[0]):
                     continue
+                my_form = entry[2]
+                if not my_form.startswith(self.FORM_TYPE_FILTER):
+                    continue
                 logger.debug('Detected 10K form proceeding to process.')
                 my_cik = entry[0]
                 my_company = entry[1]
-                my_form = entry[2]
                 (my_year, my_month, my_day) = entry[3].split('-')
                 my_accession = entry[4]
                 idx.append([my_cik, my_company, int(my_year), int(my_month), int(my_day), my_accession, my_form])
