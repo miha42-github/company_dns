@@ -6,7 +6,9 @@ metadata:
   labels:
     app.kubernetes.io/name: company-dns
 spec:
-  replicas: 2
+  # 4 is a deliberate ceiling (docs/plans/performance-improvements.md, item 3),
+  # not "as many as fit" - don't raise this without revisiting that decision.
+  replicas: 4
   selector:
     matchLabels:
       app.kubernetes.io/name: company-dns
