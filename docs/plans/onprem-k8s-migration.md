@@ -1,9 +1,13 @@
 # Migrate company_dns from Azure Container Apps to on-prem MicroK8s
 
-Status: **In progress.** Manifests authored (`k8s/prod/`), EDGAR/Wikipedia
-performance fixes landed, live cluster survey done, all open questions
-resolved. Not yet merged to `main` — see "Step-by-step execution guide" for
-exactly where execution starts and what's left.
+Status: **Migration complete.** `company_dns` is live on the cluster at
+`https://company-dns.mediumroast.io` (verified: TLS cert issued and valid,
+`/health` and representative endpoints returning correct responses), the
+Azure Container App has been deleted, and the Azure deploy steps have been
+removed from CI. Remaining work is entirely optional/deferred: DNS Phase 2
+(dedicated Dynamic DNS host, see below) and, separately, whether to pursue
+the caching/async-I/O tier of the EDGAR/Wikipedia performance work now that
+the two concrete bug fixes are live in production.
 Owner: michael.hay@mediumroast.io
 Target cluster: on-prem MicroK8s HA cluster, worker nodes `cafe-1` and `espresso-1`
 Reference implementation: `mediumroast.io` repo, `V6_K8s` branch, `k8s/prod/` +
@@ -341,51 +345,43 @@ for this migration.
    `scripts/build-and-deploy.sh`; resolve the Dockerfile's non-root user
    question.~~ **Done** — see `k8s/prod/`, `scripts/build-and-deploy.sh`,
    `k8s/README.md`, and the `Dockerfile`'s new `USER company_dns` step.
-3. **Deploy in parallel** with Azure still live: `kubectl apply -f
-   k8s/prod/` creates namespace `company-dns`, Deployment, Service. **Do not
-   apply the Ingress/Certificate yet** if that would collide with the DNS
-   record still pointing at Azure — test the Service directly first
-   (`kubectl -n company-dns port-forward` or a temporary
-   `*.mediumroast.io` test host) before touching DNS.
-4. **Smoke test**: hit a handful of representative endpoints (SIC lookup,
-   EDGAR firmographics, the SPA at `/`) against the new pod directly, compare
-   responses to the live Azure instance.
-5. **Apply Ingress + Middleware + Certificate** (`kubectl apply -f
-   k8s/prod/ingress.yaml -f k8s/prod/middleware-redirect.yaml -f
-   k8s/prod/certificate.yaml`) — do this **before** touching DNS. cert-manager
-   will attempt an HTTP-01 challenge immediately and fail/retry (DNS still
-   points at Azure at this point, so Let's Encrypt can't reach the cluster
-   yet) — that's expected and harmless; it just backs off and retries. Azure
-   traffic is completely unaffected since DNS hasn't moved.
-6. **Cut over DNS — Phase 1 (CNAME to `www.mediumroast.io`)** — see "DNS
-   cutover — Namecheap instructions" below for exact steps. This phase is
-   deliberately the *lower-risk* option first: it reuses `www`'s already-
-   proven-working Dynamic DNS tracking rather than setting up a new DDNS
-   host for `company-dns` before the cluster deployment itself is even
-   verified end-to-end. Once DNS propagates, cert-manager's next retry
-   succeeds (watch with `kubectl -n company-dns get certificate -w`) and the
-   certificate goes `Ready` — this closes the only real downtime window
-   (DNS propagation + one cert-manager retry cycle, typically a few
-   minutes), since applying the Ingress before DNS eliminates any gap where
-   traffic would arrive at Traefik with no route at all.
-7. **Verify TLS + traffic** against the new hostname: cert is `Ready`, TLS
-   handshake succeeds, and the same representative endpoints from step 4
-   (SIC lookup, EDGAR firmographics, SPA at `/`) return correct responses
-   over `https://company-dns.mediumroast.io`. **No extended burn-in window**
-   — per decision below, once this smoke test passes we treat the migration
-   as successful and move straight to teardown. Fallback to Azure (DNS
-   revert) only happens if this step turns up a real failure, not
-   preemptively.
-8. **Decommission Azure Container App immediately** once step 7 passes (see
-   Teardown below) — no soft "scale to zero and wait" window, no multi-day
-   observation period. The point of keeping Azure's config backed up (see
-   Teardown step 2) and the `asuid.company-dns` TXT record intact until
-   Teardown's last step is that a rollback is still *possible* after
-   deletion (redeploy from the backup + `container-app-config.yaml`), just
-   not fast — this plan takes on that risk in exchange for not carrying two
-   production deployments of the same service longer than necessary. This
-   step does not wait on DNS Phase 2 below — the CNAME-to-`www` setup from
-   step 6 is already fully functional and independent of Azure.
+3. ~~**Deploy in parallel** with Azure still live...~~ **Done**, with two
+   real bugs hit and fixed along the way (not caught by review — only
+   surfaced by the actual cluster rejecting the pods):
+   - `CreateContainerConfigError: cannot verify user is non-root` — the
+     Dockerfile's `USER company_dns` set a *named* user, but Kubernetes'
+     `runAsNonRoot` admission check can only verify a *numeric* UID without
+     executing anything in the image. Fixed in
+     [PR #95](https://github.com/miha42-github/company_dns/pull/95):
+     `USER 10001` (numeric) instead.
+   - `deployment "company-dns" exceeded its progress deadline` on the
+     redeploy — `kubectl apply` reported the Deployment `unchanged` even
+     though the image content had changed, because
+     `scripts/build-and-deploy.sh`'s default tag (`date +%m%d%Y`, day
+     granularity) collided with the same day's earlier failed attempt.
+     Same tag string → no diff → no new rollout, and `imagePullPolicy:
+     IfNotPresent` would have reused the stale locally-cached image even if
+     it had rolled out. Unblocked in the moment with an explicit unique tag
+     (`./scripts/build-and-deploy.sh 09262026-2`); the default tag format
+     is still day-granularity as of this writing — **follow-up**: worth
+     tightening to include time or a git SHA so same-day redeploys during
+     active debugging don't collide again.
+4. ~~**Smoke test**...~~ **Done** — `/health`, merged EDGAR+Wikipedia
+   firmographics for IBM, and the SPA root all verified via direct
+   port-forward before DNS was touched.
+5. ~~**Apply Ingress + Middleware + Certificate**...~~ **Done.**
+6. ~~**Cut over DNS — Phase 1 (CNAME to `www.mediumroast.io`)**...~~
+   **Done.** Propagated within minutes; cert-manager's solver picked it up
+   and the certificate went `Ready` shortly after.
+7. ~~**Verify TLS + traffic** against the new hostname...~~ **Done** — TLS
+   handshake verified (`Let's Encrypt`, correct `CN`/SAN), `/health` and the
+   merged firmographics endpoint both returned correct `200` responses over
+   `https://company-dns.mediumroast.io`.
+8. ~~**Decommission Azure Container App immediately**...~~ **Done** — the
+   user confirmed via Azure admin access that the Container App (and some
+   other stale ones) are deleted. GitHub Actions' Azure steps and
+   `container-app-config.yaml` removed in the cleanup PR alongside this
+   status update.
 9. **Cut over DNS — Phase 2 (dedicated Dynamic DNS host), manual, deferred**:
    once Phase 1 (step 6) has been running and verified for a while, manually
    register `company-dns` as its own Namecheap Dynamic DNS-tracked host
@@ -394,12 +390,16 @@ for this migration.
    for anything else in this plan — Azure teardown (step 8) and repo cleanup
    (step 10) don't depend on it. Done manually by the user; not something
    this plan schedules a date for.
-10. **Remove Azure-specific files** from this repo: `container-app-config.yaml`,
-   the Azure steps in `.github/workflows/main.yml`, and any Azure secrets in
-   the repo's GitHub Actions settings (`AZURE_CREDENTIALS`,
-   `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINER_APP_NAME`,
-   `AZURE_CONTAINER_APP_ENV`, `AZURE_SUBSCRIPTION`) — the user has Azure and
-   GitHub admin access to do this directly.
+10. ~~**Remove Azure-specific files** from this repo...~~ **Done**:
+    `container-app-config.yaml` removed and the `Azure Login`/`Deploy to
+    Azure Container App` steps stripped from
+    `.github/workflows/main.yml` (the `Build and push` step to
+    `ghcr.io:latest` stays — still useful independent of Azure). **Still
+    outstanding, user-side**: removing the now-unused `AZURE_CREDENTIALS`,
+    `AZURE_RESOURCE_GROUP`, `AZURE_CONTAINER_APP_NAME`,
+    `AZURE_CONTAINER_APP_ENV`, `AZURE_SUBSCRIPTION` secrets from the repo's
+    GitHub Actions settings — cosmetic at this point (nothing references
+    them anymore), not urgent.
 
 ---
 
