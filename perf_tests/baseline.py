@@ -255,7 +255,22 @@ def run_concurrency_experiment(
                         # company appears twice in one batch (level > len(companies)) -
                         # that's fine, the correctness check below is still valid
                         # since they'd expect the same marker.
-                        expected_marker_by_url[url] = raw_value
+                        #
+                        # Verify against CIK, not the raw query string: EDGAR-
+                        # touching endpoints (merged_firmographics especially)
+                        # legitimately replace the query with the resolved
+                        # formal filer name once a match is found - e.g.
+                        # querying "Amazon (company)" or "IBM" correctly
+                        # returns "AMAZON COM INC" / "INTERNATIONAL BUSINESS
+                        # MACHINES CORP", which will never literal-match the
+                        # query string. CIK is the one identifier that's
+                        # actually stable across every endpoint's response
+                        # format: edgar_ciks returns it unpadded ("51143"),
+                        # wikipedia_firmographics/merged_firmographics return
+                        # it zero-padded ("0000051143") - but the unpadded
+                        # digits are always a substring of the padded form,
+                        # so checking the unpadded CIK works against both.
+                        expected_marker_by_url[url] = c["cik"]
                 else:
                     param = ep.get("fixed_param", "")
                     field_name = ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")] if "{" in ep["path"] else None
@@ -281,14 +296,14 @@ def run_concurrency_experiment(
                         if ep["per_company"]:
                             status, latency_ms, error, body = result
                             if status == 200 and body is not None:
-                                expected_marker = expected_marker_by_url[call.url]
-                                if expected_marker.lower() not in body.lower():
+                                expected_cik = expected_marker_by_url[call.url]
+                                if expected_cik.lower() not in body.lower():
                                     raise AssertionError(
                                         f"CONCURRENCY CORRECTNESS FAILURE on {call.endpoint_key} "
                                         f"(concurrency={level}, run={run_index + 1}): expected "
-                                        f"response for {call.company_key!r} (queried "
-                                        f"{expected_marker!r}) to mention it, but it didn't - "
-                                        f"this is exactly the cross-request contamination "
+                                        f"response for {call.company_key!r} (CIK {expected_cik!r}) "
+                                        f"to contain that CIK, but it didn't - this is exactly the "
+                                        f"cross-request contamination "
                                         f"docs/plans/performance-improvements.md item 2 warns "
                                         f"about. Body (truncated): {body[:500]!r}"
                                     )

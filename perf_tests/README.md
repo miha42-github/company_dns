@@ -21,12 +21,21 @@ singleton pattern that ran everything inline on the event loop).
 The concurrency experiment's per-company batches (see
 `CONCURRENCY_ENDPOINT_KEYS`) don't just measure latency - they also assert
 correctness: each concurrent response is checked to make sure it actually
-contains the company that was queried, not a neighbor's. This is a direct
-regression guard against the specific bug item 2 fixed (a shared mutable
-`.query` attribute on module-level singletons, which could previously have
-let two concurrent requests to the same endpoint race and swap results). A
-failed check raises immediately with the offending endpoint, concurrency
-level, and response body, rather than silently reporting a fast but wrong
+belongs to the company that was queried, not a neighbor's. This checks
+against the company's **CIK**, not the raw query string - EDGAR-touching
+endpoints (`merged_firmographics` especially) legitimately replace the
+query with the resolved formal filer name once matched (querying `IBM`
+correctly returns `INTERNATIONAL BUSINESS MACHINES CORP`), so a literal
+query-string match would false-positive on entirely correct responses. CIK
+is the one identifier that's actually stable across every endpoint's
+response format (`edgar_ciks` returns it unpadded, `wikipedia_firmographics`/
+`merged_firmographics` return it zero-padded, but the unpadded digits are
+always a substring of the padded form). This is a direct regression guard
+against the specific bug item 2 fixed (a shared mutable `.query` attribute
+on module-level singletons, which could previously have let two concurrent
+requests to the same endpoint race and swap results). A failed check raises
+immediately with the offending endpoint, concurrency level, and response
+body, rather than silently reporting a fast but wrong
 answer as a latency win.
 
 ## Usage
