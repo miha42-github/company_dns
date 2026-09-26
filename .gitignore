@@ -61,3 +61,7 @@ logs/
 
 # tmp
 tmp/
+
+# Ad-hoc perf_tests runs - keep only deliberately-committed baseline snapshots
+perf_tests/results/*
+!perf_tests/results/baseline-*.json
