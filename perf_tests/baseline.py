@@ -197,6 +197,23 @@ def do_request(session: requests.Session, base_url: str, call: Call, timeout: fl
         return None, latency_ms, str(e)
 
 
+def do_request_with_body(
+    session: requests.Session, base_url: str, call: Call, timeout: float
+) -> tuple[int | None, float, str | None, str | None]:
+    """Same as do_request but also returns the response body, for the
+    concurrency correctness check below - not used in the main sequential/
+    concurrency timing paths, since keeping full response bodies for every
+    call would bloat the JSON report for no benefit there."""
+    start = time.perf_counter()
+    try:
+        resp = session.get(f"{base_url}{call.url}", timeout=timeout)
+        latency_ms = (time.perf_counter() - start) * 1000
+        return resp.status_code, latency_ms, None, resp.text
+    except requests.RequestException as e:
+        latency_ms = (time.perf_counter() - start) * 1000
+        return None, latency_ms, str(e), None
+
+
 def run_sequential(base_url: str, calls: list[Call], delay: float, timeout: float) -> list[CallResult]:
     results = []
     session = requests.Session()
@@ -225,13 +242,20 @@ def run_concurrency_experiment(
                 # like real concurrent traffic would, rather than one query
                 # repeated (which some code paths might special-case/cache
                 # incidentally at the OS/network layer).
+                expected_marker_by_url = {}
                 if ep["per_company"]:
                     batch_companies = [companies[i % len(companies)] for i in range(level)]
                     field_name = ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")]
-                    batch = [
-                        Call(key, ep["category"], c["key"], ep["path"].format(**{field_name: quote(c[ep["param_field"]], safe="")}))
-                        for c in batch_companies
-                    ]
+                    batch = []
+                    for c in batch_companies:
+                        raw_value = c[ep["param_field"]]
+                        url = ep["path"].format(**{field_name: quote(raw_value, safe="")})
+                        batch.append(Call(key, ep["category"], c["key"], url))
+                        # Different companies can share a URL only if the same
+                        # company appears twice in one batch (level > len(companies)) -
+                        # that's fine, the correctness check below is still valid
+                        # since they'd expect the same marker.
+                        expected_marker_by_url[url] = raw_value
                 else:
                     param = ep.get("fixed_param", "")
                     field_name = ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")] if "{" in ep["path"] else None
@@ -241,16 +265,40 @@ def run_concurrency_experiment(
                 print(f"  concurrency={level:>2}  run={run_index + 1}/{repeat}  endpoint={key}")
                 session = requests.Session()
                 wall_start = time.perf_counter()
+                # Per-company batches fetch bodies too, to verify concurrent
+                # requests don't cross-contaminate results (see
+                # docs/plans/performance-improvements.md, item 2, "Risk /
+                # correctness verification" - this is exactly the check that
+                # section calls for). Non-per-company batches (e.g. health)
+                # have nothing company-specific to verify, so skip the extra
+                # body fetch/parse cost for those.
+                request_fn = do_request_with_body if ep["per_company"] else do_request
                 with ThreadPoolExecutor(max_workers=level) as executor:
-                    futures = {executor.submit(do_request, session, base_url, call, timeout): call for call in batch}
+                    futures = {executor.submit(request_fn, session, base_url, call, timeout): call for call in batch}
                     for future in as_completed(futures):
                         call = futures[future]
-                        status, latency_ms, error = future.result()
+                        result = future.result()
+                        if ep["per_company"]:
+                            status, latency_ms, error, body = result
+                            if status == 200 and body is not None:
+                                expected_marker = expected_marker_by_url[call.url]
+                                if expected_marker.lower() not in body.lower():
+                                    raise AssertionError(
+                                        f"CONCURRENCY CORRECTNESS FAILURE on {call.endpoint_key} "
+                                        f"(concurrency={level}, run={run_index + 1}): expected "
+                                        f"response for {call.company_key!r} (queried "
+                                        f"{expected_marker!r}) to mention it, but it didn't - "
+                                        f"this is exactly the cross-request contamination "
+                                        f"docs/plans/performance-improvements.md item 2 warns "
+                                        f"about. Body (truncated): {body[:500]!r}"
+                                    )
+                        else:
+                            status, latency_ms, error = result
                         results.append(
                             CallResult(call.endpoint_key, call.category, call.company_key, call.url, status, latency_ms, error, "concurrent", level, run_index)
                         )
                 wall_ms = (time.perf_counter() - wall_start) * 1000
-                print(f"    -> wall time for {level} concurrent calls: {wall_ms:.1f}ms")
+                print(f"    -> wall time for {level} concurrent calls: {wall_ms:.1f}ms" + (" (correctness verified)" if ep["per_company"] else ""))
     return results
 
 

@@ -12,9 +12,22 @@ While investigating why EDGAR/Wikipedia lookups were slow, we fixed two
 concrete bugs (see `lib/edgar.py`/`lib/wikipedia.py` git history and
 `docs/plans/onprem-k8s-migration.md`). This suite exists to measure what's
 left, and specifically to test the hypothesis that concurrency - not
-per-call latency - is the more tractable lever now, since company_dns's
-query methods are synchronous and run inline on FastAPI's event loop rather
-than via `run_in_threadpool`.
+per-call latency - is the more tractable lever now. See
+`docs/plans/performance-improvements.md` for the full plan, including item
+2 (`company_dns.py` now constructs a fresh handler per request and runs
+blocking query methods via `run_in_threadpool`, instead of the old shared-
+singleton pattern that ran everything inline on the event loop).
+
+The concurrency experiment's per-company batches (see
+`CONCURRENCY_ENDPOINT_KEYS`) don't just measure latency - they also assert
+correctness: each concurrent response is checked to make sure it actually
+contains the company that was queried, not a neighbor's. This is a direct
+regression guard against the specific bug item 2 fixed (a shared mutable
+`.query` attribute on module-level singletons, which could previously have
+let two concurrent requests to the same endpoint race and swap results). A
+failed check raises immediately with the offending endpoint, concurrency
+level, and response body, rather than silently reporting a fast but wrong
+answer as a latency win.
 
 ## Usage
 
