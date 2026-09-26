@@ -253,11 +253,6 @@ class EdgarQueries:
             # Central Index Key number
             cik_no = str(row[CIK])
 
-            # Get all relevant company data either from EDGAR or just use what is in the cache DB
-            company_info = {'cik': cik_no, 'companyName': company_name}
-            
-            if firmographics: company_info = self.get_firmographics(cik_no)
-
             # Pull in the form type and define the specific form object
             form_type = str(row[FORM])
             form = {
@@ -265,8 +260,13 @@ class EdgarQueries:
                     'formType': form_type
             }
 
-            # If we've seen this company before then add the form, otherwise include both firmographics and the initial form definition
+            # If we've seen this company before then just add the form; otherwise fetch
+            # firmographics once (a live call to EDGAR) and seed the entry. Companies can
+            # have many matching filings, so this avoids re-fetching the same company's
+            # firmographics once per filing row.
             if tmp_companies.get(company_name) == None:
+                company_info = {'cik': cik_no, 'companyName': company_name}
+                if firmographics: company_info = self.get_firmographics(cik_no)
                 tmp_companies[company_name] = company_info
                 tmp_companies[company_name]['forms'] = {accession_key: form}
             else:

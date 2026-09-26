@@ -140,13 +140,17 @@ class WikipediaQueries:
         parallel_api_elapsed = time.time() - parallel_api_start
         self.logger.info(f'Completed parallel API calls for [{self.query}] in {parallel_api_elapsed:.3f} seconds')
 
-        # Prepare to get the infoblox for the company
+        # Validate and extract the infobox from the parsed page data obtained above.
+        # NOTE: previously this re-issued get_parse/get_query/get_wikidata sequentially
+        # here, duplicating the three calls already made in parallel above for no benefit
+        # other than doubling latency and load on Wikipedia/Wikidata. Use the results
+        # already fetched instead.
         parse_start_time = time.time()
         self.logger.info(f'Starting process to retrieve infobox for [{self.query}].')
-        parse_results = None
+        company_info = None
         try:
-            parse_results = company_page.get_parse(show=False)
-            if not parse_results.data['infobox']: # type: ignore
+            company_info = parse_results.data['infobox'] # type: ignore
+            if not company_info:
                 parse_elapsed = time.time() - parse_start_time
                 self.logger.error(f'An infobox for [{self.query}] was not found. Operation took {parse_elapsed:.3f} seconds')
                 return lookup_error
@@ -155,46 +159,6 @@ class WikipediaQueries:
         except Exception as e:
             parse_elapsed = time.time() - parse_start_time
             self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}]. Operation took {parse_elapsed:.3f} seconds')
-            return lookup_error
-        
-        # Get the company info from the infobox
-        infobox_start_time = time.time()
-        company_info = None
-        try:
-            company_info = parse_results.data['infobox'] # type: ignore
-            if not company_info: 
-                infobox_elapsed = time.time() - infobox_start_time
-                self.logger.error(f'An infobox for [{self.query}] was not found. Operation took {infobox_elapsed:.3f} seconds')
-                return lookup_error
-            infobox_elapsed = time.time() - infobox_start_time
-            self.logger.info(f'Completed infobox parse for [{self.query}] in {infobox_elapsed:.3f} seconds')
-        except Exception as e:
-            infobox_elapsed = time.time() - infobox_start_time
-            self.logger.error(f'An infobox for [{self.query}] was not found due to [{e}]. Operation took {infobox_elapsed:.3f} seconds')
-            return lookup_error
-
-        # Obtain the query results
-        query_start_time = time.time()
-        try:
-            self.logger.info(f'Starting get query for [{self.query}].')
-            query_results = company_page.get_query(show=False)
-            query_elapsed = time.time() - query_start_time
-            self.logger.info(f'Completed get query for [{self.query}] in {query_elapsed:.3f} seconds')
-        except Exception as e:
-            query_elapsed = time.time() - query_start_time
-            self.logger.error(f'Query for [{self.query}] failed due to [{e}]. Operation took {query_elapsed:.3f} seconds')
-            return lookup_error
-        
-        # Try to get the wikidata for the company
-        wikidata_start_time = time.time()
-        try:
-            self.logger.info(f'Starting wikidata retrieval for [{self.query}].')
-            page_data = company_page.get_wikidata(show=False)
-            wikidata_elapsed = time.time() - wikidata_start_time
-            self.logger.info(f'Completed wikidata retrieval for [{self.query}] in {wikidata_elapsed:.3f} seconds')
-        except Exception as e:
-            wikidata_elapsed = time.time() - wikidata_start_time
-            self.logger.error(f'Wikidata retrieval for [{self.query}] failed due to [{e}]. Operation took {wikidata_elapsed:.3f} seconds')
             return lookup_error
 
         # Log the beginning of the firmographics data extraction
