@@ -176,23 +176,18 @@
     width: 12rem;
   }
 
-  .sim-raw {
-    color: var(--color-link-primary);
-    font-variant-numeric: tabular-nums;
-    font-size: 0.8rem;
-  }
-
+  /* Plain-language label is the primary signal (sec5.7) - prominent.
+     Raw score is secondary/muted, shown small below the bar; available
+     on hover via the cell's title attribute too. */
   .sim-band {
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    margin-left: var(--spacing-xs);
+    font-size: 0.85rem;
+    font-weight: 500;
   }
 
   .sim-bar-track {
     background: var(--color-bg-secondary);
     border-radius: var(--border-radius-small);
-    height: 0.5rem;
+    height: 0.4rem;
     margin-top: 0.25rem;
     overflow: hidden;
   }
@@ -202,17 +197,23 @@
     border-radius: var(--border-radius-small);
   }
 
-  .band-weak .sim-bar-fill { background: #6b6560; }
-  .band-below .sim-bar-fill { background: #924e29; }
-  .band-above .sim-bar-fill { background: #ca703f; }
-  .band-strong .sim-bar-fill { background: #d98a3d; }
-  .band-excellent .sim-bar-fill { background: #e8b04a; }
+  .sim-raw {
+    display: block;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.65rem;
+    margin-top: 0.15rem;
+  }
 
-  .band-weak .sim-band { color: #6b6560; }
-  .band-below .sim-band { color: #924e29; }
-  .band-above .sim-band { color: #ca703f; }
-  .band-strong .sim-band { color: #d98a3d; }
-  .band-excellent .sim-band { color: #e8b04a; }
+  .band-unlikely .sim-bar-fill { background: #6b6560; }
+  .band-possible .sim-bar-fill { background: #924e29; }
+  .band-likely .sim-bar-fill { background: #d98a3d; }
+  .band-verysimilar .sim-bar-fill { background: #e8b04a; }
+
+  .band-unlikely .sim-band { color: #8f8a85; }
+  .band-possible .sim-band { color: #ca703f; }
+  .band-likely .sim-band { color: #d98a3d; }
+  .band-verysimilar .sim-band { color: #e8b04a; }
 
   .path {
     color: var(--color-text-primary);
@@ -280,9 +281,8 @@
     <tbody id="resultsBody"></tbody>
   </table>
   <div class="calibration-note" id="calibrationNote" style="display:none">
-    Similarity bar/band calibrated against this corpus's own measured all-MiniLM-L6-v2 score distribution
-    (5th pct &asymp; 0.15, median &asymp; 0.36, 95th pct &asymp; 0.61, 99th pct &asymp; 0.78) - not a raw 0-100% scale.
-    See docs/plans/ic-similarity-search-poc.md &sect;5.
+    Match labels are calibrated against this corpus's own results, not a raw 0-100% scale
+    (hover a result's percentage for the exact score). See docs/plans/ic-similarity-search-poc.md &sect;5.
   </div>
 </div>
 <script src="app.js"></script>
