@@ -7,35 +7,18 @@ The embedded web interface is a modern single-page application for exploring SEC
 
 # Changes
 
-## Introducing V3.2.0
-The V3.2.0 release brings **comprehensive security hardening** and modernizes the web framework:
+## Introducing V3.3.0
+The V3.3.0 release is a substantial performance pass across the whole service, covering the `companies` DB cache, request concurrency, replica capacity, comparison tooling, EDGAR connection reuse, and — the largest single win — a rewritten Wikipedia backend. See [docs/plans/performance-improvements.md](docs/plans/performance-improvements.md) for the full investigation, findings, and measured before/after numbers behind each item below.
 
-### Security Enhancements
-1. **Security Middleware**: Blocks 70+ known attack patterns including WordPress probes, PHP exploits, SQL injection, and XSS attempts
-2. **Rate Limiting**: IP-based rate limiting (100-1000 req/min by endpoint type) using SlowAPI
-3. **Structured Logging**: Severity-based logging with automatic request tracking and performance metrics
-4. **Input Validation**: Pydantic v2.10.0 provides strict request/response validation
-
-### Framework & Architecture
-1. **FastAPI Migration**: Complete replacement of Starlette with modern FastAPI framework
-2. **Automatic API Docs**: Interactive Swagger UI at `/docs` and ReDoc at `/redoc`
-3. **Enhanced Type Safety**: All endpoints use Pydantic models with proper type hints
-4. **Python 3.13 Support**: Tested with Python 3.13 via Homebrew, uses `.venv` convention
-
-### New Dependencies
-- `fastapi>=0.115.0`: Modern ASGI framework with automatic OpenAPI docs
-- `pydantic>=2.10.0`: Data validation and serialization
-- `slowapi>=0.1.9`: Rate limiting for API protection
-- `python-multipart>=0.0.9`: Multipart form data support
-
-### Verified Security
-✅ Malicious paths (`/wp-login.php`, `xmlrpc.php`, etc.) return 403 Forbidden  
-✅ SQL injection patterns blocked before reaching business logic  
-✅ XSS attempts filtered at middleware level  
-✅ All endpoints enforce rate limits per IP address
+1. **`companies` DB full-table-scan fix**: filters to `10-%` filing forms at ingest time instead of querying a ~2M-row unfiltered table, fixing a hidden bottleneck behind `edgar_ciks`/`edgar_detail` that had nothing to do with live SEC calls.
+2. **Blocking I/O moved off the event loop**: handler objects are now constructed fresh per request (fixing a latent shared-singleton correctness risk) and blocking query methods run via `run_in_threadpool`, so requests actually execute concurrently instead of serializing on a single event loop.
+3. **Replica count bumped to 4** (from 2), multiplying the throughput gained from item 2 — the service now handles concurrency=16 cleanly where it previously crashed at that level on 2 replicas.
+4. **Before/after comparison tooling** (`perf_tests/baseline.py`, `perf_tests/compare.py`): measures sequential and concurrent latency against the live deployment and flags regressions/improvements, so every change above was verified with real numbers rather than assumed.
+5. **HTTP connection reuse to SEC EDGAR**: a shared `requests.Session()` instead of a new connection per call.
+6. **Wikipedia backend rewritten** (`lib/wikipedia_v2.py`): replaces `wptools` with narrowed, direct MediaWiki/Wikidata HTTP requests (no more fetching entire parse trees or the full multi-hop wikidata-label cascade `wptools` triggered internally), plus a real, ToS-compliant User-Agent and 429/503 retry handling `wptools` never had. Validated against production with `perf_tests/shadow_compare.py` over multiple days before cutover. Now the default backend for the `wikipedia`/`merged` endpoints — **median latency down 80%** for both (`wikipedia_firmographics`: 3851ms → 773ms; `merged_firmographics`: 6095ms → 1199ms). The old `wptools`-based backend is still reachable at `/V3.0/global/company/wikipedia/v1/firmographics/{company_name}` and `/V3.0/global/company/merged/v1/firmographics/{company_name}` for reference/rollback.
 
 ### Previous Releases
-For release notes prior to V3.2.0 (including V3.1.0 and V3.0.0), see the consolidated changelog: [CHANGELOG.md](CHANGELOG.md).
+For release notes prior to V3.3.0 (including V3.2.0, V3.1.0, and V3.0.0), see the consolidated changelog: [CHANGELOG.md](CHANGELOG.md).
 
 # Installation & Setup
 The install and setup process is either for users or developers.  Instructions for both are provided below.
@@ -136,6 +119,7 @@ Since this code falls under a liberal Apache-V2 license it is provided as is, wi
 - [FastAPI](https://fastapi.tiangolo.com) - used to create the RESTful service
 - [Uvicorn](https://www.uvicorn.org) - used to run the RESTful service
 - [GeoPy with ArcGIS](https://github.com/geopy/geopy) - Enables proper address formatting and reporting of lat-long pairs for companies
-- [wptools](https://github.com/siznax/wptools/) - provides access to MediaWiki data for company search
+- `requests` - direct MediaWiki/Wikidata HTTP calls power the default Wikipedia backend (`lib/wikipedia_v2.py`) as of V3.3.0
+- [wptools](https://github.com/siznax/wptools/) - powers the legacy `/v1/` Wikipedia backend only, kept for reference/rollback; no longer used by the default endpoints
 
 
