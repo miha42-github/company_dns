@@ -321,6 +321,109 @@ immediate problem.
 your feedback; the running service still shows §5.5's flawed band
 labels until there's agreement on the direction above.
 
+### 5.7 What the literature actually says — and why §5.5/§5.6 were both still too statistical
+
+Fair pushback: §5.5 and §5.6 were still designing for someone comfortable
+with percentiles and distributions. A business user with little-to-no
+stats background is the actual audience worth designing for. Searched
+for how this is handled elsewhere rather than guessing — findings below,
+converging from independent sources (search UX, vector-search product
+writing, and peer-reviewed recommender-systems HCI research), not just
+one opinion.
+
+**1. The dominant, most consistent finding: don't show relevance/
+similarity scores as numbers to end users at all.** Search UX guidance
+(Coveo, and general search-results-design writing) is blunt about
+this — users don't need to know their relevance scores, since the score
+is mostly noise to someone not aware of what factors drove the ranking;
+relevance should be communicated **through result order and content
+presentation**, not a number. This is also just observably how Google,
+Bing, and most consumer search products actually behave — no user-facing
+relevance score, ever, just an ordered list. That's a strong, converging
+signal that the entire "show a number or percentage" framing §5.5 and
+§5.6 were refining may be solving the wrong problem for a business
+audience.
+
+**2. Where vector-search products specifically do show *something*
+beyond rank, the recommended pattern is translated, plain-language
+labels — not raw scores, and not statistical framing.** Guidance aimed
+at exactly this situation (surfacing embedding-similarity output to
+non-technical users) recommends converting raw scores into labels like
+"Very Similar," "Likely Match," "Possible Match" — a small, fixed set of
+plain phrases, calibrated once against the score ranges, never shown as
+percentiles or population comparisons. Also flags something we already
+learned the hard way in §7.8: score ranges aren't portable across
+models/backends, so whatever calibration is used has to be re-derived
+per model, not assumed universal.
+
+**3. Peer-reviewed HCI research on confidence displays in recommender
+systems (Shani et al., "Investigating confidence displays for top-N
+recommendations," JASIST 2013) gives real, specific caveats worth
+weighing, not just "add a confidence indicator":**
+   - Confidence displays **don't make it objectively easier for users to
+     pick out relevant items** — showing one doesn't improve task
+     performance by itself.
+   - Users **do appreciate and trust** confidence displays, particularly
+     when **relevance is hard to judge from the content alone** — which
+     cuts both ways for this tool: an IC classification path is fairly
+     self-explanatory text (a business user can often just *read*
+     "Agriculture > ... > Cash Grains > Wheat" and judge for themselves
+     whether it's sensible for "growing wheat"), so a confidence
+     indicator may matter most for the genuinely ambiguous/borderline
+     cases, not every row uniformly.
+   - **Novice users are measurably less likely to notice, understand, or
+     use a confidence display than experienced users.** Directly
+     relevant to "a business user who won't know anything or very
+     little about stats" — a subtle numeric or percentile-flavored
+     signal is likely to be *ignored*, not misread; it needs to be
+     obvious and plain, not precise.
+   - Separately, general guidance on communicating AI/model uncertainty
+     to non-expert users (Nielsen Norman Group's writing on this)
+     recommends **hedged natural language** ("here's my best guess...")
+     over numbers, and avoiding language that locks a user into treating
+     one result as definitively correct.
+
+**What this changes about §5.5/§5.6's direction**: both were still
+fundamentally "pick the right number/percentile to show," just disagreeing
+about which one. The literature suggests the number itself — reworded,
+recalibrated, or not — probably shouldn't be the primary signal for this
+audience at all. Revised recommendation:
+
+- **Primary signal: rank order + the result content itself** (the
+  classification path), exactly as search UX guidance recommends —
+  already what this tool does, don't add anything competing with it.
+- **Secondary signal: a small, fixed set of plain-language labels** (no
+  more than 3-4), calibrated using the same measured data as before
+  (§5.1's percentiles, §5.6's noise-floor idea) but **worded like plain
+  task language, not statistics** — e.g. "Strong match" / "Possible
+  match" / "Unlikely match" instead of anything percentile- or
+  average-flavored. The calibration work already done isn't wasted, just
+  the *words* attached to it change.
+- **Tertiary, optional: the raw score**, demoted rather than removed —
+  available for the technically-curious (which, per this doc's own
+  §1, includes whoever is using this tool to judge the model itself,
+  not just a hypothetical end user), but small, muted, and not the
+  first thing the eye lands on — closer to a tooltip/detail than a
+  headline number.
+- Worth **not showing a confidence label on every row uniformly** —
+  per the Shani et al. finding that confidence displays matter most when
+  content alone doesn't make relevance obvious, showing one only where
+  it adds information (e.g., borderline cases) rather than as decoration
+  on every row is both more literature-aligned and less visual noise.
+
+**Sources**:
+[Coveo — Search Best Practices](https://source.coveo.com/2017/09/26/search-best-practices-2/) ·
+translated-label guidance from vector-search UX writing (Labelbox/Meilisearch/Zilliz-adjacent
+product literature surfaced in this search, not one single canonical article) ·
+[Shani et al., "Investigating confidence displays for top-N recommendations," JASIST 2013](https://asistdl.onlinelibrary.wiley.com/doi/abs/10.1002/asi.22934) ·
+Nielsen Norman Group's writing on communicating AI uncertainty to end users.
+
+Still not implemented — this is the requested literature search and its
+synthesis, one more layer on top of §5.6's proposal, not a final answer
+either. Next real decision point: pick the actual 3-4 label words and
+their calibration thresholds, and decide whether/how to demote the raw
+score in the existing markup.
+
 ## 6. Open questions / decision points (not resolved here)
 
 - **DataFusion `cosine_distance` UDF vs. a plain Rust loop for
