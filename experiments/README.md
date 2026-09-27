@@ -28,7 +28,16 @@ throwaway.
   `BAAI/bge-small-en-v1.5`, `all-mpnet-base-v2`) against real US SIC
   data, to pick which model(s) the rewrite's query-time embedding path
   should run. See §7.5 of the same doc for results and the
-  low-dim/high-dim recommendation.
+  low-dim/high-dim recommendation — **speed only, see `quality-eval/`
+  for retrieval quality**, which complicates the pick made here.
+- **`quality-eval/`** — measures retrieval *quality* (not speed) for all
+  four embedding models, including `intfloat/e5-base-v2` (not covered by
+  `embed-bench/`, but its precomputed vectors are testable without any
+  Rust code), using the SIC hierarchy as a weak-label proxy for semantic
+  relatedness. See §7.6 of the same doc. Notable result: `all-MiniLM-
+  L6-v2` outperformed `bge-small-en-v1.5` on this specific dataset,
+  contrary to general retrieval-benchmark expectations — flagged as
+  SIC/NACE-specific, not assumed to transfer to company data.
 
 ## Conventions for adding a new experiment
 

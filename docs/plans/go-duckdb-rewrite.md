@@ -890,6 +890,104 @@ different model entirely) ever becomes a serious contender — it would
 need a manual ONNX export + `ort` (§6.2), not the zero-effort
 `fastembed-rs` path the two recommended models get.
 
+**Update — §7.6 below complicates this.** §7.5 only measured speed. A
+follow-up quality evaluation found `all-MiniLM-L6-v2` actually
+outperforms `bge-small-en-v1.5` on *this specific dataset* — the "pick
+BGE-small for quality" reasoning above was based on general retrieval
+benchmarks (MTEB), which don't necessarily transfer to short,
+controlled-vocabulary classification text. Read §7.6 before treating
+the low-dim pick above as settled.
+
+### 7.6 Model quality: does the "best support" pick actually retrieve well?
+
+§7.5 measured speed only — never actually tested whether the models
+retrieve *correctly*. No labeled benchmark exists for this dataset, so
+this uses the SIC hierarchy itself as a weak-label proxy: two rows
+sharing a `group_id` are, by construction, more semantically related
+than two rows in different groups. A better embedding model should
+reflect that structure more strongly in its vector space. All four
+models' precomputed vectors already exist in `us_flat_embedded.feather`
+(including `e5-base-v2`, which §7.5 couldn't benchmark for speed since
+it isn't in `fastembed-rs`'s catalog — but its vectors are still real
+data, testable without running any Rust code).
+
+**Caveat that shaped the methodology**: 416 groups across 1,005 rows,
+median group size **2**, and 201 rows (20%) are the *only* member of
+their group — meaning a naive precision@k metric is capped at 0 for a
+fifth of the dataset regardless of model quality, and capped well below
+1.0 for most of the rest (a 2-member group's row can score at most 1/5
+at k=5). Reported both a precision@k view (all 1,005 rows, useful for
+comparing against a random baseline) and a ceiling-corrected recall@k /
+hit@1 view (the 804 rows that actually have a same-group peer to find,
+each row's own true-peer count as the denominator) — the second is the
+more trustworthy number, the first is included for transparency about
+what was tried first.
+
+**Separation margin** (mean same-group cosine similarity − mean
+different-group cosine similarity, all 1,005 rows):
+
+| Model | Same-group sim | Different-group sim | Margin |
+|---|---|---|---|
+| `all-MiniLM-L6-v2` | 0.8463 | 0.3629 | **0.4834** |
+| `all-mpnet-base-v2` | 0.8427 | 0.4009 | 0.4418 |
+| `BAAI/bge-small-en-v1.5` | 0.8528 | 0.5661 | 0.2867 |
+| `intfloat/e5-base-v2` | 0.9433 | 0.8104 | 0.1329 |
+
+**Recall@k / hit@1** (804 rows with ≥1 true same-group peer):
+
+| Model | Recall@5 | Recall@10 | Hit@1 |
+|---|---|---|---|
+| `all-MiniLM-L6-v2` | **0.814** | **0.915** | **0.868** |
+| `intfloat/e5-base-v2` | 0.803 | 0.914 | 0.851 |
+| `all-mpnet-base-v2` | 0.769 | 0.879 | 0.832 |
+| `BAAI/bge-small-en-v1.5` | 0.768 | 0.893 | 0.801 |
+
+**The uncomfortable result**: `all-MiniLM-L6-v2` — the model §7.5
+*deprioritized* for the low-dim slot in favor of `bge-small-en-v1.5` on
+quality grounds — wins on every metric tested here, by a real margin.
+`e5-base-v2` is a strong second on the ranking-quality metrics
+(recall@k, hit@1) despite having by far the smallest separation margin
+(0.133) — its absolute similarity scores are compressed into a narrow
+high band (consistent with the small margin already seen in the
+Wheat/Corn sanity check in §7.4), so its *relative ranking* is still
+good even though a fixed similarity-score threshold would work poorly
+for it. `bge-small-en-v1.5` and `all-mpnet-base-v2` are essentially tied
+for worst on the ranking metrics here.
+
+**Why this doesn't simply overturn §7.5's recommendation**:
+`bge-small-en-v1.5`'s reputation comes from general-purpose retrieval
+benchmarks (MTEB), dominated by natural-language passages — not short,
+controlled-vocabulary classification codes like `"Wheat"` or `"Cash
+Grains"`. This dataset may just not be BGE-small's or mpnet's strong
+suit. The company-description embeddings ("coming later," per the
+original chat discussion) are actual free-text natural language —
+plausibly much closer to what MTEB actually measures, and where
+BGE-small's general reputation is more likely to hold. **The honest
+conclusion: this result is conclusive for SIC/NACE-style short
+classification text, not for company data.** The exact same
+recall@k/margin methodology needs re-running once company-data vectors
+exist, rather than assuming this SIC result transfers.
+
+**Practical effect, scoped correctly**:
+
+- For SIC/NACE specifically: worth reconsidering `all-MiniLM-L6-v2`
+  over `bge-small-en-v1.5` for the low-dim slot, given it wins cleanly
+  on real, in-domain data rather than a general external benchmark.
+- For company data: no change yet — `bge-small-en-v1.5` remains the
+  tentative low-dim pick until this same evaluation runs against real
+  company vectors.
+- `e5-base-v2`'s strong ranking performance here is a real data point in
+  favor of doing the manual ONNX export work (§6.2/§7.5) to give it a
+  `fastembed-rs`-equivalent runtime path, if company-data results
+  confirm it's competitive there too — it was excluded from §7.5 purely
+  on "not zero-effort," not on any quality concern, and this result
+  weakens the case for leaving it out by default.
+- The two low-dim options (`MiniLM`, `bge-small`) may simply be
+  measuring different things well — worth keeping both in mind as
+  "best for short/controlled-vocabulary text" vs. "best for natural-
+  language passages" rather than assuming one strictly dominates the
+  other once company data is in the picture.
+
 ## 8. Go-specific open questions (assuming Go — revisit if §6 lands on Rust)
 
 - Web framework: stdlib `net/http` (Go 1.22+'s routing is now solid
