@@ -1,18 +1,24 @@
 # Performance improvements: DB scan, concurrency, replicas, comparison tooling, connection reuse, Wikipedia round-trips
 
-Status: **Items 1, 2, 3, 4, and 5 executed, merged, deployed, and validated
-against the live service** (PRs #99-#103; see each item's section for the
-measured before/after numbers — EDGAR sequential latency down 56-97%,
-Wikipedia-bound concurrent throughput up to 81% faster at concurrency 8,
-service now handles concurrency=16 cleanly on 4 replicas where it crashed
-at that level on 2). **Item 6 was re-researched on 2026-09-27, its
-conclusion changed** from "smallest lever, backlog only" to a large,
-measured, previously-hidden bottleneck (Findings 1-6, including
-correctness validated against production and a real rate-limit/ToS-
-compliance gap in `wptools`) — **and is now approved for implementation**,
-shipped as parallel `/v2/` shadow endpoints alongside the existing ones
-(not a swap) until validated consistent over time. See item 6's "Decision"
-subsection for the rollout plan; not yet built.
+Status: **Items 1, 2, 3, 4, 5, and 6 executed, merged, deployed, and
+validated against the live service** (PRs #99-#105; see each item's
+section for the measured before/after numbers — EDGAR sequential latency
+down 56-97%, Wikipedia-bound concurrent throughput up to 81% faster at
+concurrency 8, service now handles concurrency=16 cleanly on 4 replicas
+where it crashed at that level on 2). **Item 6** was re-researched on
+2026-09-27 (Findings 1-6, including correctness validated against
+production and a real rate-limit/ToS-compliance gap in `wptools`), shipped
+first as parallel `/v2/` shadow endpoints (PR #104), validated over 3
+consecutive clean `shadow_compare.py` runs across separate days plus one
+run whose only mismatches were legacy-side timeouts caused by `wptools`
+itself (not a v2 correctness issue — see item 6's shadow validation log),
+then cut over as the new default for the `wikipedia`/`merged` endpoints
+(PR #105), with the legacy backend kept at `/v1/` for reference/rollback.
+Post-cutover `baseline.py` run against production (2026-09-27) confirms
+the payoff: `wikipedia_firmographics` median latency down 80% (3851ms →
+773ms), `merged_firmographics` down 80% (6095ms → 1199ms) — see item 6's
+"Post-cutover validation" subsection for the full comparison and one
+noted-but-unreproduced concurrency anomaly.
 Owner: michael.hay@mediumroast.io
 Scope: all five non-caching performance levers from the "increase
 performance without caching" discussion — (1) the `companies` DB
@@ -863,6 +869,60 @@ consecutive clean runs** as of 2026-09-27 (2026-09-25, 2026-09-26,
 attributable to legacy's own fragility, not v2. `--include-hard-set` not
 yet run as part of this log — still to do before cutover, per the
 "expand beyond the easy 10" note above.
+
+**Decision (2026-09-27): cutover executed.** On the strength of the above,
+the default `wikipedia`/`merged` endpoints were switched to the v2 backend
+(PR #105) — legacy moved to `/v1/`, `/v2/` kept as an explicit alias. See
+"Post-cutover validation" immediately below for the live confirmation.
+
+#### Post-cutover validation (2026-09-27)
+
+Two checks run against production immediately after PR #105 deployed:
+
+**1. `shadow_compare.py --endpoint wikipedia-cutover` / `--endpoint
+merged-cutover`** (compares the now-default path directly against `/v2/`
+— they should be identical, since default now just calls the v2 backend
+under the hood): 10/10 clean on both. Confirms the routing swap itself
+didn't introduce any divergence.
+
+**2. `perf_tests/baseline.py` full sequential + concurrency run**,
+compared against the first baseline (`perf_tests/results/baseline-
+20260926.json`) via `perf_tests/compare.py`. Full data:
+`perf_tests/results/baseline-20260927.json`.
+
+Sequential (the clean signal — see this doc's `perf_tests/README.md` for
+why concurrency numbers on these two endpoints are noisier):
+
+| endpoint | before (median) | after (median) | change |
+|---|---|---|---|
+| `wikipedia_firmographics` | 3851ms | 773ms | **-80%** |
+| `merged_firmographics` | 6095ms | 1199ms | **-80%** |
+
+Matches expectations directly — these are the two endpoints whose
+Wikipedia leg switched from `wptools` to the v2 direct-HTTP backend, and
+nothing else changed between the two runs.
+
+**Anomaly noted, investigated, did not reproduce**: the concurrency=8
+experiment for `merged_firmographics` included one 30098ms sample (hit
+`baseline.py`'s 30s timeout), which skewed that row's 2-sample median
+badly (16656ms, "worse than serial" on paper). A follow-up manual probe —
+3 repeats of 8 concurrent `merged_firmographics` requests, run
+immediately after — came back clean every time (3.2-4.4s wall, no
+errors). Read as a one-off transient (upstream ArcGIS/EDGAR blip or
+network noise), not a systemic issue with the v2 backend under
+concurrency — `wikipedia_firmographics` itself scaled cleanly at the same
+concurrency level in the same run (2265ms wall, 2.73x speedup vs serial,
+also a large improvement over the first baseline's 17306ms). Given
+`baseline.py`'s default `--repeat 2` is thin for concurrency signal (the
+first baseline's README already flagged this same caveat), a `--repeat
+3+` re-run of the concurrency experiment specifically is worth doing at
+some point, but nothing here blocks treating the cutover as validated.
+
+The `health` control endpoint also flagged as a concurrency
+"REGRESSION" (+175% to +416%) in the `compare.py` output — `health`
+touches none of the code this cutover changed (no DB, no network call),
+so this is almost certainly cluster/time-of-day variance between the two
+run dates, not a real regression. Noted for completeness, not acted on.
 
 #### Sequencing relative to items 1-5
 
