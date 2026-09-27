@@ -690,10 +690,12 @@ class GeneralQueriesV2(GeneralQueries):
     factory-callable overload to its signature - see
     docs/plans/performance-improvements.md item 6.
 
-    Used by the shadow endpoint
-    /V3.0/global/company/merged/v2/firmographics/{company_name}.
+    Used by the default merged endpoint (post-cutover) and by the explicit
+    /V3.0/global/company/merged/v2/firmographics/{company_name} alias.
+    GeneralQueries itself is still used, unchanged, by the legacy
+    /v1/ path.
     """
 
     def __init__(self, database=None, name='general_v2',
-                 description='Shadow-endpoint alternative to GeneralQueries using the v2 Wikipedia backend - see docs/plans/performance-improvements.md item 6.'):
+                 description='GeneralQueries using the v2 Wikipedia backend - see docs/plans/performance-improvements.md item 6.'):
         super().__init__(database=database, name=name, description=description, wikipedia_backend='v2')

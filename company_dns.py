@@ -487,6 +487,11 @@ async def edgar_firmographics(cik_no: str = Path(..., description="10-digit CIK 
 
 # -------------------------------------------------------------- #
 # BEGIN: Wikipedia functions
+# Cutover (docs/plans/performance-improvements.md item 6): after
+# shadow_compare.py ran clean across multiple runs/days in production, the
+# default wikipedia/merged endpoints now use the v2 (direct-HTTP) backend.
+# Legacy (wptools-based) stays reachable at /v1/ for reference/rollback;
+# /v2/ stays reachable too, now equivalent to the default.
 @app.get(
     "/V2.0/company/wikipedia/firmographics/{company_name}",
     response_model=WikipediaResponse,
@@ -500,20 +505,24 @@ async def edgar_firmographics(cik_no: str = Path(..., description="10-digit CIK 
     summary="Get company firmographics from Wikipedia"
 )
 async def wikipedia_firmographics(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(WikipediaQueriesV2, 'get_firmographics', company_name)
+
+# Legacy (wptools-based) backend, kept for reference/rollback now that the
+# default path above uses the v2 backend. Not otherwise maintained.
+@app.get(
+    "/V3.0/global/company/wikipedia/v1/firmographics/{company_name}",
+    response_model=WikipediaResponse,
+    tags=["Wikipedia (V3.0, legacy v1)"],
+    summary="[LEGACY] Get company firmographics from Wikipedia (wptools backend)"
+)
+async def wikipedia_firmographics_v1(company_name: str = Path(..., min_length=1, description="Company name")):
     return await _handle_request(WikipediaQueries, 'get_firmographics', company_name)
 
-# Shadow endpoint - see docs/plans/performance-improvements.md item 6.
-# Parallel to the endpoint above, not a replacement: runs WikipediaQueriesV2
-# (narrowed, direct HTTP requests, ToS-compliant User-Agent + maxlag, no
-# hidden label-resolution cascade) instead of the wptools-based
-# WikipediaQueries, so the two can be compared in production
-# (perf_tests/shadow_compare.py) until the v2 backend is trusted. Not
-# wired into any existing endpoint's default behavior.
 @app.get(
     "/V3.0/global/company/wikipedia/v2/firmographics/{company_name}",
     response_model=WikipediaResponse,
-    tags=["Wikipedia (V3.0, experimental v2)"],
-    summary="[EXPERIMENTAL] Get company firmographics from Wikipedia (v2 backend)"
+    tags=["Wikipedia (V3.0, v2)"],
+    summary="Get company firmographics from Wikipedia (v2 backend, same as default)"
 )
 async def wikipedia_firmographics_v2(company_name: str = Path(..., min_length=1, description="Company name")):
     return await _handle_request(WikipediaQueriesV2, 'get_firmographics', company_name)
@@ -535,17 +544,25 @@ async def wikipedia_firmographics_v2(company_name: str = Path(..., min_length=1,
     summary="Get merged firmographics from all sources"
 )
 async def general_query(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(GeneralQueriesV2, 'get_firmographics', company_name)
+
+# Legacy (wptools-based Wikipedia backend) merged query, kept for
+# reference/rollback now that the default path above uses the v2 backend.
+# EDGAR lookup, geocoding, and merge logic are unchanged either way.
+@app.get(
+    "/V3.0/global/company/merged/v1/firmographics/{company_name}",
+    response_model=MergedFirmographicsResponse,
+    tags=["Merged Data (V3.0, legacy v1)"],
+    summary="[LEGACY] Get merged firmographics from all sources (wptools Wikipedia backend)"
+)
+async def general_query_v1(company_name: str = Path(..., min_length=1, description="Company name")):
     return await _handle_request(GeneralQueries, 'get_firmographics', company_name)
 
-# Shadow endpoint - see docs/plans/performance-improvements.md item 6.
-# Same relationship as wikipedia_firmographics_v2 above: GeneralQueriesV2
-# is identical to GeneralQueries except it defaults to the v2 Wikipedia
-# backend (EDGAR lookup, geocoding, and merge logic are unchanged).
 @app.get(
     "/V3.0/global/company/merged/v2/firmographics/{company_name}",
     response_model=MergedFirmographicsResponse,
-    tags=["Merged Data (V3.0, experimental v2)"],
-    summary="[EXPERIMENTAL] Get merged firmographics from all sources (v2 Wikipedia backend)"
+    tags=["Merged Data (V3.0, v2)"],
+    summary="Get merged firmographics from all sources (v2 Wikipedia backend, same as default)"
 )
 async def general_query_v2(company_name: str = Path(..., min_length=1, description="Company name")):
     return await _handle_request(GeneralQueriesV2, 'get_firmographics', company_name)
