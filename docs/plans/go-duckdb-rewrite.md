@@ -988,6 +988,50 @@ exist, rather than assuming this SIC result transfers.
   language passages" rather than assuming one strictly dominates the
   other once company data is in the picture.
 
+### 7.7 Decision: `all-MiniLM-L6-v2` + `all-mpnet-base-v2` for IC data, confirmed in place
+
+**Decided (2026-09-27), scoped to IC/SIC-NACE data only**: ship exactly
+two embedding models — `all-MiniLM-L6-v2` (384-dim, low) and
+`all-mpnet-base-v2` (768-dim, high) — driven by §7.6's quality results
+plus a hard storage constraint (export size was too high with all four
+models present). Explicitly *not* a decision about company-data
+embeddings, which remain untested (company data files are "genuinely
+large" compared to IC data, per discussion — not yet in a position to
+run the same evaluation there) and may land on a different pair once
+they are.
+
+Reasoning recap:
+- **Low-dim (`all-MiniLM-L6-v2`)**: no tradeoff — wins on every quality
+  metric in §7.6 *and* is faster/smaller than `bge-small-en-v1.5` per
+  §7.5. Clean pick.
+- **High-dim (`all-mpnet-base-v2`)**: a real tradeoff against
+  `intfloat/e5-base-v2`, which ranks ~4% higher on recall@5/hit@1 (see
+  §7.6's table) — but `e5-base-v2` needs a manual ONNX export (not in
+  `fastembed-rs`'s catalog, §7.5) and a correctness-sensitive prefix
+  convention (§4.2, the earlier `"query: "`/`"passage: "` discussion)
+  replicated exactly between corpus and runtime. `mpnet-base-v2` is
+  zero-effort in `fastembed-rs`, has a healthy separation margin (0.442,
+  vs. e5's compressed 0.133), and was judged the pragmatic choice for a
+  storage-constrained IC export. Worth revisiting `e5-base-v2` later if
+  its quality edge holds up on company data too — the export effort is
+  a known, bounded cost, not a reason to rule it out permanently.
+
+**Confirmed in place**: a regenerated `tmp/us_flat_embedded.feather`
+with only these two vector columns landed and was validated the same
+way as the four-model version — schema correct (`vector_all_minilm_l6_v2`
+`FixedSizeList<Float32>[384]`, `vector_all_mpnet_base_v2`
+`FixedSizeList<Float32>[768]`, field metadata intact), 1,005 rows, all
+13 original columns byte-identical to `us_flat.feather`, zero
+nulls/NaN/Inf, all vectors normalized (norm ≈ 1.0). `quality-eval`
+re-run against this exact file reproduced §7.6's numbers for these two
+models exactly (as expected — same vectors, two fewer columns).
+
+**Storage, confirmed**: 4,361,778 bytes (1,005 rows, ~4,340 bytes/row) —
+almost exactly half the four-model version's ~8,600 bytes/row, matching
+the halved total dimensionality (1,152 vs. 2,304 floats/row). Growth
+over the plain `us_flat.feather` baseline is now **~47x instead of
+~93x**.
+
 ## 8. Go-specific open questions (assuming Go — revisit if §6 lands on Rust)
 
 - Web framework: stdlib `net/http` (Go 1.22+'s routing is now solid
