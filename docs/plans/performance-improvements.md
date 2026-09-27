@@ -1,11 +1,15 @@
 # Performance improvements: DB scan, concurrency, replicas, comparison tooling, connection reuse, Wikipedia round-trips
 
-Status: **Approved, not yet executed.** All open questions resolved (see
-"Decisions" below) — item 2 will run as its own separate PR/review cycle;
-items 1 and 5 are bundled into one PR/deploy cycle; item 3 is capped at 4
-replicas; item 4 and item 6 approved as designed. Still markdown-only in
-this worktree — PRs for the actual implementation work haven't been opened
-yet.
+Status: **Items 1, 2, 3, 4, and 5 executed, merged, deployed, and validated
+against the live service** (PRs #99-#103; see each item's section for the
+measured before/after numbers — EDGAR sequential latency down 56-97%,
+Wikipedia-bound concurrent throughput up to 81% faster at concurrency 8,
+service now handles concurrency=16 cleanly on 4 replicas where it crashed
+at that level on 2). **Item 6 was re-researched on 2026-09-27 and its
+conclusion changed** — no longer "smallest lever, backlog only"; see its
+section for a large, measured, previously-hidden bottleneck and a proposed
+Tier A implementation. Not yet scheduled or implemented — awaiting a
+decision on whether to pursue it as real work.
 Owner: michael.hay@mediumroast.io
 Scope: all five non-caching performance levers from the "increase
 performance without caching" discussion — (1) the `companies` DB
@@ -468,50 +472,158 @@ before/after.
 
 ## 6. Reduce Wikipedia round-trips
 
-### The evidence
+**Status update (2026-09-27): this was scoped as "the smallest lever of the
+six, backlog research only." That was wrong.** Reading `wptools`' actual
+source and measuring real requests against the live Wikipedia/Wikidata APIs
+turned up a hidden, sequential, mostly-wasted request cascade that plausibly
+accounts for the majority of `wikipedia_firmographics`/
+`merged_firmographics`'s remaining latency. This is now one of the
+higher-value remaining levers, not the smallest. Findings below; no code
+changed yet.
 
-`lib/wikipedia.py`'s `get_firmographics()` (post-fix) makes 3 real external
-calls per lookup — `get_parse`, `get_query`, `get_wikidata` — correctly
-parallelized via `ThreadPoolExecutor` now, but still bounded by whichever
-of the three is slowest. The perf baseline showed `wikipedia_firmographics`
-at a ~3.9s median even after removing the duplicate-fetch bug — that's
-essentially Wikipedia/Wikidata's own response time for 3 round-trips, not
-anything obviously wasteful in `company_dns`'s own code anymore.
+### Confirmed field-to-source mapping
 
-### Why this is lower priority and more invasive than items 1–3, 5
+(Original mapping, now verified against `wptools`' actual source, not just
+the extraction code that consumes it — see `lib/wikipedia.py`'s grep for
+`parse_results.`/`query_results.`/`page_data.`)
 
-This is genuinely **research, not a quick fix**. Before proposing any
-change, someone needs to map every field `get_firmographics()` extracts
-back to which of the three calls actually sources it:
+- `query_results` (`get_query`): `description` (from `extract`), `url`
+  (from `fullurl`) — **only these two fields are read**, nothing else from
+  `action=query`'s response.
+- `company_info` from `parse_results.data['infobox']` (`get_parse`):
+  `type`, `name`, fallback `country`/`city`/`website`, `isin`, `tickers` —
+  **only `infobox` (derived purely from `parsetree`) is read**, nothing
+  else from `action=parse`'s response.
+- `page_data.data['wikidata']` (`get_wikidata`): `industry (P452)`,
+  `country (P17)`, `official website (P856)`,
+  `Central Index Key (P5531)`, `stock exchange (P414)` — **only these 5
+  Wikidata properties are read.**
 
-- `query_results` (`get_query`): `description`, `wikipediaURL`
-- `company_info` from `parse_results`'s infobox (`get_parse`): `type`,
-  `name`, fallback `country`/`city`/`website`, `isin`, `tickers`
-  (`traded_as`)
-- `page_data` from `get_wikidata` (`get_wikidata`): `industry`,
-  preferred `country`/`website`, `cik`, `exchanges`
+### Finding 1 — the 3 calls are genuinely 3 separate MediaWiki API
+modules, can't be merged via `wptools`
 
-Two of the three calls (`parse` and `wikidata`) are load-bearing for fields
-with no fallback — those aren't going away. `get_query` looks like the
-best candidate to investigate first: it's only used for `description` and
-`wikipediaURL`, and `wikipediaURL` is trivially constructible from the page
-title without any API call at all
-(`https://en.wikipedia.org/wiki/{quote(title)}`) — meaning if `description`
-turns out to be droppable, skippable-on-failure, or obtainable as a
-byproduct of the `parse` call instead (worth checking what `wptools`'
-`get_parse` response already contains before assuming a 3rd call is
-needed), the 3 calls could become 2, which should meaningfully cut the
-bounded-by-slowest-of-N latency.
+Confirmed by reading `wptools/query.py`'s query-string templates:
+`action=parse` and `action=query` are different top-level MediaWiki API
+actions (can't combine into one HTTP request even though both hit the same
+host, `en.wikipedia.org`); `action=wbgetentities` is a third action against
+a *different* host (`www.wikidata.org`). `get_wikidata()` also works
+correctly even when called in parallel with the other two, before a
+`wikibase` ID is resolved — it falls back to a `sites=enwiki&titles=<title>`
+site-link lookup (still one request), confirmed in `query.py`'s
+`wikidata()` method. **So the existing parallelization is architecturally
+sound** — 3 calls is the right number for 3 genuinely independent data
+sources, not itself a bug.
 
-### What I'm explicitly not proposing yet
+### Finding 2 — both `parse` and `query` fetch far more than we use, and
+`parse` is the current bottleneck
 
-No code change, no committed approach. This item is a **documented backlog
-item with a defined starting point** (the field-to-source mapping above,
-which needs verifying against real `wptools` response objects, not just
-reading the extraction code), not a scheduled implementation step. The
-ceiling here is genuinely Wikipedia's own infrastructure latency, not
-something further code changes can fix past a point — this is the smallest
-lever of the six, exactly as flagged when it first came up.
+Measured real response sizes and timings against the live API
+(`en.wikipedia.org`/`www.wikidata.org`, `IBM`/`Apple Inc.`/`Microsoft`/
+`Amazon (company)`/`Tesla, Inc.`):
+
+| Call | Current payload | Payload if narrowed to only what we use | Reduction | Current median latency | Narrowed median latency |
+|---|---|---|---|---|---|
+| `parse` (IBM) | 936,809 bytes (`text` alone: 614,808 bytes, entirely unused) | 178,196 bytes (`parsetree` only) | **-81.0%** | 817ms | 393ms (**-45%**, measured across 5 companies) |
+| `query` (IBM) | 25,168 bytes | 3,234 bytes (`extracts`+`info` only) | **-87.2%** | 235ms | not separately timed — already small, expect modest gain |
+| `wikidata` claims (IBM) | 374,588 bytes | 367,348 bytes (`claims` only) | -1.9% (claims dominate regardless; no per-property filter exists in this API) | 461ms | ~unchanged |
+
+Timing 5 companies' raw calls showed **`parse` is the actual bottleneck of
+the 3 parallel calls today** (817ms median vs. `query`'s 235ms and
+`wikidata`'s 461ms) — so narrowing `parse`'s fields alone should shift the
+parallel group's floor from ~800-950ms down to whatever `wikidata` ends up
+costing (see Finding 4 below, which is far larger).
+
+### Finding 3 — `wptools`' request layer never reuses connections, even
+within one lookup
+
+Read `wptools/core.py`'s `_request()`: it constructs a **brand-new
+`WPToolsRequest` (and thus a brand-new `pycurl.Curl()` handle) on every
+single `_get()` call** — no connection pooling, no keep-alive reuse, not
+even between the `parse` and `query` calls that both hit
+`en.wikipedia.org` within the same lookup. This is the exact bug fixed in
+`lib/edgar.py` for item 5, except here it's inside a third-party dependency
+we don't control the request layer of. Every one of the 3 (really 4+, see
+below) calls pays a full fresh TCP+TLS handshake.
+
+### Finding 4 — the real dominant cost: `get_wikidata()` triggers a hidden,
+sequential label-resolution cascade
+
+This is the big one. `wptools/wikidata.py`'s `_set_data('wikidata')` calls
+`self.get_labels()` automatically after every `get_wikidata()` call.
+`get_labels()` resolves **every property and every Q-number value
+referenced anywhere in the entity's claims** into human-readable text —
+not just the 5 properties `company_dns` actually reads — fetching up to 50
+entities per request and looping sequentially (`while 'entities' in
+self.data and self.data['entities']: self._get('labels', ...)`) until all
+are resolved.
+
+Measured against IBM's real Wikidata entity (`Q37156`, 189 claim
+properties):
+
+| | Entities needing labels | Requests needed (50/request) | Measured time |
+|---|---|---|---|
+| **What `wptools` actually does today** | 308 (every property + every Q-value in all 189 claims) | 7, sequential | **2,808ms** |
+| **What we actually need** (5 properties + their referenced Q-values) | 13 | 1 | **285ms** |
+
+**That's an 89.8% reduction, ~2.5 seconds, entirely hidden inside what our
+code treats as "one wikidata call."** This single mechanism plausibly
+explains the gap between the raw single-request timings above (parse
+817ms / query 235ms / wikidata-claims-only 461ms — none of which alone
+approach the 4-8 second real-world `wikipedia_firmographics` latency) and
+what's actually observed in production: add the ~2.8s hidden label cascade
+on top of the ~461ms claims fetch and the numbers line up.
+
+### What this means for the recommendation
+
+Item 6 is **not** the smallest lever — Finding 4 alone is a larger,
+better-evidenced opportunity than anything in items 1-3, 5 except item 1
+itself. But capturing it means no longer being able to use `wptools`'
+`get_wikidata()`/`get_labels()` as-is; the label cascade is baked into
+`wptools`' internals with no public parameter to narrow it. Two tiers,
+neither implemented yet:
+
+**Tier A (moderate effort, high confidence)** — replace the wikidata leg
+with a small, purpose-built direct client (mirroring item 5's
+`requests.Session()` pattern):
+1. Fetch claims directly: `action=wbgetentities&props=claims&sites=enwiki&titles=<title>` (already measured above, same cost as today).
+2. From the claims response, collect only the ~13 entities needed for our
+   5 properties (property IDs + their Q-number values) — same logic
+   already prototyped in this research (see the entity-collection snippet
+   used to produce the table above).
+3. One targeted `action=wbgetentities&props=labels&ids=<13 ids>` request
+   instead of `wptools`' 7-request cascade.
+4. Reuse `wptools/utils.py`'s `get_infobox()` directly (it's a standalone
+   function operating only on a `parsetree` string — not coupled to
+   `wptools`' request layer, so it can be imported and reused as-is) for
+   the `parse` leg, fetched via our own narrowed
+   `action=parse&prop=parsetree` request instead of `wptools.get_parse()`.
+5. For `query`, either keep `wptools.get_query()` as-is (its own waste is
+   comparatively small — Finding 2 shows the narrowed version isn't even
+   separately worth timing) or narrow it the same way for consistency.
+6. All of the above through one shared `requests.Session()` (Finding 3),
+   fixing the connection-reuse gap too.
+
+This removes `wptools` from the hot path for `parse` and `wikidata`
+(keeping it, if desired, only for `query`, or dropping it entirely for
+consistency), replacing it with a few hundred lines of direct HTTP calls
+plus reused utility functions — a real rewrite of `lib/wikipedia.py`'s
+network layer, not a config tweak, but the payoff (roughly halving `parse`
+and cutting ~2.5s off `wikidata` per lookup) is large and now backed by
+measurements, not guesses.
+
+**Tier B (bigger, not recommended without cause)** — drop `wptools`
+entirely, including for `query`, and/or move to Wikidata's SPARQL endpoint
+for even narrower claim-level filtering. Not justified by the evidence
+gathered here; Tier A already captures the large, cheap wins.
+
+### Still not proposing to implement this yet
+
+This is research output for review, matching how item 6 was originally
+scoped — but the conclusion has changed from "smallest lever, low
+priority" to "large, well-evidenced lever, moderate implementation effort
+(Tier A)." Worth a real decision from the user on whether to schedule Tier
+A as an actual implementation item, given the strength of evidence, rather
+than leaving it as an indefinite backlog note.
 
 ---
 
@@ -622,6 +734,11 @@ separately once someone's done the field-to-source mapping investigation.
    decision itself.
 6. ~~Item 6: leave it purely as a written-down backlog item for now, or
    scope the field-to-source mapping investigation as actual follow-up
-   work?~~ **Resolved: backlog item, no scoped follow-up timeline.** Stays
-   documented in item 6's section as a starting point for whenever someone
-   picks it up.
+   work?~~ **Originally resolved as backlog-only — reopened 2026-09-27.**
+   The requested follow-up research (see item 6's section) found a
+   previously-hidden, large, measured bottleneck (a sequential
+   label-resolution cascade costing ~2.8s per lookup, 89.8% of which is
+   wasted resolving data never used) that changes the priority assessment.
+   **New open question**: schedule Tier A (the proposed `wptools`
+   replacement for the `parse`/`wikidata` legs) as a real implementation
+   item, or keep it backlogged despite the new evidence?
