@@ -1,7 +1,7 @@
 # company_dns on MicroK8s
 
 Kubernetes manifests for running `company_dns` on the on-prem MicroK8s HA
-cluster (worker nodes `cafe-1` / `espresso-1`), replacing the Azure
+cluster (worker nodes `host-1` / `host-2`), replacing the Azure
 Container App. Full context and rationale: see
 [docs/plans/onprem-k8s-migration.md](../docs/plans/onprem-k8s-migration.md).
 
@@ -10,7 +10,7 @@ Container App. Full context and rationale: see
 ```
 k8s/prod/
   namespace.yaml            # the "company-dns" namespace
-  deployment.yaml           # 2-replica Deployment, spread across cafe-1/espresso-1
+  deployment.yaml           # 2-replica Deployment, spread across host-1/host-2
   service.yaml               # ClusterIP :80 -> pod :8000
   ingress.yaml               # HTTPS ingress + HTTP->HTTPS redirect ingress
   middleware-redirect.yaml   # Traefik Middleware used by the redirect ingress

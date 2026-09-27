@@ -84,11 +84,18 @@ Before you get started it is important to install all prequisites and then creat
 #### Execution
 If everything above completed successfully then running company_dns can be performed via `python3 ./company_dns.py` this will run the service in the foreground.
 
+### On-prem Kubernetes (how the live deployment actually runs)
+The live service at `company-dns.mediumroast.io` runs on an on-prem MicroK8s HA cluster (it previously ran as an Azure Container App). This is a maintainer-facing deployment path, not required for local development — see [k8s/README.md](k8s/README.md) for the manifest layout, first-time cutover steps, and routine redeploy instructions, and [docs/plans/onprem-k8s-migration.md](docs/plans/onprem-k8s-migration.md) for the full migration rationale. Routine redeploys are a single command from a workstation with cluster access:
+```bash
+./scripts/build-and-deploy.sh
+```
+which builds the image, pushes it to GHCR, and rolls it out via `kubectl` (requires a `.env` file with `GITHUB_PAT` set — see [.env.template](.env.template)).
+
 ## Verify that the service is working
 Regardless of the approach taken to run the company_dns checking to see if it is operating is important.  A quick way to check on service availability when running on localhost is to follow this link: [http://localhost:8000/](http://localhost:8000/). If this is successful the embedded web interface will display (see screenshot below) describing core capabilities and function, examples with `curl`, and some helpful links to the company_dns GitHub repository.
 
 # Checkout a live system
-A live system is available for Mediuroast efforts and for anyone to try out, relevant links are below.
+A live system is available for Mediuroast efforts and for anyone to try out, running on an on-prem MicroK8s cluster (see [k8s/README.md](k8s/README.md)). Relevant links are below.
 - Embedded background - [https://company-dns.mediumroast.io/](https://company-dns.mediumroast.io/)
 - Company search for IBM - [https://company-dns.mediumroast.io/V3.0/global/company/merged/firmographics/IBM](https://company-dns.mediumroast.io/V3.0/global/company/merged/firmographics/IBM)
 - Standard industry code search for `Oil` - [https://www.mediumroast.io/company_dns/V3.0/na/sic/description/oil](https://www.mediumroast.io/company_dns/V2.0/sic/description/oil)
