@@ -10,3 +10,9 @@ beautifulsoup4>=4.13.4
 openpyxl>=3.1.5
 slowapi>=0.1.9
 python-multipart>=0.0.9
+# lxml and html2text: previously only pulled in transitively via wptools.
+# lib/wikipedia_v2.py (docs/plans/performance-improvements.md item 6) imports
+# both directly, so they need to be explicit now - especially since the
+# point of item 6 is eventually removing the wptools dependency entirely.
+lxml>=5.0.0
+html2text>=2020.1.16
