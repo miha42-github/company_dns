@@ -2,18 +2,22 @@
 """
 Shadow comparison tool for docs/plans/performance-improvements.md item 6.
 
-Hits both the existing (wptools-based) and /v2/ (direct-HTTP) Wikipedia/
-merged endpoints for the same companies, diffs response bodies
-field-by-field, and reports latency for both side-by-side. Meant to be
-re-run repeatedly over the validation period - not a one-off - see the
-plan doc's "Proposed cutover criteria" for what "consistent" should mean
-before considering swapping the existing endpoints to the v2 backend.
+Post-cutover (2026-09-27): the default wikipedia/merged endpoints now run
+the v2 (direct-HTTP) backend; the wptools-based legacy backend moved to
+/v1/ and is kept for reference/rollback only. This tool still diffs /v1/
+(legacy) against /v2/ field-by-field for the same companies, reporting
+latency side-by-side - useful as an ongoing regression check on the
+legacy path in case rollback is ever needed. `--endpoint wikipedia-cutover`
+/ `merged-cutover` instead compare the *default* path against /v2/, which
+is what actually validates the cutover itself (they should always match,
+since default now just calls the v2 backend).
 
 Usage:
     python3 perf_tests/shadow_compare.py
     python3 perf_tests/shadow_compare.py --base-url http://localhost:8000
     python3 perf_tests/shadow_compare.py --include-hard-set
     python3 perf_tests/shadow_compare.py --endpoint wikipedia
+    python3 perf_tests/shadow_compare.py --endpoint wikipedia-cutover
     python3 perf_tests/shadow_compare.py --out perf_tests/results/shadow-20261001.json
 
 Exit code is non-zero if any mismatch was found this run, so this can be
@@ -50,10 +54,18 @@ HARD_COMPANIES = [
 
 ENDPOINTS = {
     "wikipedia": {
-        "legacy": "/V3.0/global/company/wikipedia/firmographics/{name}",
+        "legacy": "/V3.0/global/company/wikipedia/v1/firmographics/{name}",
         "v2": "/V3.0/global/company/wikipedia/v2/firmographics/{name}",
     },
     "merged": {
+        "legacy": "/V3.0/global/company/merged/v1/firmographics/{name}",
+        "v2": "/V3.0/global/company/merged/v2/firmographics/{name}",
+    },
+    "wikipedia-cutover": {
+        "legacy": "/V3.0/global/company/wikipedia/firmographics/{name}",
+        "v2": "/V3.0/global/company/wikipedia/v2/firmographics/{name}",
+    },
+    "merged-cutover": {
         "legacy": "/V3.0/global/company/merged/firmographics/{name}",
         "v2": "/V3.0/global/company/merged/v2/firmographics/{name}",
     },
@@ -147,7 +159,10 @@ def print_report(endpoint_key, results):
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help=f"default: {DEFAULT_BASE_URL}")
-    parser.add_argument("--endpoint", choices=["wikipedia", "merged", "both"], default="both")
+    parser.add_argument(
+        "--endpoint",
+        choices=["wikipedia", "merged", "both", "wikipedia-cutover", "merged-cutover"],
+        default="both")
     parser.add_argument("--include-hard-set", action="store_true",
                          help="also run the deliberately-harder second company list (non-US, edge cases)")
     parser.add_argument("--timeout", type=float, default=30.0)
