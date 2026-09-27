@@ -4,6 +4,15 @@ All notable changes to this project are documented here.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
+## [3.2.0]
+The V3.2.0 release brought comprehensive security hardening and modernized the web framework:
+
+1. Security middleware blocking 70+ known attack patterns including WordPress probes, PHP exploits, SQL injection, and XSS attempts
+2. IP-based rate limiting (100-1000 req/min by endpoint type) using SlowAPI
+3. Structured, severity-based logging with automatic request tracking and performance metrics
+4. Complete replacement of Starlette with the FastAPI framework, bringing automatic interactive API docs (Swagger UI at `/docs`, ReDoc at `/redoc`) and Pydantic v2.10.0 request/response validation
+5. Python 3.13 support, tested via Homebrew with the `.venv` convention
+
 ## [3.1.0]
 The V3.1.0 release of `company_dns` brings significant UI improvements to enhance usability and functionality:
 
