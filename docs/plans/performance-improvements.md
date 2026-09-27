@@ -5,11 +5,14 @@ against the live service** (PRs #99-#103; see each item's section for the
 measured before/after numbers — EDGAR sequential latency down 56-97%,
 Wikipedia-bound concurrent throughput up to 81% faster at concurrency 8,
 service now handles concurrency=16 cleanly on 4 replicas where it crashed
-at that level on 2). **Item 6 was re-researched on 2026-09-27 and its
-conclusion changed** — no longer "smallest lever, backlog only"; see its
-section for a large, measured, previously-hidden bottleneck and a proposed
-Tier A implementation. Not yet scheduled or implemented — awaiting a
-decision on whether to pursue it as real work.
+at that level on 2). **Item 6 was re-researched on 2026-09-27, its
+conclusion changed** from "smallest lever, backlog only" to a large,
+measured, previously-hidden bottleneck (Findings 1-6, including
+correctness validated against production and a real rate-limit/ToS-
+compliance gap in `wptools`) — **and is now approved for implementation**,
+shipped as parallel `/v2/` shadow endpoints alongside the existing ones
+(not a swap) until validated consistent over time. See item 6's "Decision"
+subsection for the rollout plan; not yet built.
 Owner: michael.hay@mediumroast.io
 Scope: all five non-caching performance levers from the "increase
 performance without caching" discussion — (1) the `companies` DB
@@ -592,11 +595,14 @@ with a small, purpose-built direct client (mirroring item 5's
    used to produce the table above).
 3. One targeted `action=wbgetentities&props=labels&ids=<13 ids>` request
    instead of `wptools`' 7-request cascade.
-4. Reuse `wptools/utils.py`'s `get_infobox()` directly (it's a standalone
-   function operating only on a `parsetree` string — not coupled to
-   `wptools`' request layer, so it can be imported and reused as-is) for
-   the `parse` leg, fetched via our own narrowed
-   `action=parse&prop=parsetree` request instead of `wptools.get_parse()`.
+4. `get_infobox()` operates only on a `parsetree` string — not coupled to
+   `wptools`' request layer in principle — but **can't actually be
+   imported standalone**: `import wptools.utils` still executes
+   `wptools/__init__.py`, which unconditionally imports the
+   `pycurl`-dependent request layer (confirmed in Finding 6). The verbatim
+   source needs to be copied in, not imported, for the `parse` leg,
+   fetched via our own narrowed `action=parse&prop=parsetree` request
+   instead of `wptools.get_parse()`.
 5. For `query`, either keep `wptools.get_query()` as-is (its own waste is
    comparatively small — Finding 2 shows the narrowed version isn't even
    separately worth timing) or narrow it the same way for consistency.
@@ -696,17 +702,154 @@ This is the missing piece from Findings 1-4: not just "this should be
 faster," but "this produces the same data, confirmed against production,
 and is measured to be dramatically faster."
 
-### Still not proposing to implement this yet
+### Decision (2026-09-27): implement Tier A, ship it as parallel shadow
+endpoints, not a swap
 
-This is research output for review, matching how item 6 was originally
-scoped — but the conclusion has changed from "smallest lever, low
-priority" to "large, well-evidenced, *validated* lever, moderate
-implementation effort (Tier A)." Worth a real decision from the user on
-whether to schedule Tier A as an actual implementation item, given the
-strength of evidence, rather than leaving it as an indefinite backlog
-note. Tier A should also adopt Finding 5's fixes as part of the same work
-(proper User-Agent, `maxlag`, basic 429/503 backoff) since they're free
-once the request layer is being rewritten anyway.
+Findings 1-6 are strong enough to act on, but replacing the network layer
+behind two of the app's heaviest-traffic endpoints on the strength of a
+10-company research script is more confidence than is actually warranted.
+Per the user: **build it, deploy it, but as new, separate endpoints
+alongside the existing ones** — not a replacement — so the old and new
+implementations run side-by-side in production behind different paths,
+comparable at will, until satisfied the new one is consistent. Zero risk
+to the existing `wikipedia`/`merged` endpoints during this phase; nothing
+about their behavior changes.
+
+#### New module: `lib/wikipedia_v2.py`
+
+Production version of the validated research script
+(`docs/plans/research/wikipedia-experiment.py`), not the script itself —
+needs the same interface shape as `WikipediaQueries` so it's a drop-in for
+`_handle_request` (a `WikipediaQueriesV2` class with a `.query` attribute
+and a `get_firmographics()` method returning the same envelope: `code`,
+`message`, `module`, `data`, `dependencies`).
+
+- Shared `requests.Session()` (module-level, matching item 5's pattern),
+  headers set once: `User-Agent: company_dns/<version>
+  (https://github.com/miha42-github/company_dns; hello@mediumroast.io)
+  python-requests/<version>` (Finding 5 — real, identifying UA, not
+  `wptools`' shared generic one), and `maxlag=5` on every request
+  (Finding 5's "good citizen" parameter).
+- Three fetches in parallel via `ThreadPoolExecutor` (matching the
+  existing architecture's pattern, not a novel one): narrowed
+  `action=parse&prop=parsetree`, narrowed
+  `action=query&prop=extracts|info`, and
+  `action=wbgetentities&props=claims` — same 81%/87% payload reductions
+  measured in Findings 2. `parse`'s infobox extraction reuses the
+  verbatim-copied `get_infobox`/`template_to_dict*` functions already
+  validated in the research script (Finding 6) — copied into this module
+  too, same reasoning: `wptools` can't be imported as a dependency here
+  either, and reimplementing-from-scratch risks the same subtle
+  divergence the first draft of the research script had.
+- After the wikidata-claims future resolves: compute the ~10-15 needed
+  entities (5 target properties + their Q-value targets, per Finding 4),
+  issue **one** targeted labels request — not `wptools`' 7-request
+  cascade — then build the `{label} (P123)`-style dict via the
+  verbatim-ported `_update_wikidata`-equivalent logic (also already
+  validated in the research script).
+- Basic 429/503 handling with `Retry-After` respect (Finding 5) — new
+  behavior `wptools` never had at all, not just a port.
+- Field-for-field output must match `WikipediaQueries.get_firmographics()`
+  exactly for the properties covered by Finding 6's validation
+  (`industry`, `country`, `website`, `cik`, `exchanges`, `description`,
+  `wikipediaURL`); `type`/`isin`/`tickers`/`name`/`city` (infobox-derived
+  fields not covered by the validation pass) need their transforms ported
+  from `lib/wikipedia.py` too, straightforwardly, since they're pure
+  infobox-dict lookups with no network-layer changes involved.
+
+#### `lib/firmographics.py`: `GeneralQueries` needs a backend switch, not a
+duplicate class
+
+The merged endpoint's logic (EDGAR lookup, geocoding, response merging)
+is unaffected by any of this — only the *Wikipedia data source* changes.
+Rather than forking all of `GeneralQueries` into a parallel
+`GeneralQueriesV2`, give it a constructor parameter (e.g.
+`wikipedia_backend: str = 'legacy'`) that selects which class
+`get_firmographics_wikipedia()` instantiates (`WikipediaQueries` vs.
+`WikipediaQueriesV2`). Keeps the merge logic in exactly one place.
+
+#### New endpoints in `company_dns.py`
+
+Additive only — the existing `wikipedia`/`merged` routes and their
+`V2.0`/`V3.0` variants are untouched:
+
+```python
+@app.get(
+    "/V3.0/global/company/wikipedia/v2/firmographics/{company_name}",
+    response_model=WikipediaResponse,
+    tags=["Wikipedia (V3.0, experimental v2)"],
+    summary="[EXPERIMENTAL] Get company firmographics from Wikipedia (v2 backend)"
+)
+async def wikipedia_firmographics_v2(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(WikipediaQueriesV2, 'get_firmographics', company_name)
+
+@app.get(
+    "/V3.0/global/company/merged/v2/firmographics/{company_name}",
+    response_model=MergedFirmographicsResponse,
+    tags=["Merged Data (V3.0, experimental v2)"],
+    summary="[EXPERIMENTAL] Get merged firmographics from all sources (v2 Wikipedia backend)"
+)
+async def general_query_v2(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(
+        lambda: GeneralQueries(wikipedia_backend='v2'), 'get_firmographics', company_name
+    )
+```
+
+(The `merged/v2` handler needs a small `_handle_request` accommodation
+since it must construct `GeneralQueries` with a non-default argument —
+either a factory-callable overload of the `handler_class` parameter, or a
+dedicated `GeneralQueriesV2` thin subclass whose `__init__` just hardcodes
+`wikipedia_backend='v2'` and calls `super().__init__()`. The subclass is
+probably less invasive to `_handle_request`'s signature — pick whichever
+is cleaner once actually writing this.)
+
+`[EXPERIMENTAL]` in the summary and a distinct tag group means these show
+up clearly separated in `/docs` (Swagger UI) rather than looking like a
+third, equally-supported API version.
+
+#### Comparison tooling: how "satisfied it's consistent" actually gets
+measured
+
+New script, `perf_tests/shadow_compare.py`: hits both the existing and
+`/v2/` endpoints for the same company list, diffs the response bodies
+field-by-field (reusing the comparison approach already proven in the
+research script), and reports latency for both side-by-side. Not a one-off
+— meant to be re-run repeatedly over the validation period.
+
+- Start with the existing 10 companies (`perf_tests/companies.py`) — known
+  to work, per Finding 6.
+- **Expand beyond them before trusting the result** — all 10 are
+  extremely well-documented, easy cases (large, English-language, obvious
+  Wikidata entries). Real-world traffic will include messier cases: small-
+  caps, non-US companies, companies with sparse or missing Wikidata
+  entries, disambiguation-prone names. Add a second, deliberately
+  harder company list for this tool specifically.
+- Flag any field mismatch loudly (matching `perf_tests/baseline.py`'s
+  concurrency-correctness-check pattern of raising clearly rather than
+  silently logging) — but for a *shadow* comparison, don't hard-fail the
+  whole run on one mismatch; collect and report all of them per pass,
+  since the point during this phase is visibility, not gating a deploy.
+
+#### Proposed cutover criteria (not yet agreed — flagging for a decision
+when this phase is actually running)
+
+Something like: N consecutive clean `shadow_compare.py` runs (TBD what N
+should be) across both company lists, spanning some minimum wall-clock
+period (not just N runs back-to-back in one afternoon — want to catch
+transient Wikipedia-side data changes/edge cases over time, not just
+prove the code is deterministic). Once met: swap the *existing*
+`wikipedia`/`merged` endpoints' `_handle_request` calls to
+`WikipediaQueriesV2`/`GeneralQueriesV2`, remove the `/v2/` shadow routes
+and `lib/wikipedia.py`'s `wptools` dependency entirely (drop it from
+`requirements.txt` too). This isn't decided yet — revisit once the shadow
+phase has real data to look at.
+
+#### Sequencing relative to items 1-5
+
+Independent of all of them — items 1, 2, 3, 5 are already merged and
+deployed; this is new work, not blocked by or blocking anything else in
+this plan. Its own PR/review cycle, same reasoning as item 2 (large
+enough, novel enough, to warrant isolated review rather than bundling).
 
 ---
 
