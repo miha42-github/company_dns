@@ -45,6 +45,19 @@ build pattern, wanting a compiled single-binary deploy story, something
 else?) so this doc's "why" holds up later. Fill in once we talk through
 it.*
 
+**A sixth, confirmed real use case, found through the §7/§9 spike
+work, not originally listed above**: given a company's descriptive
+text, resolve it to its best-fit classification code(s) with the full
+hierarchical structure — a batch/API-oriented capability, distinct from
+interactive search, needed to actually classify companies against the
+IC/SIC/NACE data products in item 1. Design thinking (chunking long
+input, confidence/triage for automated use, multi-code assignment,
+ingest-time vs. query-time) is in
+[`docs/plans/ic-similarity-search-poc.md`](ic-similarity-search-poc.md)
+§10.2 — flagged there as likely deserving its own plan document rather
+than growing inside a doc scoped to a local test tool. Linked from here
+so it's visible from the main rewrite doc, not just the POC one.
+
 ## 2. What stays true from the current implementation
 
 Not being thrown out, just carried forward as requirements:

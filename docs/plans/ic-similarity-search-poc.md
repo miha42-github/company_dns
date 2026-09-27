@@ -553,7 +553,141 @@ experiments/ic-similarity-service/
    decision...~~ **Done, and it worked exactly as hoped** — using it
    directly is what caught the mpnet score-inflation issue that led to
    §7.8.
-4. **Now open**: react to §5's similarity-score-representation analysis
-   — pick one of §5.4's options (or a variant) and implement it, since
-   that's the one piece of this tool still just analysis rather than
-   working code.
+4. ~~React to §5's similarity-score-representation analysis...~~ **Done**
+   — Option 1 implemented (§5.7), then the input-layer truncation
+   warning (§5.8) on top of it.
+5. **Now open**: §10's chunking design — and the bigger use case it
+   points to, which may deserve its own plan document rather than
+   living entirely inside this one (see §10.2).
+
+## 10. Long-input chunking, and the bigger use case it points to
+
+§5.8 found and fixed a *symptom* (silent truncation, now warned about
+before search). It didn't fix the underlying *limitation*: a model with
+a 256-token window genuinely cannot see a 469-token company description
+in one pass, no matter how clearly the user is warned about it. Chunking
+is the standard fix for that — written up below, together with where it
+actually leads, which turns out to be more significant than a UI
+feature for this one test tool.
+
+### 10.1 Chunking + max-pooled merge: the mechanism
+
+**Not chunk-then-average.** The naive approach — split the text into
+pieces, embed each, average the vectors into one combined vector,
+search once — was considered and rejected. IBM's description is
+genuinely multi-topic (1911 origin story vs. current AI/quantum
+business), and averaging blends distinct topics into a vector that's
+weakly about both rather than strongly about either — the same failure
+shape as truncation, just diluted instead of dropped, not actually
+fixed.
+
+**Chunk-then-max-pool instead.** Embed each chunk separately, search
+each chunk independently against the corpus, then for every corpus row
+that appears in *any* chunk's results, keep that row's best (highest
+similarity / lowest distance) score across all chunks, and re-rank the
+merged set on that. This answers "does *any part* of this text match
+this corpus item," which is the right question for a document that's
+legitimately about several things — IBM's origin-story chunk can
+legitimately win against "Calculating and Accounting Machines" while
+its AI/quantum chunk separately wins against "Electronic Computers" (or
+a services category), and *both* surface, rather than one hiding the
+other.
+
+**Concrete design, building directly on what's already running:**
+
+1. **Chunk size**: target well under the model's 256-token limit (e.g.
+   ~200 tokens) so each chunk has headroom — tokenizing a chunk and
+   getting *another* truncation warning would be a bad failure mode for
+   the fix itself.
+2. **Chunk boundaries**: sentence-aware, not a raw token-count slice —
+   cutting mid-sentence (which is exactly what plain truncation already
+   does, and exactly what made IBM's result hard to interpret) should be
+   avoided in the chunks too. Needs a sentence splitter ahead of the
+   tokenizer-based chunker; the tokenizer alone doesn't know where
+   sentences end.
+3. **Overlap**: ~20-30 tokens between consecutive chunks, so a sentence
+   or clause that spans a chunk boundary isn't stranded, meaningless, in
+   both halves.
+4. **Merge**: per-chunk `array_distance` search (already built,
+   §2/§10.1 above), then group all chunks' hits by `unique_key`, keep
+   the best-scoring occurrence of each, re-sort. Cheap at this corpus's
+   scale — a handful of chunks × a sub-millisecond search each.
+5. **Bonus for a test tool specifically**: since every surfaced result
+   now traces back to a specific chunk, showing *which* chunk drove a
+   match (e.g. "matched on: '...quantum computing, artificial
+   intelligence...'") gives real transparency into *why* a result
+   appeared — arguably more useful for testing/trust than the
+   calibrated-label work in §5 alone.
+
+Not built yet — this is the design, next step is implementing it in
+`experiments/ic-similarity-service` unless §10.2 changes where this
+belongs.
+
+### 10.2 This points to a different, separate use case: company → classification-code matching
+
+Chunking a long company description to search against IC/SIC data isn't
+really "the interactive test tool, but for longer input." It's the core
+mechanism for a materially different capability — one **explicitly
+intended for the new `company_dns`** (per direct confirmation, not
+speculation): **given a company's descriptive text, resolve it to its
+best-fit classification code(s), with the complete hierarchical
+structure**, not a ranked list for a human to eyeball.
+
+**Why this is a different tool, not a mode of this one:**
+
+- **Input**: the same kind of long, multi-topic company description
+  that motivated §10.1's chunking work in the first place — this is the
+  *normal* input shape here, not an edge case to warn about.
+- **Output shape**: interactive search returns a ranked list for a
+  human to scan and judge (§5's whole discussion — labels, bars, raw
+  scores — is about helping a *person* interpret ambiguity). A
+  classification tool needs to *resolve* to something a downstream
+  system can act on: a definitive code (or a small, explicitly-confident
+  set of codes), with the full section→division→group→class→subclass
+  structure attached — not a top-10 list someone has to manually
+  review, unless review is exactly what's being flagged (see confidence
+  below).
+- **Usage pattern**: almost certainly batch/API-first — classifying an
+  existing company database (Mediumroast's own data is the obvious
+  case) means calling this many times programmatically, not one
+  interactive query at a time in a browser. Worth designing for
+  throughput (batch requests, not just single-query latency) from the
+  start, unlike this test tool, which was never meant to handle volume.
+- **Confidence/triage becomes a requirement, not a nice-to-have.** §5.6
+  floated a "per-query clear leader" signal (is there one standout
+  result, or several similarly-plausible candidates) and shelved it as
+  "a second iteration, not required" for the interactive tool — because
+  a human looking at a ranked list can make that judgment themselves.
+  A batch classification pipeline can't; it needs the tool itself to
+  flag "confident, single answer" vs. "ambiguous, needs human review"
+  so a downstream process knows which companies to trust automatically
+  and which to queue for a person. This is now a real requirement, not
+  a deferred idea.
+- **Multi-code reality**: real companies (IBM being the obvious example
+  already in hand) legitimately span multiple classification codes —
+  hardware, software, and services are all genuinely "IBM's business,"
+  not a single best-fit answer with everything else wrong. Worth
+  designing for "return every code above a confidence threshold,"
+  possibly per-chunk (the hardware-chunk's winner and the
+  services-chunk's winner can both be legitimate, simultaneous
+  classifications), rather than forcing a single top answer the way
+  interactive search implicitly does today.
+- **Timing**: does this run once, at ingest — when a company enters
+  Mediumroast's dataset, classify it immediately and store the result —
+  or on demand, at query time? Ingest-time seems the more natural fit
+  for "populate a durable classification field," but worth deciding
+  explicitly rather than assuming; it also sidesteps needing to keep an
+  embedding model warm in a request-serving process at all, which
+  matters for the rewrite's resource footprint (§7.8's memory-measurement
+  habit applies here too, once this gets built for real).
+
+**Not designed further here** — this section exists to name the use
+case precisely and flag how it differs from the interactive tool, since
+conflating the two would produce a design that serves neither well. Given
+this is explicitly a real, intended `company_dns` rewrite capability (not
+just a spillover from testing), it likely deserves its own plan document
+— `docs/plans/company-classification.md` or similar — cross-referenced
+from here and from `go-duckdb-rewrite.md`, rather than growing
+indefinitely inside a doc whose Scope line (top of this file) says
+"local test service." Flagging that as a decision point, not deciding
+it unilaterally here.
