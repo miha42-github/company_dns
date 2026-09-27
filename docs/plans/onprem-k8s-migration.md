@@ -9,7 +9,7 @@ removed from CI. Remaining work is entirely optional/deferred: DNS Phase 2
 the caching/async-I/O tier of the EDGAR/Wikipedia performance work now that
 the two concrete bug fixes are live in production.
 Owner: michael.hay@mediumroast.io
-Target cluster: on-prem MicroK8s HA cluster, worker nodes `cafe-1` and `espresso-1`
+Target cluster: on-prem MicroK8s HA cluster, worker nodes `host-1` and `host-2`
 Reference implementation: `mediumroast.io` repo, `V6_K8s` branch, `k8s/prod/` +
 `scripts/build-and-deploy.sh`
 
@@ -79,7 +79,7 @@ a monthly cron (`0 12 1 * *`) and on manual dispatch, via
 | Ingress controller | Traefik (`ingressClassName: traefik`) |
 | TLS | cert-manager, `ClusterIssuer/letsencrypt-prod` (cluster-wide, already exists — HTTP-01 via Traefik) |
 | LoadBalancer IPs | MetalLB pool `192.168.1.200-192.168.1.219` |
-| Scheduling | 2 effective worker nodes: `cafe-1`, `espresso-1` (pod anti-affinity spreads replicas across them) |
+| Scheduling | 2 effective worker nodes: `host-1`, `host-2` (pod anti-affinity spreads replicas across them) |
 | Secrets | Bitnami SealedSecrets controller (used for private creds; not needed here — image is public) |
 | Existing namespace pattern | one namespace per app+tier, e.g. `mediumroast-web` |
 
@@ -108,7 +108,7 @@ microk8s kubectl get ingressclass
 
 What we're confirming:
 
-1. `cafe-1` / `espresso-1` are still the effective worker nodes (i.e. no
+1. `host-1` / `host-2` are still the effective worker nodes (i.e. no
    topology change since the mediumroast.io doc was written).
 2. `letsencrypt-prod` `ClusterIssuer` still exists and is `Ready` — if so, we
    reuse it as-is (no new `certmanager.yaml` needed, just a `Certificate`
@@ -125,11 +125,11 @@ Run 2026-09-25/26 against the live cluster. All core assumptions confirmed;
 one new item to decide (ingress class choice).
 
 - **Nodes** (`get nodes -o wide`): 3 control-plane nodes total —
-  `cafe-1` and `espresso-1` are `control-plane,worker` (schedule pods, Ubuntu
+  `host-1` and `host-2` are `control-plane,worker` (schedule pods, Ubuntu
   24.04, v1.35.6); `cortado-1` is `control-plane` only (no `worker` role,
   running on a Jetson/tegra kernel) and does **not** schedule regular
-  workloads. Confirms: pod anti-affinity should target `cafe-1` /
-  `espresso-1` as originally planned — no topology change.
+  workloads. Confirms: pod anti-affinity should target `host-1` /
+  `host-2` as originally planned — no topology change.
 - **Namespaces**: `company-dns` does not exist — no naming collision.
   Existing app namespaces: `mediumroast-web`, `mediumroast-staging`,
   `mediumroast-dev`, `vault-prod`, `vault-staging`. Also present:
@@ -222,7 +222,7 @@ Key points, adapted from `mediumroast-website`'s deployment and from
   scale-to-zero equivalent needed for a low-traffic internal API.)
 - Pod anti-affinity on `app.kubernetes.io/name: company-dns` /
   `topologyKey: kubernetes.io/hostname` to spread the 2 replicas across
-  `cafe-1` and `espresso-1`.
+  `host-1` and `host-2`.
 - No `imagePullSecrets` (public image).
 - `containerPort: 8000` (matches `EXPOSE 8000` in the
   [Dockerfile](../../Dockerfile) and `targetPort: 8000` in the old Azure
@@ -424,7 +424,7 @@ None of the remaining steps below (image build, `kubectl apply`, DNS edits,
 `az` commands) can be run from this Claude session — no `docker`, `kubectl`,
 or `az` CLI access here, by design (see "Live cluster survey" above). Steps
 are marked **[you]** where you run them yourself, on a machine with the
-relevant access (your workstation, or directly on `cafe-1`).
+relevant access (your workstation, or directly on `host-1`).
 
 ### 0. Land the code on `main`
 
@@ -469,7 +469,7 @@ so nothing new happens there), and waits for the rollout.
 
 ```bash
 kubectl -n company-dns get pods -o wide
-# Expect 2/2 pods Running, spread across cafe-1 and espresso-1
+# Expect 2/2 pods Running, spread across host-1 and host-2
 ```
 
 ### 2. Smoke test directly against the Service (Azure still live, no DNS touched)

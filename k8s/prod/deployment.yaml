@@ -22,7 +22,7 @@ spec:
       labels:
         app.kubernetes.io/name: company-dns
     spec:
-      # Spread pods across the two worker nodes (cafe-1 and espresso-1)
+      # Spread pods across the two worker nodes (host-1 and host-2)
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:

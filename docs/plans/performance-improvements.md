@@ -276,14 +276,14 @@ latency numbers alone to prove correctness.
 ### Current state
 
 `k8s/prod/deployment.yaml`: `replicas: 2`, resources `requests: 100m
-CPU/256Mi`, `limits: 500m CPU/1Gi`, spread across `cafe-1`/`espresso-1` via
+CPU/256Mi`, `limits: 500m CPU/1Gi`, spread across `host-1`/`host-2` via
 pod anti-affinity. `company_dns.py` calls `uvicorn.run(app, ...)` with no
 `workers` argument (single process per pod).
 
 ### Decision: bump to 4 replicas, and no more than 4
 
 Per the user: `company_dns` is additive to what's already running on
-`cafe-1`/`espresso-1` and there's plenty of headroom, but capped at **4
+`host-1`/`host-2` and there's plenty of headroom, but capped at **4
 replicas** as a deliberate ceiling (not "as many as fit") — this isn't
 scaled by measured need, it's a fixed target agreed up front.
 
@@ -321,7 +321,7 @@ slow paths are network-wait, not computation).
 ### Pre-flight check before bumping replicas
 
 Per the user, not treated as a blocker: `company_dns` is additive and
-there's plenty of room on `cafe-1`/`espresso-1` for a 4-replica footprint at
+there's plenty of room on `host-1`/`host-2` for a 4-replica footprint at
 its current per-pod resource sizing (100m/256Mi requests). Still worth a
 quick sanity check at the time of the actual change, since the cluster's
 other workloads (`mediumroast-website`, `vault-*`, the observability stack)
@@ -372,7 +372,7 @@ time, best-effort:
   checkout.
 - Also worth capturing the deployed image tag directly, when available,
   rather than relying solely on the git-commit proxy: if `kubectl` is on
-  the `PATH` (it will be when run from `cafe-1`, where deploys actually
+  the `PATH` (it will be when run from `host-1`, where deploys actually
   happen), best-effort shell out to
   `kubectl -n company-dns get deployment company-dns -o jsonpath='{.spec.template.spec.containers[0].image}'`
   and record the result as `deployed_image`. Also wrapped in `try`/`except`
@@ -947,7 +947,7 @@ skip:
 > `perf_tests/compare.py` against the prior checkpoint → decide whether to
 > proceed**
 
-Concretely, on `cafe-1` (or wherever `build-and-deploy.sh` is run from):
+Concretely, on `host-1` (or wherever `build-and-deploy.sh` is run from):
 ```bash
 git pull                              # after merging the item's PR
 ./scripts/build-and-deploy.sh         # build, push, apply, wait for rollout
@@ -1031,7 +1031,7 @@ separately once someone's done the field-to-source mapping investigation.
    PR and review cycle, independent of items 1+5 and item 3 — reflected in
    "Suggested execution order" above.
 5. ~~Item 3: any known constraints on how many replicas
-   `cafe-1`/`espresso-1` can actually absorb...~~ **Resolved: cap at 4
+   `host-1`/`host-2` can actually absorb...~~ **Resolved: cap at 4
    replicas.** Per the user: `company_dns` is additive and there's plenty
    of room, but 4 is a deliberate ceiling, not "as many as fit" — updated
    throughout item 3's section and the execution order above. A quick
