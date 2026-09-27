@@ -1,0 +1,22 @@
+[package]
+name = "ic-similarity-service"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+datafusion = "42"
+# DataFusion 42.2.0 only requests arrow-ipc's "lz4" feature by default,
+# not "zstd" (confirmed in its Cargo.toml) - tmp/us_flat_embedded.feather
+# is genuinely zstd-compressed (unlike the tiny us_flat.feather, whose
+# buffers may be too small to have been compressed at all despite the
+# "zstd" codec tag - see docs/plans/go-duckdb-rewrite.md for context).
+# Cargo feature unification adds this even though datafusion doesn't
+# request it itself.
+arrow-ipc = { version = "53", features = ["zstd"] }
+fastembed = "7"
+axum = "0.7"
+tokio = { version = "1", features = ["full"] }
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"

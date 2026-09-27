@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IC Similarity Search (test tool)</title>
+<style>
+  /* Dark theme tokens borrowed from html/styles.css :root - not the
+     full stylesheet, just enough to look visually consistent. */
+  :root {
+    --color-bg-primary: #0F0D0E;
+    --color-bg-secondary: #1a1718;
+    --color-bg-tertiary: #3c3b3b;
+    --color-text-primary: #ca703f;
+    --color-text-secondary: rgb(104, 95, 88);
+    --color-text-accent: #924e29;
+    --color-link-primary: #1696c8;
+    --spacing-xs: 0.3rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --font-family-base: 'Avenir Next', 'Open Sans Light', 'Lato Medium', sans-serif;
+    --font-size-base: 11.5pt;
+    --font-size-small: 10.5pt;
+    --border-width: 0.05rem;
+    --border-color: rgb(104, 95, 88);
+    --border-radius: 0.5rem;
+    --border-radius-small: 0.3rem;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-base);
+    font-size: var(--font-size-base);
+  }
+
+  .wrap {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+  }
+
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-small);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  .search-bar {
+    display: flex;
+    gap: var(--spacing-sm);
+    flex-wrap: wrap;
+    margin-bottom: var(--spacing-lg);
+  }
+
+  input[type="text"], select, input[type="number"] {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius-small);
+    padding: var(--spacing-sm);
+    font-family: inherit;
+    font-size: inherit;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    min-width: 240px;
+  }
+
+  input[type="number"] {
+    width: 4rem;
+  }
+
+  button {
+    background: var(--color-text-accent);
+    color: var(--color-bg-primary);
+    border: none;
+    border-radius: var(--border-radius-small);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+  }
+
+  button:hover {
+    opacity: 0.85;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    text-align: left;
+    padding: var(--spacing-sm);
+    border-bottom: var(--border-width) solid var(--border-color);
+    font-size: var(--font-size-small);
+  }
+
+  th {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  .sim {
+    color: var(--color-link-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rank {
+    color: var(--color-text-secondary);
+    width: 2rem;
+  }
+
+  .path {
+    color: var(--color-text-primary);
+  }
+
+  .path .sep {
+    color: var(--color-text-secondary);
+    margin: 0 0.3em;
+  }
+
+  .status {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-small);
+    margin-bottom: var(--spacing-md);
+    min-height: 1.2em;
+  }
+
+  .status.error {
+    color: #c0392b;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>IC Similarity Search</h1>
+  <div class="subtitle">
+    Test tool for docs/plans/go-duckdb-rewrite.md &sect;7.7's model decision - not part of company_dns itself.
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="query" placeholder="e.g. growing wheat, software company, oil drilling..." autofocus>
+    <select id="model"></select>
+    <input type="number" id="k" value="10" min="1" max="50" title="how many results">
+    <button id="searchBtn">Search</button>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <table id="results" style="display:none">
+    <thead>
+      <tr>
+        <th class="rank">#</th>
+        <th>similarity</th>
+        <th>classification path</th>
+      </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+  </table>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

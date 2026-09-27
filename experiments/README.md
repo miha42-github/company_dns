@@ -22,7 +22,10 @@ throwaway.
   to an initial misdiagnosis — worth reading both, not just §7.3).
   Short version: DuckDB's `arrow` extension failed on the file as
   shipped; DataFusion read it directly, unmodified, with one line of
-  configuration.
+  configuration. **Caveat found later by `ic-similarity-service/`**:
+  that file's buffers may have been too small to actually exercise real
+  zstd decompression — see that experiment's README before assuming
+  DataFusion's zstd support needs zero configuration in general.
 - **`embed-bench/`** — benchmarks the three embedding models
   `fastembed-rs` supports natively (`all-MiniLM-L6-v2`,
   `BAAI/bge-small-en-v1.5`, `all-mpnet-base-v2`) against real US SIC
@@ -38,6 +41,17 @@ throwaway.
   L6-v2` outperformed `bge-small-en-v1.5` on this specific dataset,
   contrary to general retrieval-benchmark expectations — flagged as
   SIC/NACE-specific, not assumed to transfer to company data.
+- **`ic-similarity-service/`** — the first thing in `experiments/` that
+  isn't a benchmark script: a small local REST service + minimal web UI
+  wiring together DataFusion (data access), `fastembed-rs` (query-time
+  embedding with the two §7.7-decided models), and Axum (HTTP), so
+  similarity search can actually be typed into and looked at rather than
+  read off a results table. Planned in
+  [`docs/plans/ic-similarity-search-poc.md`](../docs/plans/ic-similarity-search-poc.md).
+  Surfaced two real bugs while building it — a DataFusion
+  `arrow-ipc`/zstd feature gap (see the `df-spike/` caveat above) and a
+  mismatched Rust-vs-SQL API on DataFusion's `array_distance` function —
+  both documented with fixes in this experiment's own README.
 
 ## Conventions for adding a new experiment
 

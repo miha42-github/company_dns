@@ -718,6 +718,25 @@ refused the file — a one-line fix (`ArrowReadOptions { file_extension:
 ".feather", ..Default::default() }`), not a real limitation. Once past
 that, it read the original ZSTD-compressed file directly:
 
+> **Second correction (from building `experiments/ic-similarity-
+> service/`, see its README):** "read the original ZSTD-compressed file
+> directly" needs a caveat. DataFusion 42.2.0's own `Cargo.toml` only
+> requests `arrow-ipc`'s `"lz4"` feature by default, not `"zstd"` —
+> confirmed by reading the manifest directly. `us_flat.feather` (this
+> section's file) is tiny with short string buffers that may simply
+> have been too small to actually get zstd-compressed despite carrying
+> the codec tag, meaning this test may never have exercised real zstd
+> *decompression* at all. `tmp/us_flat_embedded.feather`'s much larger
+> float-vector buffers definitely do, and reading *that* file failed
+> with `zstd IPC decompression requires the zstd feature` until
+> `arrow-ipc = { features = ["zstd"] }` was added explicitly. Net effect
+> on the DataFusion-vs-DuckDB conclusion: unchanged (DataFusion still
+> works, just needs one extra Cargo.toml line; DuckDB's `arrow`
+> extension has no equivalent fix available at all for its own,
+> different failure). But "no workaround needed" specifically wasn't
+> accurate — flagging rather than leaving it uncorrected, same policy as
+> §7.4's first correction.
+
 ```
 Reading tmp/us_flat.feather via read_arrow (Feather V2 == Arrow IPC file format)...
 
