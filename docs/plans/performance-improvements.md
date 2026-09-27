@@ -844,6 +844,26 @@ and `lib/wikipedia.py`'s `wptools` dependency entirely (drop it from
 `requirements.txt` too). This isn't decided yet — revisit once the shadow
 phase has real data to look at.
 
+#### Shadow validation log
+
+Tracking `shadow_compare.py` runs against production, per the cutover
+criteria above. All runs cover both `wikipedia` and `merged` endpoints
+unless noted.
+
+| Date | Company set | Result | Notes |
+|---|---|---|---|
+| 2026-09-25 | primary 10 | 30/30 clean | first production run after deploy |
+| 2026-09-26 | primary 10 | clean | |
+| 2026-09-27 (run 1) | primary 10 | 5/10 mismatched on `wikipedia` (5 `STATUS MISMATCH`) | Legacy leg (`wptools`) hit `Read timed out (20.0s)` on 5 of 10 companies; v2 leg returned 200 for all of them. Root-caused to Finding 5 (`wptools` has no retry/backoff, no connection reuse under load) rather than a v2 correctness issue — v2 was correct on every comparison, including these. Not counted toward the clean-run streak; recorded as confirming evidence that legacy is the less reliable leg. |
+| 2026-09-27 (run 2) | primary 10 | 30/30 clean | re-run shortly after run 1; legacy timeout did not recur |
+
+Running tally toward the (still-undecided) cutover threshold: **3
+consecutive clean runs** as of 2026-09-27 (2026-09-25, 2026-09-26,
+2026-09-27 run 2), plus one non-clean run whose only mismatches are
+attributable to legacy's own fragility, not v2. `--include-hard-set` not
+yet run as part of this log — still to do before cutover, per the
+"expand beyond the easy 10" note above.
+
 #### Sequencing relative to items 1-5
 
 Independent of all of them — items 1, 2, 3, 5 are already merged and
