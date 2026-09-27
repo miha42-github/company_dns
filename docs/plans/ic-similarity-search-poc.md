@@ -418,11 +418,74 @@ product literature surfaced in this search, not one single canonical article) ·
 [Shani et al., "Investigating confidence displays for top-N recommendations," JASIST 2013](https://asistdl.onlinelibrary.wiley.com/doi/abs/10.1002/asi.22934) ·
 Nielsen Norman Group's writing on communicating AI uncertainty to end users.
 
-Still not implemented — this is the requested literature search and its
-synthesis, one more layer on top of §5.6's proposal, not a final answer
-either. Next real decision point: pick the actual 3-4 label words and
-their calibration thresholds, and decide whether/how to demote the raw
-score in the existing markup.
+§5.6/§5.7's Option 1 wording (Unlikely/Possible/Likely Match, Very
+Similar) is implemented, with the raw score demoted to small/muted
+secondary text per §5.7 — see the commit history for exact wording and
+thresholds.
+
+### 5.8 A second, unrelated real problem found through actual use: silent input truncation
+
+Found by testing the "Detailed" tab (§4/§9) against a real, full-length
+Wikipedia company description (IBM's) rather than a short IC-style
+phrase — exactly the kind of input that tab exists for. The top result
+("Calculating and Accounting Machines, Except Electronic Computers")
+looked wrong for a company whose summary leads with quantum computing
+and AI. Investigated rather than dismissed:
+
+**Root cause, confirmed precisely**: `all-MiniLM-L6-v2` has a
+**256-token** limit (`model_max_length` in its own tokenizer config).
+IBM's Wikipedia summary tokenizes to **469 tokens** — the model only
+ever sees the first 256, and the cutoff lands mid-sentence right after
+"...remains the basis for the majority of personal—", before "computers
+sold today." Everything after that — the ThinkPad, the 1990s pivot to
+services, and critically the *entire final paragraph* on quantum
+computing/AI/data infrastructure — is invisible to the model. What
+survives is dominated by IBM's 1911 origin story (Computing-Tabulating-
+Recording Company, punch-card tabulating machines), which is exactly
+why that SIC class won — a genuinely strong match *for the text the
+model actually received*, just not for the company as a whole.
+Confirmed the mechanism directly: embedding only the tail paragraph in
+isolation surfaces "Electronic Computers," a class that doesn't appear
+anywhere in the full-text query's top 10, because that content never
+reached the model in the full-text case.
+
+**Token limits checked for all three models that have been directly
+relevant so far** (only `all-MiniLM-L6-v2` is loaded by default per
+§7.8, but this bears on the still-open company-data model decision):
+
+| Model | Max tokens | IBM description (469 tokens) |
+|---|---|---|
+| `all-MiniLM-L6-v2` (current IC pick) | 256 | 213 tokens dropped (45%) |
+| `all-mpnet-base-v2` | 384 | 85 tokens dropped (~18%) |
+| `intfloat/e5-base-v2` | 512 | 0 dropped — fits entirely |
+
+Worth being precise about what this does and doesn't mean:
+`e5-base-v2`'s 512-token window is a real, relevant number for whenever
+company-description embeddings get evaluated (full descriptions are
+far more likely to exceed 256-384 tokens than IC's short phrases ever
+would) — but it doesn't change anything about *this* Rust stack today.
+`e5-base-v2` still isn't in `fastembed-rs`'s catalog (§6.2/§7.5); using
+it would still mean the manual ONNX-export path, not a drop-in swap.
+This is a data point for a future decision, not a reason to revisit
+§7.8's IC-data pick (IC's `embedding_text` never gets remotely close to
+256 tokens).
+
+**Fix implemented, then moved per feedback**: real token counts,
+computed server-side against the actual loaded tokenizer (not
+estimated) via `Embedders::token_info` (clones the tokenizer, disables
+its baked-in truncation, encodes, compares against the model's real
+`max_length`). First version returned this alongside the search
+response and showed a warning banner after results came back — correct
+data, wrong moment: **by then the user has already searched with
+truncated input**. Replaced with a dedicated `GET /api/token-count`
+endpoint (tokenize-only, no embed/search, cheap enough to call on every
+pause in typing) that the UI calls debounced (350ms) as the user
+types/pastes into either input mode, *before* they ever click Search —
+a live warning banner for text that would be truncated, or a quiet
+`N / 256 tokens` note otherwise. Verified live in the browser: typing
+out the IBM description shows the warning appear in real time as the
+token count crosses 256, well before Search is clicked; a short query
+shows the quiet token-count note instead, no banner.
 
 ## 6. Open questions / decision points (not resolved here)
 

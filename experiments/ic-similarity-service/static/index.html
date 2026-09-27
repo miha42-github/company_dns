@@ -240,6 +240,23 @@
     font-size: 0.7rem;
     margin-top: var(--spacing-xs);
   }
+
+  .truncation-warning {
+    background: rgba(217, 138, 61, 0.12);
+    border: var(--border-width) solid #d98a3d;
+    border-radius: var(--border-radius-small);
+    color: #e8b04a;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-small);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .token-count-note {
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    margin-bottom: var(--spacing-md);
+    font-variant-numeric: tabular-nums;
+  }
 </style>
 </head>
 <body>
@@ -261,6 +278,12 @@
   <div class="input-panel" id="panelDetailed" hidden>
     <textarea id="queryDetailed" placeholder="Paste a longer description here - a company description, a fuller phrase, etc."></textarea>
   </div>
+
+  <!-- Input-layer truncation check (not a post-search banner - checked
+       live, debounced, as the user types/pastes, so it's visible
+       before they ever hit Search). -->
+  <div class="truncation-warning" id="truncationWarning" style="display:none"></div>
+  <div class="token-count-note" id="tokenCountNote" style="display:none"></div>
 
   <div class="controls-row">
     <label for="k">results:</label>

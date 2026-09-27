@@ -45,6 +45,8 @@ const statusEl = document.getElementById("status");
 const resultsTable = document.getElementById("results");
 const resultsBody = document.getElementById("resultsBody");
 const calibrationNote = document.getElementById("calibrationNote");
+const truncationWarning = document.getElementById("truncationWarning");
+const tokenCountNote = document.getElementById("tokenCountNote");
 
 let activeMode = "simple";
 
@@ -56,6 +58,7 @@ function setMode(mode) {
   panelSimple.hidden = !isSimple;
   panelDetailed.hidden = isSimple;
   (isSimple ? querySimple : queryDetailed).focus();
+  checkTokenCount();
 }
 
 tabSimple.addEventListener("click", () => setMode("simple"));
@@ -64,6 +67,60 @@ tabDetailed.addEventListener("click", () => setMode("detailed"));
 function currentQuery() {
   return (activeMode === "simple" ? querySimple.value : queryDetailed.value).trim();
 }
+
+// Input-layer truncation check (moved here per feedback that a
+// post-search warning is too late in the process - by then the user
+// has already searched with truncated input). Debounced so it's not
+// hitting the server on every keystroke; real token counts from the
+// actual tokenizer server-side (embed.rs Embedders::token_info), not
+// an estimate.
+let tokenCheckTimer = null;
+let tokenCheckSeq = 0;
+
+function scheduleTokenCheck() {
+  clearTimeout(tokenCheckTimer);
+  tokenCheckTimer = setTimeout(checkTokenCount, 350);
+}
+
+async function checkTokenCount() {
+  const q = currentQuery();
+  const seq = ++tokenCheckSeq; // guards against a slow older request overwriting a newer result
+
+  if (!q) {
+    truncationWarning.style.display = "none";
+    tokenCountNote.style.display = "none";
+    return;
+  }
+
+  try {
+    const params = new URLSearchParams({ q, model: MODEL_ID });
+    const res = await fetch(`/api/token-count?${params}`);
+    if (seq !== tokenCheckSeq) return; // a newer keystroke has already superseded this
+    if (!res.ok) return; // don't nag the user over a transient check failure
+
+    const { actual_tokens, max_tokens, truncated } = await res.json();
+
+    if (truncated) {
+      const dropped = actual_tokens - max_tokens;
+      const pct = Math.round((dropped / actual_tokens) * 100);
+      truncationWarning.textContent =
+        `⚠ This text is too long for the model: only the first ${max_tokens} of ${actual_tokens} ` +
+        `tokens will be used (the last ${pct}% will be ignored if you search now). Shorten it, or ` +
+        `search anyway knowing the tail won't be seen.`;
+      truncationWarning.style.display = "block";
+      tokenCountNote.style.display = "none";
+    } else {
+      truncationWarning.style.display = "none";
+      tokenCountNote.textContent = `${actual_tokens} / ${max_tokens} tokens`;
+      tokenCountNote.style.display = "block";
+    }
+  } catch {
+    // network hiccup on a live-typing check - not worth surfacing as an error
+  }
+}
+
+querySimple.addEventListener("input", scheduleTokenCheck);
+queryDetailed.addEventListener("input", scheduleTokenCheck);
 
 function renderPath(hit) {
   const parts = [
@@ -105,6 +162,10 @@ async function runSearch() {
   statusEl.textContent = "Searching...";
   resultsTable.style.display = "none";
   calibrationNote.style.display = "none";
+  // truncationWarning/tokenCountNote deliberately left alone here - they're
+  // driven by the live input-layer check (checkTokenCount), not by the
+  // search response. The user already saw this warning before clicking
+  // Search, if it applied.
 
   try {
     const params = new URLSearchParams({
@@ -117,7 +178,8 @@ async function runSearch() {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || `HTTP ${res.status}`);
     }
-    const hits = await res.json();
+    const data = await res.json();
+    const hits = data.results;
 
     resultsBody.innerHTML = hits
       .map(
@@ -132,7 +194,8 @@ async function runSearch() {
 
     resultsTable.style.display = hits.length ? "table" : "none";
     calibrationNote.style.display = hits.length ? "block" : "none";
-    statusEl.textContent = `${hits.length} result${hits.length === 1 ? "" : "s"} for "${q}"`;
+    const qPreview = q.length > 60 ? `${q.slice(0, 60)}…` : q;
+    statusEl.textContent = `${hits.length} result${hits.length === 1 ? "" : "s"} for "${qPreview}"`;
   } catch (e) {
     statusEl.className = "status error";
     statusEl.textContent = `Error: ${e.message}`;
