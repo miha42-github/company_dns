@@ -15,7 +15,8 @@ from datetime import datetime
 from lib.sic import SICQueries
 from lib.edgar import EdgarQueries
 from lib.wikipedia import WikipediaQueries
-from lib.firmographics import GeneralQueries
+from lib.wikipedia_v2 import WikipediaQueriesV2
+from lib.firmographics import GeneralQueries, GeneralQueriesV2
 from lib.uk_sic import UKSICQueries
 from lib.international_sic import InternationalSICQueries
 from lib.eu_sic import EuSICQueries
@@ -500,6 +501,22 @@ async def edgar_firmographics(cik_no: str = Path(..., description="10-digit CIK 
 )
 async def wikipedia_firmographics(company_name: str = Path(..., min_length=1, description="Company name")):
     return await _handle_request(WikipediaQueries, 'get_firmographics', company_name)
+
+# Shadow endpoint - see docs/plans/performance-improvements.md item 6.
+# Parallel to the endpoint above, not a replacement: runs WikipediaQueriesV2
+# (narrowed, direct HTTP requests, ToS-compliant User-Agent + maxlag, no
+# hidden label-resolution cascade) instead of the wptools-based
+# WikipediaQueries, so the two can be compared in production
+# (perf_tests/shadow_compare.py) until the v2 backend is trusted. Not
+# wired into any existing endpoint's default behavior.
+@app.get(
+    "/V3.0/global/company/wikipedia/v2/firmographics/{company_name}",
+    response_model=WikipediaResponse,
+    tags=["Wikipedia (V3.0, experimental v2)"],
+    summary="[EXPERIMENTAL] Get company firmographics from Wikipedia (v2 backend)"
+)
+async def wikipedia_firmographics_v2(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(WikipediaQueriesV2, 'get_firmographics', company_name)
 # END: Wikipedia functions
 # -------------------------------------------------------------- #
 
@@ -519,6 +536,19 @@ async def wikipedia_firmographics(company_name: str = Path(..., min_length=1, de
 )
 async def general_query(company_name: str = Path(..., min_length=1, description="Company name")):
     return await _handle_request(GeneralQueries, 'get_firmographics', company_name)
+
+# Shadow endpoint - see docs/plans/performance-improvements.md item 6.
+# Same relationship as wikipedia_firmographics_v2 above: GeneralQueriesV2
+# is identical to GeneralQueries except it defaults to the v2 Wikipedia
+# backend (EDGAR lookup, geocoding, and merge logic are unchanged).
+@app.get(
+    "/V3.0/global/company/merged/v2/firmographics/{company_name}",
+    response_model=MergedFirmographicsResponse,
+    tags=["Merged Data (V3.0, experimental v2)"],
+    summary="[EXPERIMENTAL] Get merged firmographics from all sources (v2 Wikipedia backend)"
+)
+async def general_query_v2(company_name: str = Path(..., min_length=1, description="Company name")):
+    return await _handle_request(GeneralQueriesV2, 'get_firmographics', company_name)
 # END: General query functions
 # -------------------------------------------------------------- #
 

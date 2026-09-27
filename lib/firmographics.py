@@ -1,5 +1,6 @@
 from . import edgar
 from . import wikipedia
+from . import wikipedia_v2
 import sys
 import unicodedata
 import urllib.parse as url_parse
@@ -53,9 +54,10 @@ class GeneralQueries:
     def __init__(
         self,
         database=None,
-        name='general', 
-        description='A module to search for company data in Wikipedia, EDGAR, and also a merger of the two data sources.'):
-        
+        name='general',
+        description='A module to search for company data in Wikipedia, EDGAR, and also a merger of the two data sources.',
+        wikipedia_backend='legacy'):
+
         # Construct the object to determine lat long pairs
         self.locator = ArcGIS(user_agent="company_dns")
         self.locator.timeout = 2  # Set a timeout for geocoding requests
@@ -69,6 +71,15 @@ class GeneralQueries:
         # Naming helpers
         self.NAME = name
         self.DESC = description
+
+        # Which Wikipedia implementation get_firmographics_wikipedia() uses:
+        # 'legacy' (wptools-based, lib/wikipedia.py) or 'v2' (direct-HTTP,
+        # lib/wikipedia_v2.py) - see docs/plans/performance-improvements.md
+        # item 6. Only the Wikipedia data source changes; EDGAR lookup,
+        # geocoding, and merge logic below are identical either way.
+        if wikipedia_backend not in ('legacy', 'v2'):
+            raise ValueError(f"wikipedia_backend must be 'legacy' or 'v2', got {wikipedia_backend!r}")
+        self.wikipedia_backend = wikipedia_backend
 
         # Set up the logging
         self.logger = logging.getLogger(self.NAME)
@@ -111,9 +122,10 @@ class GeneralQueries:
         # Start timing the Wikipedia query
         wiki_start_time = time.time()
         
-        self.logger.info(f'Starting Wikipedia query for [{self.query}]')
+        self.logger.info(f'Starting Wikipedia query for [{self.query}] (backend={self.wikipedia_backend})')
         try:
-            my_query = wikipedia.WikipediaQueries()
+            wikipedia_class = wikipedia_v2.WikipediaQueriesV2 if self.wikipedia_backend == 'v2' else wikipedia.WikipediaQueries
+            my_query = wikipedia_class()
             my_query.query = self.query
             result = my_query.get_firmographics()
             wiki_elapsed = time.time() - wiki_start_time
@@ -667,3 +679,21 @@ class GeneralQueries:
         }
         self.logger.error(f'No data found for [{self.query}] after {total_elapsed:.3f} seconds')
         return lookup_err_prototype
+
+class GeneralQueriesV2(GeneralQueries):
+    """
+    Thin subclass, not a duplicate: identical merge/EDGAR/geocoding logic
+    to GeneralQueries, only defaulting to the 'v2' Wikipedia backend
+    (lib/wikipedia_v2.py) instead of 'legacy'. Exists so
+    company_dns.py's _handle_request (which constructs handler_class()
+    with no arguments) can select the v2 backend without needing a
+    factory-callable overload to its signature - see
+    docs/plans/performance-improvements.md item 6.
+
+    Used by the shadow endpoint
+    /V3.0/global/company/merged/v2/firmographics/{company_name}.
+    """
+
+    def __init__(self, database=None, name='general_v2',
+                 description='Shadow-endpoint alternative to GeneralQueries using the v2 Wikipedia backend - see docs/plans/performance-improvements.md item 6.'):
+        super().__init__(database=database, name=name, description=description, wikipedia_backend='v2')
