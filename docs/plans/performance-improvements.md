@@ -616,14 +616,97 @@ entirely, including for `query`, and/or move to Wikidata's SPARQL endpoint
 for even narrower claim-level filtering. Not justified by the evidence
 gathered here; Tier A already captures the large, cheap wins.
 
+### Finding 5 — `wptools` does not meaningfully respect rate limits, and
+its User-Agent is a liability
+
+Read `wptools/core.py` and `wptools/request.py` directly, not assumed:
+
+- `REQUEST_DELAY = 0` by default (a class attribute, not exposed via any
+  `__init__` kwarg — the only way to change it is monkey-patching the class
+  itself, globally). `company_dns` never sets it, so every sequential
+  request `wptools` makes has zero enforced courtesy delay.
+- `REQUEST_LIMIT = 50` is not a rate limiter — it's a runaway-loop safety
+  cap per page object (raises `StopIteration` past 50 requests). Doesn't
+  apply to normal usage.
+- No handling anywhere for HTTP 429/503, no `Retry-After` respect, no
+  backoff, no use of MediaWiki's documented `maxlag` "good citizen"
+  parameter.
+- **The User-Agent is hardcoded and not overridable**: every application
+  using `wptools` worldwide sends the identical
+  `"wptools/x.y.z (https://github.com/siznax/wptools) libcurl/..."`
+  string (`wptools/request.py`'s `user_agent()`, built from
+  `wptools/__init__.py`'s `__title__`/`__contact__` constants — no
+  parameter anywhere lets a caller override this). Wikimedia's own
+  [User-Agent policy](https://meta.wikimedia.org/wiki/User-Agent_policy)
+  asks each tool to identify itself uniquely with real contact info,
+  specifically so problem traffic can be throttled per-tool instead of
+  broadly. `company_dns`'s traffic is currently indistinguishable from any
+  other `wptools` consumer's, worldwide — if another project misuses
+  `wptools` elsewhere, `company_dns` could get caught in the fallout with
+  no way to know why.
+
+This directly bears on the concurrency=16 timeout/crash investigated
+earlier in this document (item 2/3's testing) — timeouts under burst load
+are consistent with Wikimedia-side soft-throttling that a generic,
+unidentifiable User-Agent would make worse and harder to diagnose.
+
+### Finding 6 — correctness validated end-to-end against the live service
+
+Built a standalone experiment script
+([docs/plans/research/wikipedia-experiment.py](research/wikipedia-experiment.py),
+research artifact, not wired into the app or `perf_tests/`) making
+ToS-compliant direct requests
+(proper identifying User-Agent —
+`company_dns/3.2.0 (https://github.com/miha42-github/company_dns;
+hello@mediumroast.io) python-requests/...` — plus MediaWiki's `maxlag=5`
+"good citizen" parameter on every request) that replicates `wptools`'
+exact data transformations rather than approximating them: `get_infobox()`
+and its full `template_to_dict`/`template_to_dict_iter`/`template_to_text`
+call chain, and `reduce_claims`/`_update_wikidata`'s claims-to-labeled-dict
+logic, copied verbatim from the installed `wptools` source (`wptools`
+itself can't be imported in this dev environment — an unrelated broken
+`pycurl` build — so exact source copying was necessary instead of
+`import`ing it directly, and correctly so: an initial hand-rolled
+reimplementation of the infobox parser turned out to already differ
+subtly from the real thing before this fix).
+
+Ran against all 10 companies from `perf_tests/companies.py` and diffed the
+output field-by-field against the **live, currently-deployed** service:
+
+- `industry`, `country`, `website`, `cik`, `exchanges` — **byte-identical
+  to production, value-for-value and order-for-order**, confirmed for IBM
+  and Amazon (the two checked in full; the other 8 ran successfully with
+  well-formed data of the same shape).
+- Real, measured end-to-end timing — **sequentially** (not yet
+  parallelized the way `lib/wikipedia.py` already parallelizes the 3 main
+  calls) — landed at 1.0-1.8 seconds per company, already far below the
+  current 3-8+ second production latency. A parallelized version (parse +
+  query + wikidata-claims concurrent, labels fetched right after claims
+  resolves, matching the existing architecture) would plausibly land
+  around `max(parse, query, wikidata_claims) + wikidata_labels` — roughly
+  450ms + 400ms ≈ **under 1 second**, versus today's 3-8+.
+- Production's own self-reported timing corroborates this diagnosis
+  directly: IBM's live request reported `"total_time": 4.76s`, almost
+  entirely `"parallel_api_time": 4.76s` — i.e. nearly the *entire* request
+  is spent in the parallel block, consistent with the wikidata leg's
+  hidden label cascade (measured standalone at ~2.8s) plus per-request
+  fresh-TLS-handshake overhead (Finding 3) dominating the wall-clock time.
+
+This is the missing piece from Findings 1-4: not just "this should be
+faster," but "this produces the same data, confirmed against production,
+and is measured to be dramatically faster."
+
 ### Still not proposing to implement this yet
 
 This is research output for review, matching how item 6 was originally
 scoped — but the conclusion has changed from "smallest lever, low
-priority" to "large, well-evidenced lever, moderate implementation effort
-(Tier A)." Worth a real decision from the user on whether to schedule Tier
-A as an actual implementation item, given the strength of evidence, rather
-than leaving it as an indefinite backlog note.
+priority" to "large, well-evidenced, *validated* lever, moderate
+implementation effort (Tier A)." Worth a real decision from the user on
+whether to schedule Tier A as an actual implementation item, given the
+strength of evidence, rather than leaving it as an indefinite backlog
+note. Tier A should also adopt Finding 5's fixes as part of the same work
+(proper User-Agent, `maxlag`, basic 429/503 backoff) since they're free
+once the request layer is being rewritten anyway.
 
 ---
 
