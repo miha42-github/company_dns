@@ -42,7 +42,7 @@ spec:
           # The image tag below is bumped by scripts/build-and-deploy.sh on every
           # deploy (sed-replaced) - do not edit it by hand, and do not point it at
           # :latest (see docs/plans/onprem-k8s-migration.md, "Image tagging").
-          image: ghcr.io/miha42-github/company_dns/company_dns:09262026-5
+          image: ghcr.io/miha42-github/company_dns/company_dns:09262026-6
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
