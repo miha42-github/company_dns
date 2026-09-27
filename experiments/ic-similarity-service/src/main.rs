@@ -14,12 +14,13 @@ use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 use tower_http::services::ServeDir;
 
-use embed::{model_info, Embedders, MODEL_IDS};
+use embed::{model_info, Embedders};
 use search::IcData;
 
 struct AppState {
     data: IcData,
     embedders: Mutex<Embedders>,
+    loaded_models: Vec<&'static str>,
 }
 
 #[derive(Serialize)]
@@ -49,12 +50,23 @@ async fn main() -> anyhow::Result<()> {
     println!("Loading IC data from {data_path}...");
     let data = IcData::load(&data_path).await?;
 
-    println!("Loading embedding models (all-MiniLM-L6-v2, all-mpnet-base-v2)...");
-    let embedders = Embedders::load()?;
+    // Default: MiniLM only. go-duckdb-rewrite.md sec7.8 dropped mpnet for
+    // IC data - it lost on every quality metric (sec7.6) *and* cost
+    // ~484MB extra RSS (~687MB vs ~203MB, measured directly) for no
+    // benefit. IC_MODELS=all_mpnet_base_v2 (or "both") still available
+    // for comparison if needed.
+    let models_to_load: Vec<&'static str> = match std::env::var("IC_MODELS").ok().as_deref() {
+        Some("all_mpnet_base_v2") => vec!["all_mpnet_base_v2"],
+        Some("both") => vec!["all_minilm_l6_v2", "all_mpnet_base_v2"],
+        _ => vec!["all_minilm_l6_v2"], // default
+    };
+    println!("Loading embedding models: {models_to_load:?}...");
+    let embedders = Embedders::load(&models_to_load)?;
 
     let state = Arc::new(AppState {
         data,
         embedders: Mutex::new(embedders),
+        loaded_models: models_to_load,
     });
 
     let app = Router::new()
@@ -76,8 +88,9 @@ async fn health() -> &'static str {
     "ok"
 }
 
-async fn list_models() -> Json<Vec<ModelDescriptor>> {
-    let models = MODEL_IDS
+async fn list_models(State(state): State<Arc<AppState>>) -> Json<Vec<ModelDescriptor>> {
+    let models = state
+        .loaded_models
         .iter()
         .filter_map(|id| {
             model_info(id).map(|info| ModelDescriptor {

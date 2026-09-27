@@ -1,11 +1,13 @@
 # ic-similarity-service
 
 A small local REST service + minimal web UI for manually testing
-semantic similarity search over IC (SIC/NACE) data, using the two
-embedding models decided in
+semantic similarity search over IC (SIC/NACE) data, using
+`all-MiniLM-L6-v2` — the single model decided in
 [`docs/plans/go-duckdb-rewrite.md`](../../docs/plans/go-duckdb-rewrite.md)
-§7.7 (`all-MiniLM-L6-v2` low-dim, `all-mpnet-base-v2` high-dim). Planned
-in [`docs/plans/ic-similarity-search-poc.md`](../../docs/plans/ic-similarity-search-poc.md)
+§7.8 (supersedes §7.7's original "one low-dim, one high-dim" pick —
+`all-mpnet-base-v2` lost on every quality metric *and* cost ~484MB extra
+memory for no benefit, measured directly using this service). Planned in
+[`docs/plans/ic-similarity-search-poc.md`](../../docs/plans/ic-similarity-search-poc.md)
 — read that first for the reasoning behind the stack/design choices
 below.
 
@@ -31,12 +33,27 @@ gitignored, real Mediumroast output; see the main repo's other
 cargo run --release
 # or point it at a different file:
 IC_DATA_PATH=/path/to/other_embedded.feather cargo run --release
+
+# loads only all-MiniLM-L6-v2 by default; for comparison against
+# all-mpnet-base-v2 (dropped per §7.8, kept available for re-testing):
+IC_MODELS=all_mpnet_base_v2 cargo run --release
+IC_MODELS=both cargo run --release
 ```
 
-Then open <http://127.0.0.1:8080>. First run downloads both embedding
-models (~500MB combined, cached under `.fastembed_cache/` — gitignored,
-not committed) and takes longer; subsequent runs load from cache in
-under 200ms.
+Then open <http://127.0.0.1:8080>. First run downloads the embedding
+model(s) (~87MB for the default single-model config, cached under
+`.fastembed_cache/` — gitignored, not committed) and takes longer;
+subsequent runs load from cache in under 100ms.
+
+## Memory footprint (measured, §7.8)
+
+| Config | RSS |
+|---|---|
+| `all-MiniLM-L6-v2` only (default) | **~203MB** |
+| Both models loaded (`IC_MODELS=both`) | ~687MB |
+
+Measured directly via `ps -o rss` against the running process, not
+estimated from on-disk model sizes.
 
 ## API
 

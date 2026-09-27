@@ -1051,6 +1051,58 @@ the halved total dimensionality (1,152 vs. 2,304 floats/row). Growth
 over the plain `us_flat.feather` baseline is now **~47x instead of
 ~93x**.
 
+### 7.8 Revised decision: one model, not two — `all-MiniLM-L6-v2` only
+
+**Superseding §7.7.** Building `experiments/ic-similarity-service`
+(§9) and actually using it surfaced something the tables in §7.6 hadn't
+made obvious: `all-mpnet-base-v2` reports systematically higher raw
+similarity scores than `all-MiniLM-L6-v2` on the *same* queries (e.g.
+"growing wheat" → 60.2% top match on mpnet vs. 48.6% on MiniLM, held
+across every query tried). Confirmed this isn't mpnet being "more
+confident" about correct matches — it's a generally higher baseline
+across *both* related and unrelated pairs (§7.6's own diff-group-
+similarity numbers already showed this: 0.401 for mpnet vs. 0.363 for
+MiniLM), the same phenomenon seen taken to an extreme with
+`e5-base-v2`'s compressed score range. Cross-model raw-percentage
+comparisons aren't meaningful — each model has its own score
+distribution.
+
+That observation prompted revisiting whether keeping mpnet in the IC
+export was earning its keep at all. It wasn't:
+
+| | `all-MiniLM-L6-v2` | `all-mpnet-base-v2` |
+|---|---|---|
+| Recall@5 / Recall@10 / Hit@1 | **0.814 / 0.915 / 0.868** | 0.769 / 0.879 / 0.832 |
+| Separation margin | **0.483** | 0.442 |
+| Query latency (median) | **2.49ms** | 7.17ms |
+| On-disk model size | **87MB** | 418MB |
+| **Service RSS with both models loaded** | | **~687MB** |
+| **Service RSS with only this model loaded** | **~203MB** (measured directly) | |
+
+MiniLM doesn't win a tradeoff here — it wins on quality, latency, disk
+size, *and* memory, simultaneously, with nothing pulling the other way.
+The original "one low-dim, one high-dim" framing (§7.7) was a reasonable
+starting heuristic before any of this data existed; it doesn't survive
+contact with it. **Decided: ship `all-MiniLM-L6-v2` only for IC data.**
+
+Confirmed in place: a regenerated `tmp/us_flat_embedded.feather` with
+only `vector_all_minilm_l6_v2` validates cleanly (1,005 rows, all 13
+original columns byte-identical, zero nulls/NaN, normalized vectors),
+`quality-eval` reproduces §7.6's MiniLM numbers exactly, and
+`ic-similarity-service` (updated to load only this model by default,
+`IC_MODELS=all_mpnet_base_v2` or `IC_MODELS=both` still available for
+comparison) runs at ~203MB RSS with unchanged, correct search results.
+File size: **1,496,162 bytes, ~1,488 bytes/row** — growth over the plain
+`us_flat.feather` baseline is now **~16x**, down from §7.7's ~47x and
+the original four-model version's ~93x.
+
+**Same scope caveat as §7.7, repeated because it matters**: this is IC
+data only. Company-description embeddings are a different text domain,
+untested, and may not land on a single model — the "one model" framing
+is not itself the finding; the finding is "MiniLM beats mpnet on *this*
+dataset by every measure we have." That could look completely different
+once company vectors exist to test against.
+
 ## 8. Go-specific open questions (assuming Go — revisit if §6 lands on Rust)
 
 - Web framework: stdlib `net/http` (Go 1.22+'s routing is now solid

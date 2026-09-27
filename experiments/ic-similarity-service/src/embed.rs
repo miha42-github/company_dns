@@ -2,12 +2,13 @@ use anyhow::Result;
 use fastembed::{EmbeddingModel, TextEmbedding, TextInitOptions};
 use std::collections::HashMap;
 
-/// The two models decided in docs/plans/go-duckdb-rewrite.md sec7.7, for
-/// IC data specifically. Column names match tmp/us_flat_embedded.feather
-/// exactly - see experiments/embed-bench and quality-eval for how those
-/// got picked.
-pub const MODEL_IDS: [&str; 2] = ["all_minilm_l6_v2", "all_mpnet_base_v2"];
-
+/// Both remain recognized (see model_info below) even though only
+/// all-MiniLM-L6-v2 loads by default - go-duckdb-rewrite.md sec7.8
+/// dropped all-mpnet-base-v2 for IC data (lost on every quality metric
+/// in sec7.6 *and* cost ~484MB extra RSS for no benefit), but main.rs's
+/// IC_MODELS env var can still load it for comparison. Column names
+/// match tmp/us_flat_embedded.feather exactly - see experiments/
+/// embed-bench and quality-eval for how the pick got made.
 pub struct ModelInfo {
     pub label: &'static str,
     pub dim: usize,
@@ -37,22 +38,22 @@ pub struct Embedders {
 }
 
 impl Embedders {
-    pub fn load() -> Result<Self> {
+    /// Loads only the given model ids - lets main.rs control this via
+    /// an env var, e.g. for the memory-footprint comparison in
+    /// docs/plans/go-duckdb-rewrite.md sec7.8 (one model vs. two).
+    pub fn load(ids: &[&'static str]) -> Result<Self> {
         let mut models = HashMap::new();
-        models.insert(
-            "all_minilm_l6_v2",
-            TextEmbedding::try_new(
-                TextInitOptions::new(EmbeddingModel::AllMiniLML6V2)
-                    .with_show_download_progress(false),
-            )?,
-        );
-        models.insert(
-            "all_mpnet_base_v2",
-            TextEmbedding::try_new(
-                TextInitOptions::new(EmbeddingModel::AllMpnetBaseV2)
-                    .with_show_download_progress(false),
-            )?,
-        );
+        for id in ids {
+            let variant = match *id {
+                "all_minilm_l6_v2" => EmbeddingModel::AllMiniLML6V2,
+                "all_mpnet_base_v2" => EmbeddingModel::AllMpnetBaseV2,
+                other => anyhow::bail!("unknown model id: {other}"),
+            };
+            let model = TextEmbedding::try_new(
+                TextInitOptions::new(variant).with_show_download_progress(false),
+            )?;
+            models.insert(*id, model);
+        }
         Ok(Self { models })
     }
 
