@@ -246,9 +246,80 @@ once**, not picking one:
 This calibration is specific to **`all-MiniLM-L6-v2` on this IC
 corpus** — a different model, or company data once it exists, would
 need its own percentile table (§5.1's approach generalizes; the numbers
-don't). Nothing here is implemented yet — this section is the analysis
-requested, not a design decided in isolation; next step is reacting to
-it before building anything.
+don't).
+
+### 5.6 §5.5's band labels have their own conflation problem
+
+**Built per §5.5, then flagged as wrong** (not just imprecise — actively
+misleading, same severity as §5.4 option 2). The implementation used
+qualitative labels ("Weak" / "Below Average" / "Above Average" /
+"Strong" / "Excellent") derived from where a score falls in the
+corpus-wide pairwise similarity distribution. The problem: that
+distribution is computed across **all** ~1M pairs in the corpus,
+overwhelmingly *unrelated* ones — any two randomly-picked SIC codes are
+usually unrelated, so the corpus-wide median (0.355) mostly reflects
+"typical score between two unrelated codes," not "typical score for a
+real search match." Labeling a result "Below Average" because it sits
+under that median doesn't mean the result is a weak match — the
+"average" it's being compared to is dragged down by irrelevant pairs
+that never appear in an actual result set at all. **The label describes
+the model's behavior across the whole corpus; it reads to a user as a
+verdict on the one result in front of them.** Those are different
+things, and the wording collapses them into one number.
+
+Concretely, this means a genuinely good match could easily be labeled
+"Below Average" simply because the corpus-wide baseline it's compared
+against isn't the right reference class — the right question isn't "how
+does this score compare to two random SIC codes," it's closer to "is
+this a real match, or is this what the model returns even when nothing
+good exists for this query" (§5.3's problem, actually — the noise-floor
+question, not a grading-curve question).
+
+**Two candidate directions for a third measure, not mutually
+exclusive:**
+
+1. **Reframe the existing percentile as an explicitly-scoped statistical
+   fact, not a grade.** Drop "Below Average" / "Above Average" /
+   "Strong" entirely — that vocabulary reads as a report card on the
+   result. Replace with language that can't be misread as a verdict:
+   e.g. `"Higher than 73% of all corpus pairs"` or a compact `P73`
+   badge, with the "vs. entire corpus, including unrelated pairs" scope
+   stated plainly (the calibration footnote already exists; the *label
+   itself* needs the scope too, not just a footnote most people won't
+   read closely).
+2. **A genuinely new measure, not a rewording of the same one** —
+   something that actually answers "is this a real match," which
+   corpus-wide percentile doesn't. Two candidates:
+   - **Per-row, noise-floor proximity**: how far above the empirically-
+     measured "typical unrelated pair" baseline (§5.1's 5th percentile,
+     ~0.154) does this score sit? Framed as a binary/tri-state
+     confidence cue, not a grade — e.g. "clearly above typical noise"
+     vs. "near typical noise level — treat with caution" for scores
+     close to that floor. This is the same underlying number as
+     §5.5's bar, but phrased as a caution flag about trustworthiness
+     rather than a performance rating.
+   - **Per-query, not per-row**: whether there's a **clear leader** in
+     this particular result set — e.g. flag when result #1's score is
+     meaningfully separated from #2's vs. when the top few results are
+     close together (several similarly-plausible candidates, no
+     standout). This tells a tester something rank order alone doesn't:
+     whether the model is confidently pointing at one answer or
+     shrugging across several. Shown once per search, not per row —
+     doesn't repeat the min-max-rescale trap (§5.4 option 2) because
+     it's a single summary judgment about the *result set*, not a
+     per-row rescaled score.
+
+Leaning toward **combining 1 and the noise-floor variant of 2**: reworded
+percentile badge (removes the misleading grade language) plus a
+separate, distinctly-styled noise-floor caution flag (answers the
+actual question a "Below Average" label was trying and failing to
+answer). The per-query "clear leader" idea is worth keeping in the
+option set but feels like a second iteration, not required to fix the
+immediate problem.
+
+**Not re-implemented yet** — this section updates the analysis based on
+your feedback; the running service still shows §5.5's flawed band
+labels until there's agreement on the direction above.
 
 ## 6. Open questions / decision points (not resolved here)
 
