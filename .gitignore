@@ -65,3 +65,15 @@ tmp/
 # Ad-hoc perf_tests runs - keep only deliberately-committed baseline snapshots
 perf_tests/results/*
 !perf_tests/results/baseline-*.json
+
+# Rust build artifacts (experiments/*) - Cargo.lock IS committed
+# (binary/experiment, not a library - want reproducible builds)
+target/
+
+# Derived from a .feather file that isn't committed either - regenerate,
+# don't commit (see experiments/embed-bench/README.md)
+experiments/embed-bench/embedding_texts.txt
+
+# fastembed-rs's downloaded ONNX model weights (~600MB for 3 models) -
+# never commit, re-downloaded automatically on first run
+experiments/embed-bench/.fastembed_cache/
