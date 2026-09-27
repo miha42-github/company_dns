@@ -37,7 +37,7 @@
   }
 
   .wrap {
-    max-width: 900px;
+    max-width: 960px;
     margin: 0 auto;
     padding: var(--spacing-lg);
   }
@@ -54,14 +54,43 @@
     margin-bottom: var(--spacing-lg);
   }
 
-  .search-bar {
+  /* Input mode tabs */
+  .tabs {
     display: flex;
-    gap: var(--spacing-sm);
-    flex-wrap: wrap;
-    margin-bottom: var(--spacing-lg);
+    gap: 2px;
+    margin-bottom: var(--spacing-sm);
   }
 
-  input[type="text"], select, input[type="number"] {
+  .tab {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border: var(--border-width) solid var(--border-color);
+    border-bottom: none;
+    border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-family: inherit;
+    font-size: var(--font-size-small);
+    cursor: pointer;
+  }
+
+  .tab.active {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+  }
+
+  .input-panel {
+    background: var(--color-bg-tertiary);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: 0 var(--border-radius-small) var(--border-radius-small) var(--border-radius-small);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .input-panel[hidden] {
+    display: none;
+  }
+
+  input[type="text"], textarea, input[type="number"] {
     background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     border: var(--border-width) solid var(--border-color);
@@ -69,15 +98,29 @@
     padding: var(--spacing-sm);
     font-family: inherit;
     font-size: inherit;
+    width: 100%;
+    box-sizing: border-box;
   }
 
-  input[type="text"] {
-    flex: 1;
-    min-width: 240px;
+  textarea {
+    resize: vertical;
+    min-height: 6rem;
   }
 
-  input[type="number"] {
+  .controls-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    margin-top: var(--spacing-sm);
+  }
+
+  .controls-row input[type="number"] {
     width: 4rem;
+  }
+
+  .controls-row label {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-small);
   }
 
   button {
@@ -110,6 +153,7 @@
     padding: var(--spacing-sm);
     border-bottom: var(--border-width) solid var(--border-color);
     font-size: var(--font-size-small);
+    vertical-align: middle;
   }
 
   th {
@@ -120,15 +164,55 @@
     letter-spacing: 0.05em;
   }
 
-  .sim {
-    color: var(--color-link-primary);
-    font-variant-numeric: tabular-nums;
-  }
-
   .rank {
     color: var(--color-text-secondary);
     width: 2rem;
   }
+
+  /* Similarity cell: raw score, calibrated bar, qualitative band -
+     see docs/plans/ic-similarity-search-poc.md sec5 for why a bare
+     percentage alone is misleading. */
+  .sim-cell {
+    width: 12rem;
+  }
+
+  .sim-raw {
+    color: var(--color-link-primary);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.8rem;
+  }
+
+  .sim-band {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-left: var(--spacing-xs);
+  }
+
+  .sim-bar-track {
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius-small);
+    height: 0.5rem;
+    margin-top: 0.25rem;
+    overflow: hidden;
+  }
+
+  .sim-bar-fill {
+    height: 100%;
+    border-radius: var(--border-radius-small);
+  }
+
+  .band-weak .sim-bar-fill { background: #6b6560; }
+  .band-below .sim-bar-fill { background: #924e29; }
+  .band-above .sim-bar-fill { background: #ca703f; }
+  .band-strong .sim-bar-fill { background: #d98a3d; }
+  .band-excellent .sim-bar-fill { background: #e8b04a; }
+
+  .band-weak .sim-band { color: #6b6560; }
+  .band-below .sim-band { color: #924e29; }
+  .band-above .sim-band { color: #ca703f; }
+  .band-strong .sim-band { color: #d98a3d; }
+  .band-excellent .sim-band { color: #e8b04a; }
 
   .path {
     color: var(--color-text-primary);
@@ -149,34 +233,57 @@
   .status.error {
     color: #c0392b;
   }
+
+  .calibration-note {
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    margin-top: var(--spacing-xs);
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>IC Similarity Search</h1>
   <div class="subtitle">
-    Test tool for docs/plans/go-duckdb-rewrite.md &sect;7.7's model decision - not part of company_dns itself.
+    Test tool for docs/plans/go-duckdb-rewrite.md &sect;7.8's model decision (all-MiniLM-L6-v2 only) - not part of company_dns itself.
   </div>
 
-  <div class="search-bar">
-    <input type="text" id="query" placeholder="e.g. growing wheat, software company, oil drilling..." autofocus>
-    <select id="model"></select>
+  <div class="tabs">
+    <button type="button" class="tab active" id="tabSimple" data-mode="simple">Simple</button>
+    <button type="button" class="tab" id="tabDetailed" data-mode="detailed">Detailed</button>
+  </div>
+
+  <div class="input-panel" id="panelSimple">
+    <input type="text" id="querySimple" placeholder="e.g. growing wheat, software company, oil drilling..." autofocus>
+  </div>
+
+  <div class="input-panel" id="panelDetailed" hidden>
+    <textarea id="queryDetailed" placeholder="Paste a longer description here - a company description, a fuller phrase, etc."></textarea>
+  </div>
+
+  <div class="controls-row">
+    <label for="k">results:</label>
     <input type="number" id="k" value="10" min="1" max="50" title="how many results">
     <button id="searchBtn">Search</button>
   </div>
 
-  <div class="status" id="status"></div>
+  <div class="status" id="status" style="margin-top: var(--spacing-md);"></div>
 
   <table id="results" style="display:none">
     <thead>
       <tr>
         <th class="rank">#</th>
-        <th>similarity</th>
+        <th class="sim-cell">similarity</th>
         <th>classification path</th>
       </tr>
     </thead>
     <tbody id="resultsBody"></tbody>
   </table>
+  <div class="calibration-note" id="calibrationNote" style="display:none">
+    Similarity bar/band calibrated against this corpus's own measured all-MiniLM-L6-v2 score distribution
+    (5th pct &asymp; 0.15, median &asymp; 0.36, 95th pct &asymp; 0.61, 99th pct &asymp; 0.78) - not a raw 0-100% scale.
+    See docs/plans/ic-similarity-search-poc.md &sect;5.
+  </div>
 </div>
 <script src="app.js"></script>
 </body>
