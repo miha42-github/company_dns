@@ -88,7 +88,8 @@ equivalent to fall back to). Same asymmetry for direct SQL access — it
 works against whatever's cached/local, not against anything requiring a
 live API call. Worth keeping this distinction explicit in the UX rather
 than presenting every feature as uniformly available — see the new UX
-planning doc.
+planning doc,
+[`docs/plans/company-dns-ux.md`](company-dns-ux.md).
 
 ## 2. What stays true from the current implementation
 
