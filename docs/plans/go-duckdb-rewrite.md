@@ -409,17 +409,6 @@ UI doing real vector similarity search, chunking design, and a
 live-typed truncation check). The language decision isn't picking a
 horse anymore; it's confirming the horse that's already run the race.
 
-**2. The business context settles the remaining "why" question §1
-flagged as open.** Moved to [§0](#0-why-this-project-exists), since it
-sets context for the whole document, not just this decision — short
-version: `company_dns`'s purpose has been reframed as the example OSS
-project for Mediumroast's free IC-classification and enriched-company
-data giveaways, not a production bulk-processing service, and that
-purpose is a direct, strong argument for DataFusion specifically — it's
-the tool that reads Mediumroast's Arrow-native `.feather` output with
-zero translation, which fits a "here's how to work with this data"
-reference project better than a generic backend choice would.
-
 **Resolves §4's SQLite-vs-DuckDB question too, by making it moot.**
 `ic-similarity-service` already demonstrated DataFusion alone —
 no SQLite, no DuckDB — handling feather reads, vector
@@ -434,7 +423,7 @@ answering: DataFusion was never one of the two options being compared
 there, and it turned out to be the one that didn't need the tradeoff at
 all.
 
-**3. What Rust + DataFusion actually gives this project**, stated as
+**2. What Rust + DataFusion actually gives this project**, stated as
 current architecture rather than dug out of §6.2/§6.3's now-archived
 comparisons (Annex D):
 
@@ -1353,7 +1342,7 @@ one (how to cache Wikipedia lookups).
 > the technical facts here that are still true today (Arrow IPC
 > zero-copy reads, DataFusion's built-in vector-distance functions,
 > the `tokio`/async model, the single-binary deployment story) are
-> restated as current architecture in §6.5's third point rather than
+> restated as current architecture in §6.5's second point rather than
 > left buried in a comparison against options no longer on the table.
 
 #### 6.2 Go vs. Rust, on the dimensions that actually matter for this project
