@@ -32,12 +32,39 @@ codebase — the current implementation is preserved at tag
 [`V3.3.0`](https://github.com/miha42-github/company_dns/releases/tag/V3.3.0)
 and branch `archive/python-v3.3.0` for reference and rollback, and stays
 in production until the rewrite is ready to replace it. **Purpose
-reframed (§6.5): this is now explicitly a reference/example OSS project**
-demonstrating how to use the IC-classification and enriched-company data
-Mediumroast is giving away as free samples — not a bulk-processing
-service; see §1's use-case list.
+reframed: this is now explicitly a reference/example OSS project** — see
+§0 immediately below for the full context, since it shapes everything
+that follows, not just the language/engine decision it was originally
+buried under.
 
 ---
+
+## 0. Why this project exists
+
+*(Originally written as part of §6.5's decision rationale — moved here
+because it's context for the whole document, not just for the
+language/engine choice it was attached to.)*
+
+Mediumroast is giving away several IC classification systems (legacy
+Japanese SIC, US SIC, an older NACE vintage) and a sample of enriched
+Wikipedia/EDGAR company data — including precomputed-embeddings
+versions — as free "taste" packages. Most people who download those
+packages won't know what to do with them. **`company_dns` is the
+example OSS project showing how to actually use this data** — a
+reference implementation demonstrating real use cases against real
+Mediumroast data, not a production bulk-processing service (bulk
+operations explicitly out of scope; see §1's use-case list for the
+specifics).
+
+This purpose is also the strongest argument for DataFusion specifically
+(§6.5): it's the tool that reads Mediumroast's Arrow-native `.feather`
+output with zero translation, and demonstrating "here's how to work
+with this data" is easiest to do faithfully in the engine built for
+that data's own format. The goal was never just a faster service — it's
+a reference implementation for data Mediumroast is about to publish,
+and that framing should shape every design decision from here on:
+**clarity and "here's-how-this-works" legibility matter more than
+polish or throughput.**
 
 ## 1. Motivation and goals
 
@@ -63,16 +90,10 @@ As stated, five things are driving this:
    §6.5's "resolves §4" note).
 
 **"Why these five together" — resolved (2026-09-27), was an open
-question here**: `company_dns`'s purpose has been reframed. Mediumroast
-is giving away several IC classification systems (legacy Japanese SIC,
-US SIC, an older NACE vintage) and a sample of enriched Wikipedia/EDGAR
-company data — including precomputed-embeddings versions — as free
-"taste" packages, expecting most recipients won't immediately know what
-to do with them. **`company_dns` is the example OSS project answering
-that** — a reference implementation demonstrating real use cases against
-real Mediumroast data, not a production bulk-processing service (bulk
-operations explicitly out of scope). Concretely, the use cases this
-needs to demonstrate:
+question here**: see §0 above for the full reframing (`company_dns` as
+the example OSS project for Mediumroast's free data giveaways, not a
+bulk-processing service). Concretely, the use cases this needs to
+demonstrate:
 
 - Search for SIC/industry codes and get results back across the
   various IC systems (parity with today's multi-system search).
@@ -393,25 +414,15 @@ live-typed truncation check). The language decision isn't picking a
 horse anymore; it's confirming the horse that's already run the race.
 
 **2. The business context settles the remaining "why" question §1
-flagged as open.** `company_dns`'s purpose has been reframed (direct
-context, 2026-09-27): Mediumroast is giving away several IC
-classification systems (legacy Japanese SIC, US SIC, an older NACE
-vintage) and a sample of enriched Wikipedia/EDGAR company data —
-including the precomputed-embeddings versions — as free "taste"
-packages. Most people who download those packages won't know what to
-do with them. **`company_dns` becomes the example OSS project showing
-how to actually use this data** — reference use cases (SIC/IC search
-across systems, company-to-classification matching, company search,
-company-to-company similarity, ad-hoc SQL against the cached data), not
-a production bulk-processing service (bulk operations explicitly not a
-goal). That purpose is a direct, strong argument for DataFusion
-specifically: it's the tool that reads Mediumroast's Arrow-native
-`.feather` output with zero translation, and demonstrating "here's
-how to work with this data" is easiest to do faithfully in the engine
-built for that data's own format. This is what item 1's "why these five
-together" open question was actually missing — the goal was never just
-a faster service, it's a reference implementation for data Mediumroast
-is about to publish.
+flagged as open.** Moved to [§0](#0-why-this-project-exists), since it
+sets context for the whole document, not just this decision — short
+version: `company_dns`'s purpose has been reframed as the example OSS
+project for Mediumroast's free IC-classification and enriched-company
+data giveaways, not a production bulk-processing service, and that
+purpose is a direct, strong argument for DataFusion specifically — it's
+the tool that reads Mediumroast's Arrow-native `.feather` output with
+zero translation, which fits a "here's how to work with this data"
+reference project better than a generic backend choice would.
 
 **Resolves §4's SQLite-vs-DuckDB question too, by making it moot.**
 `ic-similarity-service` already demonstrated DataFusion alone —
