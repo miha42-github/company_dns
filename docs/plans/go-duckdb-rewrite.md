@@ -132,7 +132,7 @@ a while), or is it WONTFIX because the rewrite makes it moot?
 | [#53](https://github.com/miha42-github/company_dns/issues/53) | Augment SIC description data with similarity/semantic search using SQLite's vector function | **Pick up in the rewrite — but the backend choice below changes what "SQLite's vector function" even means.** | Filed assuming SQLite. If DuckDB replaces SQLite, this issue's premise needs revisiting, not just its implementation — see §4. Good anchor for that discussion regardless of outcome. |
 | [#54](https://github.com/miha42-github/company_dns/issues/54) | Move client-side pagination to server-side pagination (API-breaking) | **Pick up in the rewrite.** | Already flagged as API-breaking in the issue itself — a new major version/implementation is the natural place to land a breaking API change, rather than breaking existing Python-service callers separately. |
 | [#78](https://github.com/miha42-github/company_dns/issues/78) | Extract SIC data management functions into a separate module | **WONTFIX (on the Python codebase) — superseded by the rewrite.** | The motivation (share SIC logic more broadly, clean separation) is better served by the rewrite's data-product/feather design from the start than by refactoring Python code that's being replaced. Worth confirming you agree before closing. |
-| [#33](https://github.com/miha42-github/company_dns/issues/33) | `edgar.get_all_details()` keys a dict by company name instead of CIK | **WONTFIX (as filed) — but carry the underlying fix forward.** | The specific proposed diff is Python-specific and the file it targets won't exist post-rewrite. But the lesson (CIK is durable, name isn't) is exactly the kind of bug worth not re-introducing in Go — captured in §2 above. Recommend closing #33 with a comment pointing here, not silently. |
+| [#33](https://github.com/miha42-github/company_dns/issues/33) | `edgar.get_all_details()` keys a dict by company name instead of CIK | **WONTFIX (as filed) — but carry the underlying fix forward.** | The specific proposed diff is Python-specific and the file it targets won't exist post-rewrite. But the lesson (CIK is durable, name isn't) is exactly the kind of bug worth not re-introducing in Rust — captured in §2 above. Recommend closing #33 with a comment pointing here, not silently. |
 
 *No open issues about adding vector search were closed as WONTFIX in the
 past — #53 is still open, hasn't been superseded by anything already
@@ -295,16 +295,17 @@ all; it only affects *direct*-lookup latency on a cache miss, not
 similarity search.
 
 - Does the EDGAR fallback path inherit anything from the current Python
-  service's item-5 connection-reuse work, or is a Go-native equivalent
-  (e.g., a shared `http.Client` with keep-alive) the right call instead?
-  **Keeping all options on the table** — evaluate for best fit in Go
-  rather than assuming a straight port.
+  service's item-5 connection-reuse work, or is a Rust-native equivalent
+  (e.g., a shared `reqwest::Client`, which pools/reuses connections by
+  default) the right call instead? **Keeping all options on the table**
+  — evaluate for best fit in Rust/`tokio` rather than assuming a straight
+  port.
 - Same question for the Wikipedia fallback path and item 6's direct-
   HTTP approach (`lib/wikipedia_v2.py`) — the *idea* (narrow the
   MediaWiki/Wikidata requests to only the fields actually used, real
   identifying User-Agent, respect `maxlag`/429/503) carries over
-  conceptually, but the Go implementation should be evaluated on its own
-  merits rather than assumed to mirror the Python approach.
+  conceptually, but the Rust implementation should be evaluated on its
+  own merits rather than assumed to mirror the Python approach.
 
 ## 6. Language choice: Go vs. Rust
 
