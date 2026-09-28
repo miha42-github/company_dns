@@ -65,6 +65,19 @@ throwaway.
   exactly the ~3% `10-%`-form-type ratio already documented in
   `lib/prepare_edgar_data.py`'s own comment — a genuine cross-validation,
   not just a passing test.
+- **`edgar-index-query/`** — the other half of `edgar-spike/`'s
+  index-building test: loads the `.feather` file that spike writes with
+  DataFusion and runs real SQL against it, same `read_arrow` pattern as
+  `df-spike/`. Had to be a **separate crate**, not just another function
+  in `edgar-spike/` — a real, unavoidable `chrono`-version conflict
+  between `edgarkit` (needs `>=0.4.45`) and `arrow-arith`/DataFusion
+  (no 53.x version works with that `chrono`), confirmed by trying to pin
+  around it three different ways. All 9,241 rows round-tripped cleanly;
+  a real query for IBM found its actual Q1 2025 10-Q. Also surfaced an
+  unexpected finding: the `'10-%'` form-type filter both codebases use
+  catches more than its own comment describes (`10-D`, `10-12G/B`,
+  `10-KT` too, not just `10-K`/`10-K/A`/`10-Q`) — see this experiment's
+  README for the full breakdown.
 
 ## Conventions for adding a new experiment
 

@@ -133,6 +133,38 @@ load — this spike made only a handful of requests total. This doesn't
 settle Option 1 vs. Option 2 (§3) on its own, but it's a real, passing
 result against this project's actual data, not just documentation.
 
+**Pressed further (2026-09-28): does the resulting data actually load
+into a running query engine, not just get fetched?** All 9,241 filtered
+`10-%` entries got written to a real `.feather` file and loaded back
+with DataFusion (`experiments/edgar-index-query/`) — clean round trip
+(9,241 rows out, matching 9,241 in), and a real query for IBM's CIK
+found its actual Q1 2025 10-Q filing. Two results worth carrying
+forward:
+
+- **A real dependency conflict, not a spike inconvenience**: `edgarkit`
+  and DataFusion 42 cannot share one `Cargo.toml` — `edgarkit` requires
+  `chrono >=0.4.45`, and every `arrow-arith` 53.x release (the line
+  DataFusion 42 needs) either fails to compile against that `chrono`
+  version outright or explicitly forbids it. Confirmed genuine, not a
+  mistake in this project's setup, by trying three different pins before
+  concluding no combination works. **Practical effect on §3's Option
+  2**: "single-language, single-binary story stays intact" (below) needs
+  a caveat — if `edgarkit` is the fetch mechanism, it and the
+  DataFusion-querying side must be separate processes/crates, the same
+  two-sided shape Option 1 already has (Python feeding Rust), just with
+  Rust on both sides instead. Still single-*language*; not
+  single-*binary* if `edgarkit` is in the mix.
+- **The `'10-%'` filter catches more than documented**: grouping the
+  9,241 rows by `form_type` shows `10-D`/`10-D/A` (2,659 rows — more
+  than all `10-K`/`10-K/A` combined), `10-12G`/`10-12G/A`/`10-12B`/
+  `10-12B/A`, and `10-KT`/`10-KT/A` alongside the `10-K`/`10-K/A`/`10-Q`
+  `lib/prepare_edgar_data.py`'s own comment names explicitly. Not a bug
+  — `lib/edgar.py`'s query uses the same broad `LIKE '10-%'` match, so
+  the two pipelines agree — but worth a real decision (narrow the filter
+  to exactly three form types, or keep the broader match and update the
+  comment) rather than carrying an inaccurate comment into the rewrite.
+  See `experiments/edgar-index-query/README.md` for the full breakdown.
+
 ### 2.2 `sec_edgar` (crates.io, `tieje/rs_sec_edgar`)
 
 v1.0.5, released ~3 years ago, 9,918 downloads all-time (more adoption
@@ -199,8 +231,14 @@ raw format `pyedgar` parses, §1.1) using plain `reqwest` + a tab-
 delimited/gzip parser, or adopt `edgarkit`'s `index` feature (§2.1) to
 avoid re-implementing that parsing from scratch.
 
-- **Pro**: single-language, single-binary story stays intact — no
-  Python anywhere, matching the rest of the architecture.
+- **Pro, with a real caveat found by spiking it (§2.1)**: single-*language*
+  story stays intact either way — no Python anywhere. Single-*binary*
+  only holds if hand-rolling the index parser directly against
+  `data.sec.gov`'s raw files; if `edgarkit` is used instead, it can't
+  share a process with DataFusion (a genuine `chrono`-version conflict,
+  not a workaround-able one), so this becomes two Rust
+  processes/crates talking via files on disk — still no Python, but not
+  the one-binary story this bullet originally assumed.
 - **Pro**: item 1.2 (live firmographics) is low-risk either way — a
   JSON GET request and some field reshaping, well within "write it
   ourselves" territory regardless of what happens with index-building.

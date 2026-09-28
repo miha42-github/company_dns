@@ -185,6 +185,7 @@ async fn index_test(edgar: &Edgar) -> Result<(), Box<dyn std::error::Error>> {
 
     println!();
     accession_and_date_test(&ten_series).await?;
+    write_feather(&ten_series)?;
 
     Ok(())
 }
@@ -282,4 +283,104 @@ fn split_date_filed(date_filed: &str) -> Option<(i32, u32, u32)> {
     let m = parts.next()?.parse().ok()?;
     let d = parts.next()?.parse().ok()?;
     Some((y, m, d))
+}
+
+/// Writes the filtered '10-%' index entries out as a real `.feather`
+/// file (same schema shape as lib/edgar.py's `companies` SQLite table -
+/// CIK/COMPANY/YEAR/MONTH/DAY/ACCESSION/FORM). The write-then-query
+/// pipeline is split across two crates, not one function - see
+/// ../edgar-index-query/ for why (a genuine edgarkit/DataFusion
+/// dependency conflict, not a design choice) and for the DataFusion
+/// side (loading this file back, running real SQL against it, the same
+/// read_arrow pattern ../df-spike validated against a real Mediumroast
+/// file - docs/plans/go-duckdb-rewrite.md sec7).
+fn write_feather(
+    ten_series: &[&edgarkit::parsing::index::IndexEntry],
+) -> Result<(), Box<dyn std::error::Error>> {
+    use arrow_array::{Int32Array, RecordBatch, StringArray, UInt64Array};
+    use arrow_ipc::writer::FileWriter;
+    use arrow_schema::{DataType, Field, Schema};
+    use std::sync::Arc;
+
+    println!("=== Writing filtered index to .feather (for ../edgar-index-query/) ===");
+
+    let mut ciks = Vec::with_capacity(ten_series.len());
+    let mut companies = Vec::with_capacity(ten_series.len());
+    let mut forms = Vec::with_capacity(ten_series.len());
+    let mut years = Vec::with_capacity(ten_series.len());
+    let mut months = Vec::with_capacity(ten_series.len());
+    let mut days = Vec::with_capacity(ten_series.len());
+    let mut accessions = Vec::with_capacity(ten_series.len());
+    let mut urls = Vec::with_capacity(ten_series.len());
+
+    let mut skipped = 0;
+    for entry in ten_series {
+        let (accession, date_parts) = match (
+            extract_accession(&entry.url),
+            split_date_filed(&entry.date_filed),
+        ) {
+            (Some(a), Some(d)) => (a, d),
+            _ => {
+                skipped += 1;
+                continue;
+            }
+        };
+        ciks.push(entry.cik);
+        companies.push(entry.company_name.clone());
+        forms.push(entry.form_type.clone());
+        years.push(date_parts.0);
+        months.push(date_parts.1 as i32);
+        days.push(date_parts.2 as i32);
+        accessions.push(accession);
+        urls.push(entry.url.clone());
+    }
+
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("cik", DataType::UInt64, false),
+        Field::new("company_name", DataType::Utf8, false),
+        Field::new("form_type", DataType::Utf8, false),
+        Field::new("year", DataType::Int32, false),
+        Field::new("month", DataType::Int32, false),
+        Field::new("day", DataType::Int32, false),
+        Field::new("accession", DataType::Utf8, false),
+        Field::new("url", DataType::Utf8, false),
+    ]));
+
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(UInt64Array::from(ciks)),
+            Arc::new(StringArray::from(companies)),
+            Arc::new(StringArray::from(forms)),
+            Arc::new(Int32Array::from(years)),
+            Arc::new(Int32Array::from(months)),
+            Arc::new(Int32Array::from(days)),
+            Arc::new(StringArray::from(accessions)),
+            Arc::new(StringArray::from(urls)),
+        ],
+    )?;
+    let rows_written = batch.num_rows();
+
+    // Deliberately uncompressed - this file is short strings, no vector
+    // buffers, and side-stepping compression avoids the arrow-ipc
+    // zstd-feature gap df-spike/ic-similarity-service already found and
+    // documented (docs/plans/go-duckdb-rewrite.md sec7.3/Annex E)
+    // entirely, rather than needing to route around it here too.
+    std::fs::create_dir_all("../../tmp")?;
+    let out_path = "../../tmp/edgar_10series_2025q2.feather";
+    {
+        let file = std::fs::File::create(out_path)?;
+        let mut writer = FileWriter::try_new(file, &schema)?;
+        writer.write(&batch)?;
+        writer.finish()?;
+    }
+    let file_size = std::fs::metadata(out_path)?.len();
+    println!(
+        "wrote {rows_written} rows ({skipped} skipped - missing accession/date) \
+        to {out_path} ({file_size} bytes, uncompressed)"
+    );
+    println!("Now run: (cd ../edgar-index-query && cargo run)");
+    println!();
+
+    Ok(())
 }

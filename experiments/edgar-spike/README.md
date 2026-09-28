@@ -9,7 +9,9 @@ tested, matching that doc's §1 split:
 1. **Company/firmographics fetch** (`lib/edgar.py`'s `get_firmographics`,
    a live JSON REST call — no `pyedgar` involved in the current code).
 2. **Quarterly index-building** (`lib/prepare_edgar_data.py`, currently
-   `pyedgar`'s `IndexMaker`).
+   `pyedgar`'s `IndexMaker`) — including whether the result can actually
+   be loaded into and queried by DataFusion, not just fetched; see
+   [`../edgar-index-query/`](../edgar-index-query/) for that half.
 
 ## Running it
 
@@ -21,6 +23,9 @@ Hits real `data.sec.gov`/`www.sec.gov` endpoints — no local data needed,
 no flags. Uses a Mediumroast-identifying User-Agent
 (`Mediumroast, Inc. edgar-spike hello@mediumroast.io`), per SEC.gov's
 fair-access requirements and matching `lib/edgar.py`'s existing pattern.
+Writes a `.feather` file as its last step — run
+[`../edgar-index-query/`](../edgar-index-query/) afterward to load and
+query it.
 
 ## What it found (2026-09-28)
 
@@ -93,6 +98,17 @@ gaps, **both closed by a follow-up check**:
 made a handful of requests total, well under the default 10 req/s
 limit — nothing here demonstrates the adaptive limiter actually
 engaging or recovering correctly under sustained/concurrent use).
+
+**Feather write — produces a real, loadable dataset.** All 9,241
+filtered `10-%` entries get written to a real `.feather` (Arrow IPC)
+file (uncompressed, ~1.47MB) using the same schema shape as
+`lib/edgar.py`'s `companies` SQLite table (CIK/company/year/month/day/
+accession/form). **This had to move to a separate crate,
+[`../edgar-index-query/`](../edgar-index-query/), to actually load and
+query it** — see that crate's README for why (a real `chrono`-version
+conflict between `edgarkit` and `arrow-arith`/DataFusion, not a design
+choice) and for the query results, including an unexpected finding
+about what the `'10-%'` form-type filter actually catches.
 
 ## Bottom line for edgar-backend.md §2.1/§3
 

@@ -19,3 +19,19 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # For printing the get_firmographics()-equivalent shape as JSON, to
 # compare directly against lib/edgar.py's actual output shape.
 serde_json = "1"
+# Writes the filtered '10-%' index entries out as a real .feather file.
+# Deliberately the *narrow* arrow-* crates, not the `arrow` umbrella
+# crate or `datafusion` itself: both pull in `arrow-arith` (for compute
+# kernels this spike doesn't need), which has a genuine upstream
+# conflict with the chrono version edgarkit requires (>=0.4.45) -
+# arrow-arith 53.4.0's ChronoDateExt::quarter() collides with
+# Datelike::quarter(), added to chrono in that same version range. Confirmed
+# this is a real, unavoidable incompatibility (not a mistake on this
+# project's part) by trying to pin around it several ways - none work,
+# because arrow-arith 53.4.1 itself hard-requires chrono <0.4.40, which
+# directly contradicts edgarkit's own >=0.4.45 requirement. See
+# ../edgar-index-query/ (a separate crate, deliberately) for the
+# DataFusion side of this test - it can't live in this same Cargo.toml.
+arrow-array = "53"
+arrow-schema = "53"
+arrow-ipc = "53"
