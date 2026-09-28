@@ -120,11 +120,16 @@ a real Q2 2025 quarterly index download+parse took ~1.65s and returned
 331,786 entries, 2.79% matching the `10-%` filter — closely matching the
 ~3% figure `lib/prepare_edgar_data.py`'s own comment already documents,
 a genuine cross-validation between the two pipelines, not just "it ran
-without erroring." Two minor gaps found, not blockers: `IndexEntry` has
-no separate accession-number field (likely extractable from its `url`,
-not yet verified) and `date_filed` is an unsplit string rather than
-pre-parsed year/month/day. Not tested: rate-limiter behavior under real
-sustained load — this spike made only two requests total. This doesn't
+without erroring." Two output-shape gaps found, **both closed by a
+follow-up check in the same spike**: `IndexEntry` has no separate
+accession-number field, but it's the filename in `IndexEntry.url` —
+extracted it for 5 real `10-%` entries, rebuilt `lib/edgar.py`'s
+`filing_idx_url` from it, and fetched each one for real: **5/5 HTTP
+200**, not just a plausible-looking derivation. `date_filed` is an
+unsplit `"YYYY-MM-DD"` string rather than pre-parsed year/month/day — a
+one-line split handled all 5 samples correctly, confirmed trivial as
+suspected. Not tested: rate-limiter behavior under real sustained
+load — this spike made only a handful of requests total. This doesn't
 settle Option 1 vs. Option 2 (§3) on its own, but it's a real, passing
 result against this project's actual data, not just documentation.
 

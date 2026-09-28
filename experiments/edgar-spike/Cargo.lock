@@ -178,6 +178,7 @@ name = "edgar-spike"
 version = "0.1.0"
 dependencies = [
  "edgarkit",
+ "reqwest",
  "tokio",
 ]
 

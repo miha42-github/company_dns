@@ -47,29 +47,37 @@ own comment (measured against a different quarter), a real, independent
 cross-check that both pipelines are filtering the same underlying data
 the same way. Each `IndexEntry` carries `company_name`, `form_type`,
 `cik`, `date_filed`, `url` — covers `pyedgar`'s output except for two
-differences worth noting, not yet resolved:
+gaps, **both closed by a follow-up check**:
 
-- No separate accession-number field — `lib/edgar.py` needs the
-  accession number specifically (to build filing index URLs, e.g.
-  `EDGARARCHIVES/{cik}/{accession}/`), not just the full `url`. It's
-  very likely extractable from `IndexEntry.url`'s path (the URL is a
-  direct link to the filing text), but this spike didn't verify that
-  parsing — worth doing before relying on it.
-- `date_filed` is a single string (`"2025-06-30"`), not pre-split into
+- **Accession number**: not a separate field, but `IndexEntry.url`'s
+  filename *is* the accession number with dashes
+  (`https://www.sec.gov/Archives/edgar/data/{cik}/{accession}.txt`).
+  Extracted it for a sample of 5 real `10-%` entries, used it to build
+  the exact URL `lib/edgar.py`'s `filing_idx_url` constructs
+  (`.../{cik}/{accession_no_dashes}/{accession}-index.html`), and
+  fetched each one for real — **5/5 returned HTTP 200**. Not a
+  theoretical derivation; verified against live `sec.gov`.
+- **`date_filed`**: a single `"YYYY-MM-DD"` string, not pre-split into
   year/month/day the way `pyedgar`'s output and `lib/edgar.py`'s
-  `YEAR`/`MONTH`/`DAY` fields are — a trivial parse, not a real gap.
+  `YEAR`/`MONTH`/`DAY` fields are. A one-line `splitn('-')` handled it
+  correctly for all 5 sample entries — confirmed a trivial parse, not a
+  real gap, as suspected.
 
 **Not tested here**: rate-limiting behavior under real load (this spike
-made only two requests total, well under the default 10 req/s limit —
-nothing here demonstrates the adaptive limiter actually engaging or
-recovering correctly under sustained/concurrent use).
+made a handful of requests total, well under the default 10 req/s
+limit — nothing here demonstrates the adaptive limiter actually
+engaging or recovering correctly under sustained/concurrent use).
 
 ## Bottom line for edgar-backend.md §2.1/§3
 
 This is a real, positive data point for Option 2 (native Rust module) —
 `edgarkit` handled both halves of §1's split cleanly against live SEC
-data, not just in its own README examples. It doesn't settle the
-Option 1 vs. Option 2 choice on its own (that's still open, per
-edgar-backend.md §5), but the crate's biggest risk flagged in §2.1
-(new, solo-maintained, low-adoption) is now paired with a real, passing
-empirical test, not just a maturity concern taken on faith either way.
+data, not just in its own README examples, and the two output-shape
+gaps found (accession number, date parts) are both cheap, verified
+derivations from what `IndexEntry` already returns — not missing
+functionality. It doesn't settle the Option 1 vs. Option 2 choice on
+its own (that's still open, per edgar-backend.md §5), but the crate's
+biggest risk flagged in §2.1 (new, solo-maintained, low-adoption) is
+now paired with a real, passing empirical test against this project's
+actual data shape, not just a maturity concern taken on faith either
+way.
