@@ -21,6 +21,8 @@ process-local, in-memory TTL+LRU cache per replica for EDGAR/Wikipedia
 fallback responses, nothing external, nothing shared across pods. The
 TiKV/minikv distributed-KVS research that originally motivated part of
 the Go-vs-Rust question is now purely historical — moved to Annex C.
+**Versioning/repo decided (2026-09-27, §9): this is V4.0.0, built on a
+branch within the current `company_dns` repo** — not a new repository.
 Owner: michael.hay@mediumroast.io
 Scope: a from-scratch rewrite of `company_dns` in Rust with DataFusion as
 the query/data-access engine, backed by Mediumroast `.feather` (Arrow IPC)
@@ -949,22 +951,32 @@ once company vectors exist to test against.
 > Kept in the annex as a record of what was still open when Go was a
 > live candidate, not as work to pick up.
 
-## 9. Explicitly out of scope for this document
+## 9. Scope decisions (originally "explicitly out of scope")
 
-- No code, no repo scaffolding, no dependency choices locked in yet —
-  **with one explicit exception to resolve**: §7.2 flags that the
-  DataFusion/DuckDB spike likely needs some throwaway validation code to
-  actually run. Whether that counts as "code" under this line, or is a
-  separate disposable-prototype category, needs an explicit yes/no
-  before it gets written, not an assumption either way.
-- No decision yet on whether this is a new repo or a directory/branch
-  within the existing one.
-- No versioning/naming decided (is this "V4.0.0"? A different product
-  name entirely, given how far it diverges from the current
-  implementation?).
-- No language decision yet either (§6) — this document's own title still
-  says "Go, DuckDB" from the original framing; revisit the title once §6
-  actually resolves.
+Most of what this section originally flagged as undecided has since been
+decided elsewhere in the document; kept below with each item updated
+rather than left to read as still-open.
+
+- ~~No code, no repo scaffolding, no dependency choices locked in yet —
+  with one explicit exception to resolve: does throwaway validation code
+  count as "code" under this line?~~ **Resolved in practice (§7.3).**
+  Small, disposable validation spikes — not committed to the repo, not
+  part of the rewrite itself — are a different thing from "writing the
+  rewrite" and don't need to wait on any decision being final. `df-spike`,
+  `embed-bench`, `quality-eval`, and `experiments/ic-similarity-service`
+  are all real instances of this pattern already.
+- **Decided (2026-09-27): a branch within the current `company_dns`
+  repo, not a new repository.** Same repo, same issue tracker, same
+  history — the rewrite lives alongside `archive/python-v3.3.0` rather
+  than starting fresh elsewhere.
+- **Decided (2026-09-27): this is V4.0.0.** Not a rename or a different
+  product entirely — the next major version of `company_dns`, reflecting
+  how far it diverges from the current implementation (§0/§1) without
+  needing a new identity.
+- ~~No language decision yet either (§6)...~~ **Decided (§6.5): Rust +
+  DataFusion.** This document's title and scope were updated to match
+  once §6.5 landed (see the top of this doc); no longer an open
+  question.
 
 ## 10. Next steps
 
