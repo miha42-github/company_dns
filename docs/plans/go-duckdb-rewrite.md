@@ -1,4 +1,4 @@
-# company_dns rewrite: Rust + DataFusion, parquet data products, cache-with-fallback
+# company_dns rewrite: Rust + DataFusion, feather data products, cache-with-fallback
 
 Status: **Language/engine decided: Rust + DataFusion (§6.5).** Most of
 what follows is still a working draft to iterate on together — where a
@@ -7,11 +7,19 @@ everything else is still up for discussion. Title/scope below updated
 from the original "Go, DuckDB" framing now that §6.5 has resolved that
 question — earlier sections that still discuss Go or DuckDB as live
 options are kept as-is (not rewritten after the fact) since the
-reasoning that led to the decision is worth keeping visible.
+reasoning that led to the decision is worth keeping visible. **Data
+format update (2026-09-27): Mediumroast's free data giveaway is
+`.feather` (Arrow IPC) only — no parquet package.** This doc originally
+assumed parquet packages alongside feather; every parquet reference in
+the live sections below has been corrected to feather. Historical
+sections/annexes that discuss parquet as part of an earlier comparison
+(e.g. DuckDB's native Parquet support, `arrow-go`/`parquet-go` library
+maturity) are left as-is where they're evaluating general ecosystem
+tooling rather than asserting what this project's own data looks like.
 Owner: michael.hay@mediumroast.io
 Scope: a from-scratch rewrite of `company_dns` in Rust with DataFusion as
-the query/data-access engine, backed by Mediumroast parquet/feather data
-packages for SIC/NACE classification data (US legacy SIC, Japanese SIC,
+the query/data-access engine, backed by Mediumroast `.feather` (Arrow IPC)
+data packages for SIC/NACE classification data (US legacy SIC, Japanese SIC,
 UK SIC, EU NACE), plus a "cache a limited number of rows, fall back to
 the live service" pattern for both EDGAR and Wikipedia data. Explicitly
 **not** an incremental migration of the current Python/FastAPI/SQLite
@@ -30,9 +38,10 @@ service; see §1's use-case list.
 
 As stated, five things are driving this:
 
-1. **Parquet data products for classification parity.** Mediumroast
-   parquet packages covering legacy US SIC, legacy Japanese SIC, UK SIC,
-   and EU NACE — bringing the new service to feature parity with what
+1. **Feather (Arrow IPC) data products for classification parity.**
+   Mediumroast `.feather` packages covering legacy US SIC, legacy
+   Japanese SIC, UK SIC, and EU NACE — bringing the new service to
+   feature parity with what
    `company_dns` already does today (see `lib/sic.py`, `lib/uk_sic.py`,
    `lib/japan_sic.py`, `lib/eu_sic.py`, `lib/international_sic.py` and
    their `prepare_*_data.py` counterparts for the current, per-country
@@ -117,7 +126,7 @@ a while), or is it WONTFIX because the rewrite makes it moot?
 |---|---|---|---|
 | [#53](https://github.com/miha42-github/company_dns/issues/53) | Augment SIC description data with similarity/semantic search using SQLite's vector function | **Pick up in the rewrite — but the backend choice below changes what "SQLite's vector function" even means.** | Filed assuming SQLite. If DuckDB replaces SQLite, this issue's premise needs revisiting, not just its implementation — see §4. Good anchor for that discussion regardless of outcome. |
 | [#54](https://github.com/miha42-github/company_dns/issues/54) | Move client-side pagination to server-side pagination (API-breaking) | **Pick up in the rewrite.** | Already flagged as API-breaking in the issue itself — a new major version/implementation is the natural place to land a breaking API change, rather than breaking existing Python-service callers separately. |
-| [#78](https://github.com/miha42-github/company_dns/issues/78) | Extract SIC data management functions into a separate module | **WONTFIX (on the Python codebase) — superseded by the rewrite.** | The motivation (share SIC logic more broadly, clean separation) is better served by the rewrite's data-product/parquet design from the start than by refactoring Python code that's being replaced. Worth confirming you agree before closing. |
+| [#78](https://github.com/miha42-github/company_dns/issues/78) | Extract SIC data management functions into a separate module | **WONTFIX (on the Python codebase) — superseded by the rewrite.** | The motivation (share SIC logic more broadly, clean separation) is better served by the rewrite's data-product/feather design from the start than by refactoring Python code that's being replaced. Worth confirming you agree before closing. |
 | [#33](https://github.com/miha42-github/company_dns/issues/33) | `edgar.get_all_details()` keys a dict by company name instead of CIK | **WONTFIX (as filed) — but carry the underlying fix forward.** | The specific proposed diff is Python-specific and the file it targets won't exist post-rewrite. But the lesson (CIK is durable, name isn't) is exactly the kind of bug worth not re-introducing in Go — captured in §2 above. Recommend closing #33 with a comment pointing here, not silently. |
 
 *No open issues about adding vector search were closed as WONTFIX in the
@@ -131,7 +140,7 @@ be worth doing in Python first as a testbed).*
 
 > **Superseded by §6.5, moved to [Annex A](#annex-a-4-backend-sqlite-vs-duckdb-historical---superseded-by-65).**
 > The actual resolution ended up being neither SQLite nor DuckDB:
-> DataFusion alone (Rust, §6) handles parquet reads, vector search, and
+> DataFusion alone (Rust, §6) handles feather reads, vector search, and
 > ad-hoc SQL access, already proven in `experiments/ic-similarity-
 > service`, making this SQLite-vs-DuckDB framing moot rather than
 > answered. The full research and reasoning (§4.1-§4.6) is kept, unedited,
@@ -148,15 +157,15 @@ today's `companies.db` does) to: **keep a limited number of rows cached
 locally, fall back to the live service on a miss.**
 
 **Update, per discussion:** the cached rows themselves are also a
-Mediumroast-supplied parquet data product, same delivery mechanism as
+Mediumroast-supplied `.feather` data product, same delivery mechanism as
 the SIC/NACE classification data in §1 — not something `company_dns`
 builds up on its own from scratch. Several open questions from the first
 draft are now settled:
 
 - **Decided: no write-back to the persistent store, ever.** A live
   EDGAR/Wikipedia fallback answer is served to the caller and not
-  written into the parquet-backed cache. The cached set changes only
-  when Mediumroast ships a new parquet package — one source of truth,
+  written into the feather-backed cache. The cached set changes only
+  when Mediumroast ships a new `.feather` package — one source of truth,
   no risk of a locally-written row disagreeing with what Mediumroast
   ships later for the same company.
 - **Decided: company-to-company semantic search is in scope.** Since
@@ -180,7 +189,7 @@ draft are now settled:
 caching**, given there's no write-back to the real store? A few distinct
 options, not mutually exclusive:
 
-1. **No caching at all beyond the parquet-seeded set.** Simplest — every
+1. **No caching at all beyond the feather-seeded set.** Simplest — every
    miss re-fetches live, every time, no matter how recently the same
    company was looked up. Correct by construction (nothing to go stale),
    but repeat lookups for anything outside the seeded set always pay
@@ -284,14 +293,14 @@ one (how to cache Wikipedia lookups).
 ### 6.2 Go vs. Rust, on the dimensions that actually matter for this project
 
 Skipping generic "which language is faster" framing in favor of what
-this specific rewrite needs — parquet/Arrow-heavy data access, embedded
+this specific rewrite needs — feather/Arrow-heavy data access, embedded
 DuckDB + SQLite(+ `sqlite-vec`), moderate-concurrency HTTP fallback
 calls, a multi-arch Docker/k8s deploy story, and (unstated but real) a
 small/solo maintainer team.
 
 | Dimension | Go | Rust |
 |---|---|---|
-| Parquet/Arrow ecosystem | `apache/arrow-go` is the official Apache implementation, but young and comparatively lightly adopted; `segmentio/parquet-go` is a solid community alternative, though its repo recently moved maintainership to `parquet-go/parquet-go`. Historically the weaker side of this comparison — Go "lacked an official and performant Parquet library" until arrow-go. | `apache/arrow-rs` + `datafusion` are the **official, first-party Apache implementations**, heavily used and actively developed (DataFusion's recent release cycle: ~740 commits from 139 contributors in ~11 weeks). This is Rust's strongest, most directly relevant advantage for *this* project specifically, given how central parquet + precomputed vectors are to the whole design. |
+| Arrow ecosystem (this project's data arrives as `.feather`/Arrow IPC) | `apache/arrow-go` is the official Apache implementation, but young and comparatively lightly adopted. Go's Parquet story (`segmentio/parquet-go`, now `parquet-go/parquet-go`) is more mature, but that's a different file format than the one this project actually needs. | `apache/arrow-rs` + `datafusion` are the **official, first-party Apache implementations**, heavily used and actively developed (DataFusion's recent release cycle: ~740 commits from 139 contributors in ~11 weeks). This is Rust's strongest, most directly relevant advantage for *this* project specifically, given how central `.feather`/Arrow IPC and precomputed vectors are to the whole design. |
 | DuckDB driver | `marcboeker/go-duckdb` — community-maintained Go bindings around DuckDB's C/C++ core. | `duckdb-rs` — community-maintained Rust bindings, similar shape. Roughly comparable maturity to the Go side; neither is DuckDB's own first-party client library. Worth a real evaluation pass on both, not assumed. |
 | SQLite + `sqlite-vec` | `modernc.org/sqlite` (pure Go, no cgo) is a genuine, well-regarded advantage for plain SQLite — but it's a from-scratch reimplementation, not the real SQLite C library, so it's unclear it can load an arbitrary C extension like `sqlite-vec` at all. Loading `sqlite-vec` for real likely means falling back to a cgo-based driver (`mattn/go-sqlite3`), which gives up the pure-Go cross-compilation advantage. **Needs a spike**, same caveat as §4.4's DuckDB question. | `rusqlite` wraps the real libsqlite3 via FFI (optionally bundling the C source) and has a documented `load_extension` path — more directly compatible with loading `sqlite-vec` as-is, but it's still an FFI boundary either way, not a pure-Rust reimplementation. **Also needs a spike** to confirm in practice, not assumed to "just work." |
 | Concurrency model | Goroutines + `net/http`: simple, well-proven for I/O-bound, moderate-concurrency services — which matches this project's actual profile (a REST API doing outbound HTTP calls and local DB lookups, not millions of concurrent connections). | `async`/Tokio is more powerful and can go further (production Tokio deployments handle far higher connection counts than this service will ever see), but that power comes with real complexity (`async fn` coloring, `Send`/`Sync` bounds, pinning) that this project's actual load doesn't obviously need. |
@@ -313,11 +322,10 @@ benchmarks are unlikely to be the deciding factor regardless.
 Worth digging into deeper, per request — two reasons: it's genuinely the
 more interesting question than Go-vs-Rust in the abstract, and it
 changes shape now that **Mediumroast will distribute data in `.feather`
-format specifically, for Arrow compatibility** (in addition to the
-parquet packages in §1). Feather V2 *is* the Arrow IPC file format —
-they're not "compatible," they're the same bytes on disk — so this is
-squarely an Arrow-ecosystem question, not a generic "which database is
-faster" one.
+format specifically, for Arrow compatibility** (§1 — this is the only
+format Mediumroast ships; no parquet package). Feather V2 *is* the Arrow
+IPC file format — this is squarely an Arrow-ecosystem question, not a
+generic "which database is faster" one.
 
 **Architecturally, these two aren't really peers.** DataFusion is a
 query *framework/library* — Arrow RecordBatches are its native, only
@@ -376,7 +384,7 @@ project's vectors are precomputed upstream by Mediumroast (so the
 runtime cost really is just similarity computation over Arrow arrays,
 nothing more), **a DataFusion-based Rust service could plausibly do the
 SIC/NACE and company similarity search natively** — same engine that's
-already reading the parquet/feather data, no `sqlite-vec` or DuckDB VSS
+already reading the feather data, no `sqlite-vec` or DuckDB VSS
 needed at all, and no split-architecture (§4.6) required either. This is
 a new, real option worth adding to §4.6's list: *DataFusion-native
 vector search via its built-in Arrow-array distance functions,
@@ -399,7 +407,7 @@ The specific reason Rust came up — "compatibility with TiKV/minikv" —
 doesn't hold up well under examination (§6.1): TiKV is oversized for the
 actual need, and minikv has a Go-native sibling project from the same
 author, so neither actually requires choosing Rust. **If Rust gets
-chosen, the real argument for it is the parquet/Arrow/DataFusion
+chosen, the real argument for it is the Arrow/feather/DataFusion
 ecosystem** (§6.2's first row, expanded in §6.3) — which, now that
 `.feather` is confirmed as a second Mediumroast delivery format and
 DataFusion's vector-search angle is on the table too, is a noticeably
@@ -447,7 +455,7 @@ company-to-company similarity, ad-hoc SQL against the cached data), not
 a production bulk-processing service (bulk operations explicitly not a
 goal). That purpose is a direct, strong argument for DataFusion
 specifically: it's the tool that reads Mediumroast's Arrow-native
-parquet/feather output with zero translation, and demonstrating "here's
+`.feather` output with zero translation, and demonstrating "here's
 how to work with this data" is easiest to do faithfully in the engine
 built for that data's own format. This is what item 1's "why these five
 together" open question was actually missing — the goal was never just
@@ -456,7 +464,7 @@ is about to publish.
 
 **Resolves §4's SQLite-vs-DuckDB question too, by making it moot.**
 `ic-similarity-service` already demonstrated DataFusion alone —
-no SQLite, no DuckDB — handling parquet/feather reads, vector
+no SQLite, no DuckDB — handling feather reads, vector
 similarity search (`array_distance` via DataFusion's own SQL interface,
 §7.3-onward), *and* ad-hoc SQL queries against the same in-memory
 table, all through one engine. That directly satisfies the newly-named
@@ -1046,7 +1054,7 @@ once company vectors exist to test against.
    write-back, company semantic search in scope, Mediumroast sets the
    cap) — remaining: pick one of the four ephemeral-cache options for
    direct-lookup misses (or confirm "none," option 1), and get an actual
-   row-count estimate for the company parquet package for scale planning.
+   row-count estimate for the company `.feather` package for scale planning.
 4. ~~Settle §6 (Go vs. Rust)...~~ **Done (§6.5)** — Rust + DataFusion,
    on both proof (four working prototypes) and the business reframing
    argument, not the original KVS-compatibility premise.
@@ -1087,7 +1095,7 @@ references elsewhere in this doc point at this content.
 > DataFusion was decided (§6.5). DataFusion resolved the question these
 > sections were trying to answer without choosing either SQLite or
 > DuckDB — `experiments/ic-similarity-service` already does vector
-> search, parquet/feather reads, and ad-hoc SQL through DataFusion alone.
+> search, feather reads, and ad-hoc SQL through DataFusion alone.
 > Kept below unedited for the reasoning trail.
 
 This is the concrete question issue #53 turns on, and the one place
