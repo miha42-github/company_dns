@@ -1,9 +1,14 @@
 # EDGAR backend for the Rust + DataFusion rewrite
 
-Status: **Draft — research only, no code written yet.** This doc exists
-to work out what the current Python EDGAR implementation actually does,
-survey what exists in the Rust ecosystem for the same job, and lay out
-the real options — not to commit to one yet. **Decided (2026-09-28):
+Status: **Draft — research, plus one disposable spike; no production
+code, no decision between Option 1/2 yet.** This doc exists to work out
+what the current Python EDGAR implementation actually does, survey what
+exists in the Rust ecosystem for the same job, and lay out the real
+options — not to commit to one yet. `experiments/edgar-spike/` (§2.1)
+validated `edgarkit` against real, live SEC data — a real result, not
+just documentation research, but still only one input into the Option 1
+vs. Option 2 choice (§3), not a decision on its own. **Decided
+(2026-09-28):
 the CIK/10-K/10-Q index (§1.1) is a direct `company_dns` concern, not
 something that moves upstream to Mediumroast's own pipeline.** This
 resolves §3/§4's earlier open question about whether index-building was
@@ -105,6 +110,23 @@ taken toward other self-described "production-ready" or promising-
 looking dependencies elsewhere (`go-duckdb-rewrite.md` Annex C's minikv,
 Annex A's DuckDB VSS): plausible, not yet verified against this
 project's actual data, needs a real spike before being trusted.
+
+**Spiked (2026-09-28), and it held up**: `experiments/edgar-spike/`
+(see its own README for full numbers) ran both features against real,
+live SEC data — a company lookup (`submissions("0000051143")`, IBM)
+returned every field `get_firmographics` needs, already structured
+(addresses split into mailing/business, not a blob to flatten by hand);
+a real Q2 2025 quarterly index download+parse took ~1.65s and returned
+331,786 entries, 2.79% matching the `10-%` filter — closely matching the
+~3% figure `lib/prepare_edgar_data.py`'s own comment already documents,
+a genuine cross-validation between the two pipelines, not just "it ran
+without erroring." Two minor gaps found, not blockers: `IndexEntry` has
+no separate accession-number field (likely extractable from its `url`,
+not yet verified) and `date_filed` is an unsplit string rather than
+pre-parsed year/month/day. Not tested: rate-limiter behavior under real
+sustained load — this spike made only two requests total. This doesn't
+settle Option 1 vs. Option 2 (§3) on its own, but it's a real, passing
+result against this project's actual data, not just documentation.
 
 ### 2.2 `sec_edgar` (crates.io, `tieje/rs_sec_edgar`)
 
@@ -229,19 +251,24 @@ avoid re-implementing that parsing from scratch.
    (§4)...~~ **Done** — yes, it's a direct `company_dns` concern (this
    doc's status line). Both of §3's options are live; next is choosing
    between them, not settling whether either is needed.
-2. A small, disposable spike (same spirit as `go-duckdb-rewrite.md`
-   §7's `df-spike`) testing `edgarkit`'s `index` and `company` features
-   against real SEC data, not committed to the repo — the concrete
-   evidence Option 2 needs before it's a real contender against
-   Option 1's zero-risk-on-parsing story.
-3. In parallel, confirm what a `pyedgar`-as-CLI step (Option 1) would
-   actually look like — is it a thin wrapper around today's
-   `lib/prepare_edgar_data.py` logic, or does it need rework to emit
-   `.feather` instead of populating SQLite directly?
+2. ~~A small, disposable spike... testing `edgarkit`'s `index` and
+   `company` features against real SEC data...~~ **Done (§2.1)** —
+   `experiments/edgar-spike/`, both features passed against real, live
+   SEC data. A real spike result now exists for Option 2, not just a
+   README reading; still doesn't settle Option 1 vs. Option 2 on its
+   own (item 3 below is still open).
+3. Confirm what a `pyedgar`-as-CLI step (Option 1) would actually look
+   like — is it a thin wrapper around today's `lib/prepare_edgar_data.py`
+   logic, or does it need rework to emit `.feather` instead of
+   populating SQLite directly? No equivalent spike exists yet for
+   Option 1 — worth one before comparing the two options head-to-head,
+   for the same reason item 2 got one.
 4. Item 1.2 (live firmographics fallback) can likely move forward
    independently and sooner — it's the lower-risk half of this doc's
    scope, doesn't depend on the Option 1 vs. 2 choice, and is small
    enough to just build directly in Rust once `go-duckdb-rewrite.md`
-   §5.3's fallback-path questions are answered.
-5. No code yet, per this doc's own status line — items 2/3 above are
+   §5.3's fallback-path questions are answered. `edgar-spike`'s company
+   test (item 2) is already a real data point that this is
+   straightforward.
+5. Beyond the disposable spike in item 2, no production code yet, per
    spike proposals, not commitments.

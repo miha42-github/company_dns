@@ -52,6 +52,17 @@ throwaway.
   `arrow-ipc`/zstd feature gap (see the `df-spike/` caveat above) and a
   mismatched Rust-vs-SQL API on DataFusion's `array_distance` function —
   both documented with fixes in this experiment's own README.
+- **`edgar-spike/`** — tests whether the `edgarkit` crate can replace
+  the current Python EDGAR implementation (`pyedgar`'s `IndexMaker` for
+  quarterly index-building, plus `lib/edgar.py`'s hand-rolled JSON REST
+  firmographics fetch), against real, live SEC EDGAR data. See
+  [`docs/plans/edgar-backend.md`](../docs/plans/edgar-backend.md) §2.1/§5.
+  Both halves passed cleanly: a real company lookup (IBM) returned every
+  field `get_firmographics` needs, already structured; a real quarterly
+  index download+parse took ~1.65s and reproduced almost exactly the
+  ~3% `10-%`-form-type ratio already documented in
+  `lib/prepare_edgar_data.py`'s own comment — a genuine cross-validation,
+  not just a passing test.
 
 ## Conventions for adding a new experiment
 
