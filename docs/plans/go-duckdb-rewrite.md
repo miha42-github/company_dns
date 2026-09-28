@@ -41,10 +41,6 @@ buried under.
 
 ## 0. Why this project exists
 
-*(Originally written as part of §6.5's decision rationale — moved here
-because it's context for the whole document, not just for the
-language/engine choice it was attached to.)*
-
 Mediumroast is giving away several IC classification systems (legacy
 Japanese SIC, US SIC, an older NACE vintage) and a sample of enriched
 Wikipedia/EDGAR company data — including precomputed-embeddings
