@@ -129,217 +129,16 @@ be worth doing in Python first as a testbed).*
 
 ## 4. Backend: SQLite vs. DuckDB, specifically for vector/semantic search
 
-> **Superseded by §6.5** — kept as-is below since the reasoning is still
-> useful context, but the actual resolution ended up being neither
-> option: DataFusion alone (Rust, §6) handles parquet reads, vector
-> search, and ad-hoc SQL access, already proven in
-> `experiments/ic-similarity-service`, making this SQLite-vs-DuckDB
-> framing moot rather than answered.
-
-This is the concrete question issue #53 turns on, and the one place
-where "which backend" isn't just a taste call — it's worth grounding in
-actual data before deciding. Research below, current as of 2026-09-27.
-
-### 4.1 Why this matters for *this* project specifically
-
-The candidate dataset for #53 (SIC/NACE descriptions) is small:
-
-| Source | Rows |
-|---|---|
-| `source_data/sic_data/sic-codes.csv` | 1,006 |
-| `source_data/sic_data/industry-groups.csv` | 417 |
-| `source_data/sic_data/major-groups.csv` | 84 |
-| `source_data/sic_data/divisions.csv` | 11 |
-| `source_data/eu_sic_data/NACE_Rev2.1_Heading_All_Languages.tsv` | 1,048 |
-| **Total (US SIC + EU NACE only; UK/Japan not yet in-repo)** | **~2,566** |
-
-Even generously assuming UK and Japanese SIC roughly double or triple
-this, we're talking low-to-mid thousands of rows, not millions. That
-number matters a lot: it's squarely in the range where **brute-force
-vector search (linear scan) is fast enough that approximate nearest-
-neighbor (ANN) indexing like HNSW is a nice-to-have, not a requirement.**
-That reframes the comparison — it's not "which one has better ANN
-performance at scale," it's "which one is more reliable and simpler for
-a workload this size."
-
-**Update, per discussion:** vectors for both the industry-classification
-(SIC/NACE) data and company data will be **precomputed by Mediumroast
-upstream**, using multiple algorithms, some specifically SIMD-oriented —
-not generated at query time or ingest time by `company_dns` itself. This
-pushes the reframing above even further: the runtime cost in question is
-purely *similarity computation over already-computed vectors*, not
-embedding generation. That's exactly the workload both candidates handle
-well at this scale — `sqlite-vec`'s brute-force scan is explicitly SIMD-
-accelerated (AVX/NEON), and DuckDB's entire execution engine is
-vectorized/SIMD-oriented by design, so a brute-force `list_cosine_
-similarity`-style scan in DuckDB isn't just "acceptable because the
-dataset is small," it's arguably a natural fit for how DuckDB executes
-queries generally. Either way, real ANN indexing (HNSW) looks even less
-necessary than §4.1's row-count argument alone suggested — worth
-confirming with an actual benchmark once we're at that point, but it
-further weakens the case for taking on DuckDB VSS's production-readiness
-risk (§4.3) to get ANN we probably don't need.
-
-### 4.2 SQLite's vector search story
-
-- **`sqlite-vec`** (Alex Garcia) is the actively maintained, current
-  answer — pure C, no dependencies, runs anywhere SQLite runs (including
-  WASM/browser). Stores vectors in `vec0` virtual tables; K-nearest-
-  neighbor search via brute-force (linear) scan, SIMD-accelerated
-  (AVX/NEON), multiple distance metrics and vector types (float, int8,
-  binary). A community fork (`photostructure/sqlite-vec`) adds distance
-  constraints, pagination, and space-reclaiming `optimize` on top, with
-  releases as recent as February 2026.
-- Independent assessment (Marco Bambini, "The State of Vector Search in
-  SQLite"): calls `sqlite-vec` **production-ready**, with the caveat
-  that vectors live in separate virtual tables, so queries need explicit
-  joins back to the source data — a real but manageable ergonomic cost,
-  not a reliability risk.
-- **`sqlite-vector`** (sqlite.ai) is newer and more aggressive on
-  performance (claims 50% faster inserts, ~17x faster queries with
-  quantization vs. brute-force baselines) and allows vectors in ordinary
-  tables, not just virtual ones — worth a look, but less battle-tested
-  than `sqlite-vec`.
-- **`sqlite-vss`** (the older Faiss-based extension) is **abandoned** —
-  its own creator discontinued it over integration issues. Not a live
-  option; mentioning only so we don't accidentally reach for it.
-- **`libsql`/Turso** offers DiskAnn-based indexing, but indexing can take
-  *hours* for typical datasets — a mismatch for a dataset that's a few
-  thousand rows and changes rarely (SIC/NACE codes don't churn daily).
-
-### 4.3 DuckDB's vector search story
-
-- DuckDB's **VSS extension** adds HNSW-indexed vector similarity search
-  (`l2sq`, `cosine`, `ip` distance metrics) on its fixed-size `ARRAY`
-  type, built on the `usearch` library — real ANN, not brute-force.
-- It is explicitly labeled **experimental** by DuckDB itself.
-- The serious issue for a production service: **HNSW indexes only work
-  on in-memory databases by default.** Persisting the index to disk at
-  all requires opting into an experimental flag
-  (`hnsw_enable_experimental_persistence`), and DuckDB's own
-  documentation states plainly: *"we still recommend that you do not use
-  this feature in production environments,"* because **WAL (write-ahead
-  log) recovery for custom extension indexes isn't fully implemented** —
-  a crash or unexpected shutdown with uncommitted changes can **corrupt
-  the index or lose data**, requiring manual recovery.
-- Deletions are marked, not pruned, so index quality can degrade over
-  time without periodic maintenance — a real but secondary concern next
-  to the persistence issue.
-
-### 4.4 "Have our cake and eat it too": can DuckDB read SQLite directly?
-
-Yes, and it changes the shape of the split-decision option below. DuckDB
-ships a **core `sqlite` extension** (`ATTACH 'file.db' (TYPE sqlite);`,
-autoloaded on first use) that reads *and writes* SQLite database files
-directly via standard SQL — no ETL step, no copying data between
-engines. Unlike the VSS extension, this one is **not** flagged
-experimental in DuckDB's own docs; it reads as a stable, production-
-oriented core extension.
-
-Caveats worth knowing before leaning on this:
-
-- **Unconfirmed: does it see `sqlite-vec`'s `vec0` virtual tables?**
-  DuckDB's sqlite extension documentation only discusses standard
-  SQLite b-tree tables — it doesn't mention virtual tables or loading
-  third-party SQLite runtime extensions (like `sqlite-vec` itself) at
-  all. Silence isn't a "no," but it's not a "yes" either — DuckDB embeds
-  its own SQLite reader, and interpreting a `vec0` virtual table
-  requires the `sqlite-vec` module to be registered with *that* SQLite
-  instance, which may or may not happen automatically. **This needs a
-  small spike/prototype to confirm one way or the other before
-  designing around it** — don't assume it works without testing it.
-- **Type enforcement**: DuckDB is strictly typed, SQLite is weakly
-  typed; the extension converts via type-affinity rules, with an
-  `sqlite_all_varchar` escape hatch if needed (must be set before
-  attaching).
-- **Single writer at a time** across the attached SQLite file (multiple
-  concurrent readers are fine) — a non-issue for SIC/NACE data that
-  changes on Mediumroast's release cadence, not continuously.
-- Don't link multiple copies of the SQLite library into the same
-  process — DuckDB's own docs flag this as a real footgun, worth keeping
-  in mind if the Go binary *also* links a separate SQLite driver
-  directly (likely, if we want `sqlite-vec` support at all — see below).
-
-**What this actually buys us**, assuming the virtual-table question
-above resolves favorably (or even if it doesn't): the plain relational
-data sitting alongside the vectors — SIC/NACE codes, descriptions,
-metadata, whatever else lives in ordinary tables in that SQLite file —
-becomes queryable from DuckDB with zero duplication, joinable directly
-against parquet-backed company/EDGAR data in the same DuckDB query. The
-vector *similarity search* step itself may still need to go through
-SQLite directly (via a Go SQLite driver with `sqlite-vec` loaded) rather
-than through DuckDB's attachment, if the virtual-table question above
-comes back "no" — in which case the likely shape is: SQLite computes the
-nearest-neighbor SIC/NACE codes, hands back a small set of IDs, and
-DuckDB does everything else (joins, parquet reads, aggregation) using
-those IDs. Not as seamless as one unified query, but still a real "both,
-each doing what it's good at" architecture rather than a forced either/or.
-
-### 4.5 Comparison table
-
-| | SQLite (`sqlite-vec`) | DuckDB (VSS extension) |
-|---|---|---|
-| Index type | Brute-force / linear scan (SIMD-accelerated) | HNSW (true ANN) |
-| Maturity | Actively maintained, called production-ready by independent review | Explicitly experimental per DuckDB's own docs |
-| Disk persistence | Standard SQLite durability — no caveats | Requires an experimental flag; off by default |
-| Crash safety | Standard SQLite WAL | **DuckDB's own docs warn of data loss/index corruption on crash** — WAL recovery incomplete for this extension |
-| Fit for ~2.5-10k row SIC/NACE dataset | Good — brute-force is plenty fast at this scale | Overkill on the index side, and the extra ANN sophistication isn't worth the persistence risk here |
-| Query ergonomics | Extra join (vectors in a separate virtual table) | Native `ARRAY` column, no join needed |
-| Ecosystem trajectory | Multiple independent, competing implementations (`sqlite-vec`, `sqlite-vector`) actively improving | Single official extension, DuckDB-maintained, but stuck at "experimental" for a while |
-
-### 4.6 Where this leaves us
-
-The data supports your instinct: **for this project's actual workload
-(a few thousand rows of classification-code text, read far more often
-than written, where "good enough" similarity ranking beats sub-
-millisecond ANN), SQLite's vector story is the safer choice** —
-specifically because DuckDB's own documentation disqualifies its VSS
-extension from production use today, not because of any performance
-gap. If DuckDB's stance on WAL recovery/persistence changes later,
-that calculus could change too — worth a "recheck before committing"
-note rather than treating this as permanently settled.
-
-§4.4 makes the "split the decision" option below meaningfully more
-attractive than it would otherwise be: it's not just "run two separate
-embedded databases and stitch results together in application code," it
-could be "SQLite owns the vector index, DuckDB transparently reads
-everything else out of that same file plus parquet, in one query
-language." That's a materially nicer architecture *if* the virtual-table
-question resolves favorably — worth prototyping early, since it's cheap
-to test and the answer changes how much of the "split" option's cost is
-real.
-
-**This is a real tension with goal #5 above** (DuckDB replacing SQLite
-generally, for its analytical/parquet-native strengths — which matter a
-lot for reading the Mediumroast parquet data products directly). Options
-to think through together, not decided here:
-
-- **Split the decision**: DuckDB for the parquet-backed classification
-  data (its actual strength — querying parquet directly, no ETL step),
-  SQLite (with `sqlite-vec`) specifically for the semantic-search index
-  over SIC/NACE descriptions. Two embedded stores instead of one, but
-  each doing what it's better at.
-- **DuckDB only, brute-force vector search via plain SQL** (a
-  `list_cosine_similarity`-style scan, no HNSW index at all) — sidesteps
-  the experimental-index risk entirely, and at ~2.5-10k rows, a full
-  scan without an index may simply be fast enough that the HNSW question
-  is moot either way. Worth benchmarking before assuming this isn't
-  viable.
-- **SQLite only**, and read the parquet data products into SQLite at
-  ingest time rather than querying parquet natively — gives up DuckDB's
-  parquet-native convenience, keeps one storage engine.
-- **Revisit DuckDB's VSS extension status closer to implementation
-  time** — it's explicitly evolving (see the 2026 development activity
-  in the research above); "experimental today" isn't necessarily
-  "experimental when we actually build this."
-- **DataFusion-native (if §6 lands on Rust)**: skip the SQLite/DuckDB
-  question for vector search entirely. DataFusion already has a
-  SIMD-kernel `cosine_distance` function over Arrow arrays, and with
-  vectors arriving precomputed (§4.1) and both SIC/NACE *and* company
-  data arriving as Arrow-native `.feather` (§6.3), the same query engine
-  that reads the parquet/feather data could do the similarity search
-  too — no second embedded store at all. See §6.3 for the full
-  DataFusion-vs-DuckDB writeup this option depends on.
+> **Superseded by §6.5, moved to [Annex A](#annex-a-4-backend-sqlite-vs-duckdb-historical---superseded-by-65).**
+> The actual resolution ended up being neither SQLite nor DuckDB:
+> DataFusion alone (Rust, §6) handles parquet reads, vector search, and
+> ad-hoc SQL access, already proven in `experiments/ic-similarity-
+> service`, making this SQLite-vs-DuckDB framing moot rather than
+> answered. The full research and reasoning (§4.1-§4.6) is kept, unedited,
+> in the annex at the end of this doc — it's a real illustration of how
+> the decision process got here, not a live comparison to act on.
+> Internal `§4.x` references elsewhere in this doc point at that annex
+> content.
 
 ## 5. Data architecture: cache-with-fallback (EDGAR, Wikipedia)
 
@@ -1208,7 +1007,300 @@ is not itself the finding; the finding is "MiniLM beats mpnet on *this*
 dataset by every measure we have." That could look completely different
 once company vectors exist to test against.
 
-## 8. Go-specific open questions (assuming Go — revisit if §6 lands on Rust)
+## 8. Go-specific open questions (historical)
+
+> **Moot, moved to [Annex B](#annex-b-8-go-specific-open-questions-historical---moot-rust-decided-in-65).**
+> §6.5 decided Rust, not Go, so these Go-specific questions (web
+> framework choice, Go driver maturity, etc.) no longer need answering.
+> Kept in the annex as a record of what was still open when Go was a
+> live candidate, not as work to pick up.
+
+## 9. Explicitly out of scope for this document
+
+- No code, no repo scaffolding, no dependency choices locked in yet —
+  **with one explicit exception to resolve**: §7.2 flags that the
+  DataFusion/DuckDB spike likely needs some throwaway validation code to
+  actually run. Whether that counts as "code" under this line, or is a
+  separate disposable-prototype category, needs an explicit yes/no
+  before it gets written, not an assumption either way.
+- No decision yet on whether this is a new repo or a directory/branch
+  within the existing one.
+- No versioning/naming decided (is this "V4.0.0"? A different product
+  name entirely, given how far it diverges from the current
+  implementation?).
+- No language decision yet either (§6) — this document's own title still
+  says "Go, DuckDB" from the original framing; revisit the title once §6
+  actually resolves.
+
+## 10. Next steps
+
+1. Talk through §1's "why now, why all five together" framing and
+   capture the real answer here.
+2. ~~Settle §4 (SQLite vs. DuckDB for vector search)...~~ **Moot (§6.5)**
+   — Rust + DataFusion resolved this without picking either SQLite or
+   DuckDB; `ic-similarity-service` already does vector search via
+   DataFusion's `array_distance`. §4's original analysis moved to
+   [Annex A](#annex-a-4-backend-sqlite-vs-duckdb-historical---superseded-by-65).
+   Issue #53 can be updated to point at the DataFusion approach.
+3. §5's cache-with-fallback questions are now mostly settled (no
+   write-back, company semantic search in scope, Mediumroast sets the
+   cap) — remaining: pick one of the four ephemeral-cache options for
+   direct-lookup misses (or confirm "none," option 1), and get an actual
+   row-count estimate for the company parquet package for scale planning.
+4. ~~Settle §6 (Go vs. Rust)...~~ **Done (§6.5)** — Rust + DataFusion,
+   on both proof (four working prototypes) and the business reframing
+   argument, not the original KVS-compatibility premise.
+5. ~~**Immediate/concrete**: run §7's spike...~~ **Done (§7.3)** —
+   DuckDB's `arrow` extension failed to open the real, ZSTD-compressed
+   `tmp/us_flat.feather`; DataFusion read it directly with one line of
+   config. Concrete, not theoretical, evidence for §6.3/§6.4's leaning.
+6. ~~**New, follow-on**: get a vectors-included `.feather` file...~~
+   **Done (§7.4-§7.8)** — real vectors-included file obtained, DataFusion's
+   `array_distance` validated against it, model choice narrowed to
+   `all-MiniLM-L6-v2` alone. `sqlite-vec`/DuckDB comparison never needed,
+   per item 2 above.
+7. ~~Work through §8's Go-specific questions...~~ **Moot (§6.5)** — Rust
+   was decided, so Go's web-framework/driver/deployment questions don't
+   apply. §8's original content moved to
+   [Annex B](#annex-b-8-go-specific-open-questions-historical---moot-rust-decided-in-65).
+   The equivalent Rust-side questions (Axum vs. alternatives, etc.) are
+   largely answered in practice by `ic-similarity-service` already using
+   Axum + `tower-http`.
+8. Decide issue dispositions from §3 and act on them (comment/close/
+   relabel as agreed).
+9. New: work through [`company-dns-ux.md`](company-dns-ux.md) together —
+   the UX layer this doc's §1/§6.5 now points to.
+
+---
+
+## Annex
+
+Superseded sections, kept verbatim (not edited after the fact) as a
+record of the actual decision process — how the reasoning moved from
+"here are the live options" to §6.5's answer — not as current guidance.
+Nothing here should be read as a live comparison to act on; `§4.x`/`§8`
+references elsewhere in this doc point at this content.
+
+### Annex A (§4): Backend: SQLite vs. DuckDB (historical — superseded by §6.5)
+
+> **Historical.** This entire section (§4-§4.6) was written before Rust +
+> DataFusion was decided (§6.5). DataFusion resolved the question these
+> sections were trying to answer without choosing either SQLite or
+> DuckDB — `experiments/ic-similarity-service` already does vector
+> search, parquet/feather reads, and ad-hoc SQL through DataFusion alone.
+> Kept below unedited for the reasoning trail.
+
+This is the concrete question issue #53 turns on, and the one place
+where "which backend" isn't just a taste call — it's worth grounding in
+actual data before deciding. Research below, current as of 2026-09-27.
+
+#### 4.1 Why this matters for *this* project specifically
+
+The candidate dataset for #53 (SIC/NACE descriptions) is small:
+
+| Source | Rows |
+|---|---|
+| `source_data/sic_data/sic-codes.csv` | 1,006 |
+| `source_data/sic_data/industry-groups.csv` | 417 |
+| `source_data/sic_data/major-groups.csv` | 84 |
+| `source_data/sic_data/divisions.csv` | 11 |
+| `source_data/eu_sic_data/NACE_Rev2.1_Heading_All_Languages.tsv` | 1,048 |
+| **Total (US SIC + EU NACE only; UK/Japan not yet in-repo)** | **~2,566** |
+
+Even generously assuming UK and Japanese SIC roughly double or triple
+this, we're talking low-to-mid thousands of rows, not millions. That
+number matters a lot: it's squarely in the range where **brute-force
+vector search (linear scan) is fast enough that approximate nearest-
+neighbor (ANN) indexing like HNSW is a nice-to-have, not a requirement.**
+That reframes the comparison — it's not "which one has better ANN
+performance at scale," it's "which one is more reliable and simpler for
+a workload this size."
+
+**Update, per discussion:** vectors for both the industry-classification
+(SIC/NACE) data and company data will be **precomputed by Mediumroast
+upstream**, using multiple algorithms, some specifically SIMD-oriented —
+not generated at query time or ingest time by `company_dns` itself. This
+pushes the reframing above even further: the runtime cost in question is
+purely *similarity computation over already-computed vectors*, not
+embedding generation. That's exactly the workload both candidates handle
+well at this scale — `sqlite-vec`'s brute-force scan is explicitly SIMD-
+accelerated (AVX/NEON), and DuckDB's entire execution engine is
+vectorized/SIMD-oriented by design, so a brute-force `list_cosine_
+similarity`-style scan in DuckDB isn't just "acceptable because the
+dataset is small," it's arguably a natural fit for how DuckDB executes
+queries generally. Either way, real ANN indexing (HNSW) looks even less
+necessary than §4.1's row-count argument alone suggested — worth
+confirming with an actual benchmark once we're at that point, but it
+further weakens the case for taking on DuckDB VSS's production-readiness
+risk (§4.3) to get ANN we probably don't need.
+
+#### 4.2 SQLite's vector search story
+
+- **`sqlite-vec`** (Alex Garcia) is the actively maintained, current
+  answer — pure C, no dependencies, runs anywhere SQLite runs (including
+  WASM/browser). Stores vectors in `vec0` virtual tables; K-nearest-
+  neighbor search via brute-force (linear) scan, SIMD-accelerated
+  (AVX/NEON), multiple distance metrics and vector types (float, int8,
+  binary). A community fork (`photostructure/sqlite-vec`) adds distance
+  constraints, pagination, and space-reclaiming `optimize` on top, with
+  releases as recent as February 2026.
+- Independent assessment (Marco Bambini, "The State of Vector Search in
+  SQLite"): calls `sqlite-vec` **production-ready**, with the caveat
+  that vectors live in separate virtual tables, so queries need explicit
+  joins back to the source data — a real but manageable ergonomic cost,
+  not a reliability risk.
+- **`sqlite-vector`** (sqlite.ai) is newer and more aggressive on
+  performance (claims 50% faster inserts, ~17x faster queries with
+  quantization vs. brute-force baselines) and allows vectors in ordinary
+  tables, not just virtual ones — worth a look, but less battle-tested
+  than `sqlite-vec`.
+- **`sqlite-vss`** (the older Faiss-based extension) is **abandoned** —
+  its own creator discontinued it over integration issues. Not a live
+  option; mentioning only so we don't accidentally reach for it.
+- **`libsql`/Turso** offers DiskAnn-based indexing, but indexing can take
+  *hours* for typical datasets — a mismatch for a dataset that's a few
+  thousand rows and changes rarely (SIC/NACE codes don't churn daily).
+
+#### 4.3 DuckDB's vector search story
+
+- DuckDB's **VSS extension** adds HNSW-indexed vector similarity search
+  (`l2sq`, `cosine`, `ip` distance metrics) on its fixed-size `ARRAY`
+  type, built on the `usearch` library — real ANN, not brute-force.
+- It is explicitly labeled **experimental** by DuckDB itself.
+- The serious issue for a production service: **HNSW indexes only work
+  on in-memory databases by default.** Persisting the index to disk at
+  all requires opting into an experimental flag
+  (`hnsw_enable_experimental_persistence`), and DuckDB's own
+  documentation states plainly: *"we still recommend that you do not use
+  this feature in production environments,"* because **WAL (write-ahead
+  log) recovery for custom extension indexes isn't fully implemented** —
+  a crash or unexpected shutdown with uncommitted changes can **corrupt
+  the index or lose data**, requiring manual recovery.
+- Deletions are marked, not pruned, so index quality can degrade over
+  time without periodic maintenance — a real but secondary concern next
+  to the persistence issue.
+
+#### 4.4 "Have our cake and eat it too": can DuckDB read SQLite directly?
+
+Yes, and it changes the shape of the split-decision option below. DuckDB
+ships a **core `sqlite` extension** (`ATTACH 'file.db' (TYPE sqlite);`,
+autoloaded on first use) that reads *and writes* SQLite database files
+directly via standard SQL — no ETL step, no copying data between
+engines. Unlike the VSS extension, this one is **not** flagged
+experimental in DuckDB's own docs; it reads as a stable, production-
+oriented core extension.
+
+Caveats worth knowing before leaning on this:
+
+- **Unconfirmed: does it see `sqlite-vec`'s `vec0` virtual tables?**
+  DuckDB's sqlite extension documentation only discusses standard
+  SQLite b-tree tables — it doesn't mention virtual tables or loading
+  third-party SQLite runtime extensions (like `sqlite-vec` itself) at
+  all. Silence isn't a "no," but it's not a "yes" either — DuckDB embeds
+  its own SQLite reader, and interpreting a `vec0` virtual table
+  requires the `sqlite-vec` module to be registered with *that* SQLite
+  instance, which may or may not happen automatically. **This needs a
+  small spike/prototype to confirm one way or the other before
+  designing around it** — don't assume it works without testing it.
+- **Type enforcement**: DuckDB is strictly typed, SQLite is weakly
+  typed; the extension converts via type-affinity rules, with an
+  `sqlite_all_varchar` escape hatch if needed (must be set before
+  attaching).
+- **Single writer at a time** across the attached SQLite file (multiple
+  concurrent readers are fine) — a non-issue for SIC/NACE data that
+  changes on Mediumroast's release cadence, not continuously.
+- Don't link multiple copies of the SQLite library into the same
+  process — DuckDB's own docs flag this as a real footgun, worth keeping
+  in mind if the Go binary *also* links a separate SQLite driver
+  directly (likely, if we want `sqlite-vec` support at all — see below).
+
+**What this actually buys us**, assuming the virtual-table question
+above resolves favorably (or even if it doesn't): the plain relational
+data sitting alongside the vectors — SIC/NACE codes, descriptions,
+metadata, whatever else lives in ordinary tables in that SQLite file —
+becomes queryable from DuckDB with zero duplication, joinable directly
+against parquet-backed company/EDGAR data in the same DuckDB query. The
+vector *similarity search* step itself may still need to go through
+SQLite directly (via a Go SQLite driver with `sqlite-vec` loaded) rather
+than through DuckDB's attachment, if the virtual-table question above
+comes back "no" — in which case the likely shape is: SQLite computes the
+nearest-neighbor SIC/NACE codes, hands back a small set of IDs, and
+DuckDB does everything else (joins, parquet reads, aggregation) using
+those IDs. Not as seamless as one unified query, but still a real "both,
+each doing what it's good at" architecture rather than a forced either/or.
+
+#### 4.5 Comparison table
+
+| | SQLite (`sqlite-vec`) | DuckDB (VSS extension) |
+|---|---|---|
+| Index type | Brute-force / linear scan (SIMD-accelerated) | HNSW (true ANN) |
+| Maturity | Actively maintained, called production-ready by independent review | Explicitly experimental per DuckDB's own docs |
+| Disk persistence | Standard SQLite durability — no caveats | Requires an experimental flag; off by default |
+| Crash safety | Standard SQLite WAL | **DuckDB's own docs warn of data loss/index corruption on crash** — WAL recovery incomplete for this extension |
+| Fit for ~2.5-10k row SIC/NACE dataset | Good — brute-force is plenty fast at this scale | Overkill on the index side, and the extra ANN sophistication isn't worth the persistence risk here |
+| Query ergonomics | Extra join (vectors in a separate virtual table) | Native `ARRAY` column, no join needed |
+| Ecosystem trajectory | Multiple independent, competing implementations (`sqlite-vec`, `sqlite-vector`) actively improving | Single official extension, DuckDB-maintained, but stuck at "experimental" for a while |
+
+#### 4.6 Where this leaves us
+
+The data supports your instinct: **for this project's actual workload
+(a few thousand rows of classification-code text, read far more often
+than written, where "good enough" similarity ranking beats sub-
+millisecond ANN), SQLite's vector story is the safer choice** —
+specifically because DuckDB's own documentation disqualifies its VSS
+extension from production use today, not because of any performance
+gap. If DuckDB's stance on WAL recovery/persistence changes later,
+that calculus could change too — worth a "recheck before committing"
+note rather than treating this as permanently settled.
+
+§4.4 makes the "split the decision" option below meaningfully more
+attractive than it would otherwise be: it's not just "run two separate
+embedded databases and stitch results together in application code," it
+could be "SQLite owns the vector index, DuckDB transparently reads
+everything else out of that same file plus parquet, in one query
+language." That's a materially nicer architecture *if* the virtual-table
+question resolves favorably — worth prototyping early, since it's cheap
+to test and the answer changes how much of the "split" option's cost is
+real.
+
+**This is a real tension with goal #5 above** (DuckDB replacing SQLite
+generally, for its analytical/parquet-native strengths — which matter a
+lot for reading the Mediumroast parquet data products directly). Options
+to think through together, not decided here:
+
+- **Split the decision**: DuckDB for the parquet-backed classification
+  data (its actual strength — querying parquet directly, no ETL step),
+  SQLite (with `sqlite-vec`) specifically for the semantic-search index
+  over SIC/NACE descriptions. Two embedded stores instead of one, but
+  each doing what it's better at.
+- **DuckDB only, brute-force vector search via plain SQL** (a
+  `list_cosine_similarity`-style scan, no HNSW index at all) — sidesteps
+  the experimental-index risk entirely, and at ~2.5-10k rows, a full
+  scan without an index may simply be fast enough that the HNSW question
+  is moot either way. Worth benchmarking before assuming this isn't
+  viable.
+- **SQLite only**, and read the parquet data products into SQLite at
+  ingest time rather than querying parquet natively — gives up DuckDB's
+  parquet-native convenience, keeps one storage engine.
+- **Revisit DuckDB's VSS extension status closer to implementation
+  time** — it's explicitly evolving (see the 2026 development activity
+  in the research above); "experimental today" isn't necessarily
+  "experimental when we actually build this."
+- **DataFusion-native (if §6 lands on Rust)**: skip the SQLite/DuckDB
+  question for vector search entirely. DataFusion already has a
+  SIMD-kernel `cosine_distance` function over Arrow arrays, and with
+  vectors arriving precomputed (§4.1) and both SIC/NACE *and* company
+  data arriving as Arrow-native `.feather` (§6.3), the same query engine
+  that reads the parquet/feather data could do the similarity search
+  too — no second embedded store at all. See §6.3 for the full
+  DataFusion-vs-DuckDB writeup this option depends on.
+
+### Annex B (§8): Go-specific open questions (historical — moot, Rust decided in §6.5)
+
+> **Historical.** Written when Go was still a live candidate for the
+> rewrite language. §6.5 decided Rust instead, so none of these
+> questions need answering as written — kept for the record of what was
+> considered.
 
 - Web framework: stdlib `net/http` (Go 1.22+'s routing is now solid
   enough that a framework may not be needed at all) vs. something like
@@ -1233,63 +1325,3 @@ once company vectors exist to test against.
   entire-service rewrite? Given the scope, a side-by-side period seems
   likely to be worth it, but at what granularity (whole-service, or
   endpoint-by-endpoint)?
-
-## 9. Explicitly out of scope for this document
-
-- No code, no repo scaffolding, no dependency choices locked in yet —
-  **with one explicit exception to resolve**: §7.2 flags that the
-  DataFusion/DuckDB spike likely needs some throwaway validation code to
-  actually run. Whether that counts as "code" under this line, or is a
-  separate disposable-prototype category, needs an explicit yes/no
-  before it gets written, not an assumption either way.
-- No decision yet on whether this is a new repo or a directory/branch
-  within the existing one.
-- No versioning/naming decided (is this "V4.0.0"? A different product
-  name entirely, given how far it diverges from the current
-  implementation?).
-- No language decision yet either (§6) — this document's own title still
-  says "Go, DuckDB" from the original framing; revisit the title once §6
-  actually resolves.
-
-## 10. Next steps
-
-1. Talk through §1's "why now, why all five together" framing and
-   capture the real answer here.
-2. Settle §4 (SQLite vs. DuckDB for vector search) enough to know what
-   to tell issue #53 — doesn't need to be final, just enough to update
-   the issue with a direction. Concretely: spike whether DuckDB's
-   `sqlite` extension can see `sqlite-vec`'s `vec0` virtual tables
-   (§4.4) — cheap to test, and the answer meaningfully changes how
-   attractive the "split" architecture option is. Note this now depends
-   partly on §6/§6.3: if Rust+DataFusion is chosen, the DataFusion-native
-   vector-search option (§4.6's last bullet) may make the whole
-   SQLite-vs-DuckDB question moot for the vector-search piece — worth
-   settling the language question first, or at least in parallel, rather
-   than strictly before it.
-3. §5's cache-with-fallback questions are now mostly settled (no
-   write-back, company semantic search in scope, Mediumroast sets the
-   cap) — remaining: pick one of the four ephemeral-cache options for
-   direct-lookup misses (or confirm "none," option 1), and get an actual
-   row-count estimate for the company parquet package so §4's backend
-   decision accounts for that dataset too, not just SIC/NACE.
-4. Settle §6 (Go vs. Rust) — specifically, answer the team-fit question
-   §6.2 flagged (any existing Rust experience?), and decide whether the
-   parquet/Arrow ecosystem advantage is enough to outweigh Go's simpler
-   deployment story, independent of the KVS-compatibility premise that
-   turned out not to hold up.
-5. ~~**Immediate/concrete**: run §7's spike...~~ **Done (§7.3)** —
-   DuckDB's `arrow` extension failed to open the real, ZSTD-compressed
-   `tmp/us_flat.feather`; DataFusion read it directly with one line of
-   config. Concrete, not theoretical, evidence for §6.3/§6.4's leaning.
-6. **New, follow-on**: get a vectors-included `.feather` file (once
-   Mediumroast has one to share) and repeat something like §7's spike
-   scoped to the vector-search question specifically — test DataFusion's
-   `cosine_distance` UDF (§6.3) against real precomputed vectors, and/or
-   `sqlite-vec` loaded via `rusqlite`/`mattn`-style drivers (§4.2/§4.4),
-   to give §4's decision the same kind of real-file evidence §7.3 just
-   gave §6.
-7. Work through §8's Go-specific questions (or their Rust equivalents,
-   if §6 lands elsewhere) — §7.3's result is a real point in Rust's
-   favor now, worth weighing alongside the team-fit question from §6.2.
-8. Decide issue dispositions from §3 and act on them (comment/close/
-   relabel as agreed).
