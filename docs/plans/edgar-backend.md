@@ -3,7 +3,12 @@
 Status: **Draft — research only, no code written yet.** This doc exists
 to work out what the current Python EDGAR implementation actually does,
 survey what exists in the Rust ecosystem for the same job, and lay out
-the real options — not to commit to one yet.
+the real options — not to commit to one yet. **Decided (2026-09-28):
+the CIK/10-K/10-Q index (§1.1) is a direct `company_dns` concern, not
+something that moves upstream to Mediumroast's own pipeline.** This
+resolves §3/§4's earlier open question about whether index-building was
+even `company_dns`'s decision to make — it is, both options in §3 stay
+fully live, and neither is moot.
 Owner: michael.hay@mediumroast.io
 Scope: how the new `company_dns` (V4.0.0, Rust + DataFusion — see
 [`go-duckdb-rewrite.md`](go-duckdb-rewrite.md) §6.5/§9) gets its EDGAR
@@ -154,11 +159,11 @@ arrive (`go-duckdb-rewrite.md` §0/§1).
 - **Con**: item 1.2 (live firmographics fallback) still needs a Rust
   answer regardless of what happens here — this option only addresses
   index-building, not the live-fallback path.
-- **Open**: does `company_dns` even own index-building going forward,
-  or does Mediumroast's own pipeline produce the EDGAR `.feather`
-  package the same way it does for IC/classification data (§5's
-  "Mediumroast-supplied `.feather` data product" framing)? If so, this
-  option may be moot — not `company_dns`'s decision to make at all.
+- **Settled**: index-building is a `company_dns` concern (see this
+  doc's status line) — this option is live, not moot. The question is
+  purely "does `company_dns` build its CIK/10-K/10-Q index via `pyedgar`
+  as an external step" vs. Option 2's "does it build that index natively
+  in Rust," not "does `company_dns` build it at all."
 
 ### Option 2: A small Rust module replicating what `pyedgar` does
 
@@ -182,19 +187,19 @@ avoid re-implementing that parsing from scratch.
   means depending on a new, solo-maintained, 638-download crate for a
   meaningfully load-bearing piece of the pipeline — a real risk, not a
   hypothetical one, per §2.1's maturity note.
-- **Open**: same question as Option 1's last bullet — if Mediumroast
-  ends up owning EDGAR index-building upstream (the same way it now
-  owns IC-classification and company data), this whole option may be
-  solving a problem `company_dns` doesn't actually have anymore.
+- **Settled**: same resolution as Option 1's last bullet — index-building
+  is a `company_dns` concern, not something Mediumroast owns upstream, so
+  this option is solving a real problem, not a hypothetical one.
 
 ## 4. Open questions
 
-- **Does `company_dns` still own EDGAR index-building at all**, or does
-  that move upstream to Mediumroast's own data pipeline, consistent
-  with how IC-classification and enriched-company data now arrive as
-  `.feather` packages (`go-duckdb-rewrite.md` §0)? This changes the
-  shape of both options above substantially and should probably be
-  settled before spiking either one.
+- ~~Does `company_dns` still own EDGAR index-building at all, or does
+  that move upstream to Mediumroast's own data pipeline?~~ **Decided
+  (2026-09-28, this doc's status line): yes, the CIK/10-K/10-Q index is
+  a direct `company_dns` concern.** Unlike IC-classification and
+  enriched-company data, this isn't something Mediumroast supplies as a
+  `.feather` package — `company_dns` builds and owns it, via whichever
+  of §3's two options wins.
 - **If `edgarkit` is seriously considered for Option 2**: a real spike
   against actual SEC data (not just reading its README) is needed
   before depending on it — consistent with this project's own standard
@@ -217,20 +222,23 @@ avoid re-implementing that parsing from scratch.
 
 ## 5. Next steps
 
-1. Settle the "does `company_dns` still own index-building" question
-   (§4) — it changes which of §3's two options is even worth spiking.
-2. If Option 2 stays live: a small, disposable spike (same spirit as
-   `go-duckdb-rewrite.md` §7's `df-spike`) testing `edgarkit`'s `index`
-   and `company` features against real SEC data, not committed to the
-   repo.
-3. If Option 1 stays live: confirm what a `pyedgar`-as-CLI step would
+1. ~~Settle the "does `company_dns` still own index-building" question
+   (§4)...~~ **Done** — yes, it's a direct `company_dns` concern (this
+   doc's status line). Both of §3's options are live; next is choosing
+   between them, not settling whether either is needed.
+2. A small, disposable spike (same spirit as `go-duckdb-rewrite.md`
+   §7's `df-spike`) testing `edgarkit`'s `index` and `company` features
+   against real SEC data, not committed to the repo — the concrete
+   evidence Option 2 needs before it's a real contender against
+   Option 1's zero-risk-on-parsing story.
+3. In parallel, confirm what a `pyedgar`-as-CLI step (Option 1) would
    actually look like — is it a thin wrapper around today's
    `lib/prepare_edgar_data.py` logic, or does it need rework to emit
    `.feather` instead of populating SQLite directly?
-4. Either way, item 1.2 (live firmographics fallback) can likely move
-   forward independently and sooner — it's the lower-risk half of this
-   doc's scope, doesn't depend on §4's open question, and is small
+4. Item 1.2 (live firmographics fallback) can likely move forward
+   independently and sooner — it's the lower-risk half of this doc's
+   scope, doesn't depend on the Option 1 vs. 2 choice, and is small
    enough to just build directly in Rust once `go-duckdb-rewrite.md`
    §5.3's fallback-path questions are answered.
-5. No code yet, per this doc's own status line — the above are spike
-   proposals, not commitments.
+5. No code yet, per this doc's own status line — items 2/3 above are
+   spike proposals, not commitments.
