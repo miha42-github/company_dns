@@ -24,14 +24,28 @@ constraints at once. Confirmed by trying to pin around it three
 different ways before concluding this is real, not a mistake in this
 project's own `Cargo.toml`.
 
-**Practical effect**: `edgarkit` and DataFusion 42 cannot share one
-`Cargo.toml` today. `edgar-spike` writes the `.feather` file using only
-the narrow `arrow-array`/`arrow-schema`/`arrow-ipc` crates (no
+**Practical effect**: `edgarkit` and DataFusion **42** cannot share one
+`Cargo.toml`. `edgar-spike` writes the `.feather` file using only the
+narrow `arrow-array`/`arrow-schema`/`arrow-ipc` crates (no
 `arrow-arith`, no `datafusion`); this crate reads it back with
 `datafusion` (no `edgarkit`). Two processes, not one — a real
 architectural constraint worth carrying into
 [`docs/plans/edgar-backend.md`](../../docs/plans/edgar-backend.md)'s
 Option 2 discussion, not just a spike inconvenience.
+
+**This is specific to DataFusion 42, not permanent**: checked whether
+a newer DataFusion release already fixed the upstream `arrow-arith`
+bug, and it has — DataFusion 55.1.0 pulls `arrow-arith` 59.3.0, which
+disambiguates the exact `quarter()` call that broke here and relaxes
+the `chrono` bound to `^0.4.40` (satisfied by `edgarkit`'s `>=0.4.45`).
+Verified with a real, throwaway test, not just reading version numbers:
+built `edgarkit` + DataFusion 55 in one `Cargo.toml`, and both a live
+`edgarkit` fetch and a real DataFusion SQL query ran correctly in the
+same process. Not acted on here — this project's spikes are
+deliberately pinned to DataFusion 42.2.0, matching
+`go-duckdb-rewrite.md` §7's already-validated results — but see that
+doc's `edgar-backend.md` §2.1/§4 for the tradeoff of upgrading
+project-wide versus keeping this two-crate split.
 
 ## Running it
 
