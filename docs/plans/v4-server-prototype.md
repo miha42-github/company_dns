@@ -149,6 +149,18 @@ pattern, generalized from a one-off test into a real ingest step:
   whether/how V4 eventually does the same is a real question but not
   this prototype's — it needs *a* real catalog to serve V3-parity
   endpoints against, not the complete one.
+- **Decided (2026-09-28): catalog freshness is a build-time concern,
+  not a runtime one.** The real service's refresh story is a GitHub
+  Actions workflow that rebuilds the image monthly with a freshly
+  ingested catalog baked in — the same shape this ingest step already
+  is (§4's ingest binary, run once at build time, `.feather` written to
+  `./tmp` and packaged into the image), just on a schedule rather than
+  invoked manually for this prototype. **This means the server itself
+  never needs to know about refreshing** — no cron, no background
+  re-ingest job, no "is the catalog stale" logic inside the running
+  process. Out of scope for this prototype specifically (no CI workflow
+  being built here, just the ingest step the workflow would eventually
+  call), but no longer an open question about *how* it would work.
 - **EDGAR spillover** (live firmographics for CIKs not in the catalog,
   or a catalog entry that's gone stale) is `edgar-cache-spike`'s
   cache-on-top-of-`edgarkit` pattern, wired directly into the `edgar`
@@ -176,7 +188,11 @@ handling can stay a simple query-string length check at the API level
 for now); the calibrated-label response shaping from that same doc is
 worth carrying into the JSON response body's field *names* even before
 there's a UI to render them, so the API doesn't need a breaking change
-once §9's UX work resumes.
+once §9's UX work resumes. **Envelope**: since the breaking-change
+question for V4-only endpoints is explicitly deferred (§10), this
+starts out wrapped in V3's `{code, message, module, data, dependencies}`
+envelope too — the simplest default, not a decision that this endpoint
+is locked into that shape long-term.
 
 ### 5.2 US SIC lookup (V3 parity)
 
@@ -219,17 +235,16 @@ before the comparison means anything:
 
 - **V3's name search is `LIKE '%name%'`-fuzzy** (both `lib/sic.py` and
   `lib/edgar.py`, `EdgarQueries.get_all_ciks`/`get_all_details`) against
-  a SQLite table. **V4's equivalent, backed by a DataFusion query
-  against a `.feather` table, needs its own matching semantics decided
-  explicitly** — a literal `LIKE`-equivalent (DataFusion supports `LIKE`
-  in SQL directly, so this could be a drop-in), a prefix/substring
-  match, or something closer to the similarity search in §5.1. Worth
-  deciding once, consistently, for both SIC-description and
-  EDGAR-company-name search, rather than each endpoint inventing its
-  own answer. **Recommendation, not yet decided**: start with
-  DataFusion's own `LIKE` operator for an honest apples-to-apples
-  comparison against V3's behavior first; revisit only if that's
-  actually a wrong fit once real usage shows it.
+  a SQLite table. **Decided (2026-09-28): V4 matches V3's `LIKE`
+  behavior exactly** — DataFusion's own `LIKE` operator, a direct
+  drop-in, applied consistently to both SIC-description and
+  EDGAR-company-name search rather than each endpoint inventing its own
+  answer. This keeps the §7 comparison honestly apples-to-apples for the
+  prototype. Anything more sophisticated (prefix/substring tuning, or
+  something closer to §5.1's similarity search applied to name lookup
+  too) is explicitly **deferred to when V4 has additional company data
+  to justify it** — not a prototype-scope concern, and not worth
+  designing against speculatively before that data exists.
 - **V4's EDGAR catalog (§4) is one recent quarter**, not V3's
   multi-year `companies` table (built from whatever `pyedgar`'s
   `IndexMaker` has accumulated in the current deployment). A
@@ -237,10 +252,10 @@ before the comparison means anything:
   return fewer/different results for older filings (a real, disclosed
   scope difference, not a bug) or scope the comparison's test company
   list (`perf_tests/companies.py`) to companies with filings inside
-  V4's catalog window. **Recommendation**: disclose the difference in
-  the harness's report rather than trying to hide it by cherry-picking
-  test data — this is a prototype-scope limitation worth being visible
-  about, not something to paper over.
+  V4's catalog window. **Decided (2026-09-28): disclose the difference
+  in the harness's report** rather than trying to hide it by
+  cherry-picking test data — this is a prototype-scope limitation worth
+  being visible about, not something to paper over.
 
 ## 7. Extending the Python perf harness for V3-vs-V4 comparison
 
@@ -345,21 +360,27 @@ something real to design a UX around rather than a hypothetical one.
   explicitly (§3, `go-duckdb-rewrite.md`/`edgar-backend.md` status
   lines) — no longer a precondition to confirm, a settled starting
   point.
-- **§6's matching-semantics decision** (V4's `LIKE`-equivalent vs. some
-  other search behavior for SIC-description and EDGAR-name search)
-  needs to be settled once, consistently, before those endpoints are
-  built — not discovered endpoint-by-endpoint.
-- **EDGAR catalog refresh policy** — this prototype ingests one quarter
-  once; a real service needs a story for keeping the catalog current
-  (re-run the ingest periodically? on a schedule? manually?). Explicitly
-  out of scope for the prototype, but worth naming so it doesn't get
-  mistaken for solved.
-- **Response envelope shape** — V3's `{code, message, module, data,
-  dependencies}` envelope (`go-duckdb-rewrite.md` §2) needs an explicit
-  decision on whether V4 keeps it verbatim (simplest for the perf
-  harness's comparison and for anything downstream still expecting it)
-  or documents a deliberate replacement. Not decided here; assumed kept
-  as-is unless a reason to change it shows up while building §5/§6.
+- ~~§6's matching-semantics decision...~~ **Decided (2026-09-28, §6)**:
+  V4 matches V3's `LIKE` behavior exactly; anything more sophisticated
+  deferred until additional company data justifies it.
+- ~~EDGAR catalog refresh policy...~~ **Decided (2026-09-28, §4)**: a
+  monthly GitHub Actions workflow rebuilds the image with a freshly
+  ingested catalog baked in — a build-time concern, not something the
+  running server needs any logic for.
+- **Response envelope shape — decided for V3 endpoints, deferred for
+  V4-only ones (2026-09-28).** V3's `{code, message, module, data,
+  dependencies}` envelope (`go-duckdb-rewrite.md` §2) **must stay
+  identical, verbatim, for every V4 endpoint that's a V3-parity
+  replacement** (§5.2/§5.3) — anything downstream still expecting that
+  shape, and the §7 perf comparison itself, depend on it not changing.
+  For genuinely new V4-only endpoints (§5.1's SIC similarity search,
+  anything else V3 has no equivalent for), breaking changes to the
+  envelope are explicitly on the table — but that discussion is
+  deferred, not decided here. §5.1 should ship with *some* envelope
+  (V3's, for now, being the simplest default) rather than block on this
+  question; revisiting it isn't a breaking change to anything yet, since
+  nothing downstream depends on a V4-only endpoint's shape before it
+  exists.
 
 ## 11. Next steps
 
