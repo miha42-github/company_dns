@@ -472,6 +472,18 @@ comparisons (Annex D):
 
 ## 7. Spike plan: DataFusion against a real Mediumroast `.feather` file
 
+> **DuckDB's role here is historical.** This section was originally
+> designed as a side-by-side DataFusion-vs-DuckDB spike, back when both
+> were live candidates (§6.3/Annex D). §6.5 has since settled on Rust +
+> DataFusion, with no DuckDB anywhere in the architecture. The DuckDB
+> side of the testing (its failures, the two rounds of misdiagnosis and
+> correction, the eventual workarounds) is real, useful history — it's
+> what actually proved DataFusion was the better fit, not just
+> documentation claims — so it's kept, moved to
+> [Annex E](#annex-e-73-74-duckdb-comparison-results-historical---duckdb-not-used),
+> rather than deleted. What's below is trimmed to the DataFusion-only
+> results, which are this project's actual, current findings.
+
 Everything in §6.3 is grounded in DuckDB's and DataFusion's own
 documentation, not in anything actually tested against real Mediumroast
 data. Before that section's conclusions carry any real weight in a
@@ -571,51 +583,23 @@ count table), a good sign for schema/data parity between what
    vector-search question), though that's still ahead of this file, not
    confirmed by it.
 
-### 7.3 Results: DuckDB vs. DataFusion, both run against the real file
+### 7.3 Results: DataFusion against the real file
 
-Both halves of §7.1 actually run now — `duckdb` (1.5.5) and a disposable
-Rust/`datafusion` (42.2.0) spike, both installed via Homebrew/cargo for
-this test, both run directly against `tmp/us_flat.feather` (the real,
+> **DuckDB was also run side-by-side here** (§7.1 item 5) — it failed on
+> the file as shipped, through two rounds of misdiagnosis and
+> correction. That whole thread is real, useful history (it's what
+> actually proved DataFusion was the better fit for this project's data,
+> not just documentation claims) but DuckDB isn't part of the
+> architecture (§6.5), so the full account — including the original
+> wrong diagnosis and its correction — has moved to
+> [Annex E](#annex-e-73-74-duckdb-comparison-results-historical---duckdb-not-used).
+> What's below is DataFusion's side only.
+
+A disposable Rust/`datafusion` (42.2.0) spike, installed via cargo for
+this test, run directly against `tmp/us_flat.feather` (the real,
 ZSTD-compressed file as shipped, not a modified copy). This is the
 single most concrete finding in this document so far — not documentation
 research, actual behavior on real Mediumroast data.
-
-**DuckDB: fails on the file as shipped.**
-
-```
-INSTALL arrow FROM community; LOAD arrow;
-SELECT * FROM read_arrow('tmp/us_flat.feather') LIMIT 5;
-```
-```
-Invalid Input Error: arrow_scan: get_next failed(): InternalException:
-"...Compression type with value 1 not supported by this build of
-nanoarrow..."
-```
-
-> **Correction (§7.4)**: the paragraph originally here concluded this was
-> a ZSTD compression-support gap, based on the error message and on
-> decompressing the file making it work. §7.4 found that conclusion was
-> **wrong** — a follow-up test isolated the actual trigger to a `pandas`
-> `RangeIndex` entry in the file's schema metadata, not the compression
-> codec at all. DuckDB's `arrow` extension still has a real bug here,
-> just a different one than first diagnosed; the "no ZSTD/LZ4 for
-> reads" line from DuckDB's own roadmap (§6.3) is still accurate as
-> *documentation*, it just isn't what actually caused *this* failure.
-> Left the original (wrong) reasoning below struck through rather than
-> deleted, so the correction in §7.4 has something concrete to point at.
-
-~~Confirmed this is a compression-support gap, not a corrupt file or a
-one-off bug: decompressing the file to an uncompressed copy first
-(`pyarrow.feather.write_feather(..., compression='uncompressed')`) makes
-DuckDB's `arrow` extension read it and query it correctly. Also
-confirmed the extension is already at its latest version
-(`UPDATE EXTENSIONS` → `NO_UPDATE_AVAILABLE` for both `arrow` and
-`nanoarrow`) — this isn't "go update and it's fixed," it's the current
-state of DuckDB's community Arrow extension. This is exactly the gap
-§6.3 flagged from DuckDB's own documented roadmap ("no ZSTD/LZ4
-compression... for reads") — now verified directly against a real
-Mediumroast file, not just read about.~~ **See §7.4 for what was
-actually going on.**
 
 **DataFusion: reads the file as shipped, no workaround needed.** The
 only friction was mechanical, not architectural: `read_arrow`'s default
@@ -658,27 +642,17 @@ Reading tmp/us_flat.feather via read_arrow (Feather V2 == Arrow IPC file format)
 +------------+------------------------------------+----+
 ```
 That query result (companies in the "Agricultural Production Crops"
-division, grouped by section) **matches DuckDB's result on the
-uncompressed copy exactly** — same 20-row count, same values — a real
-cross-validation that both engines agree on the data itself; the only
-difference is which one can open the file Mediumroast actually shipped.
+division, grouped by section) **cross-validated exactly against DuckDB's
+result on an uncompressed copy** (Annex E has the full DuckDB side) —
+both engines agree on the data itself; the only difference was which one
+could open the file Mediumroast actually shipped.
 
-**What this settles, concretely (see §7.4 for a correction to the first
-point below):**
+**What this settles, concretely:**
 
-- ~~§6.3's DuckDB-Arrow-maturity-gap claim... it's specifically that
-  DuckDB's Arrow extension can't open a compressed file, and
-  Mediumroast's real output is compressed by default.~~ **Wrong — see
-  §7.4.** DataFusion still reads the file with no workaround needed,
-  and DuckDB still fails on it, but the *reason* DuckDB fails isn't
-  compression.
-- This doesn't mean DuckDB is unusable here — §7.4 also found a
-  workaround (dropping one schema-metadata field). But it's still an
-  extra step DataFusion doesn't need, and still the kind of
-  small-but-real friction that adds up when picking the tool that's the
-  *worse* fit for a format you'll use constantly — the underlying
-  pattern from the original (wrong) conclusion holds even though the
-  specific mechanism doesn't.
+- DataFusion reads the real, unmodified Mediumroast `.feather` file with
+  no workaround needed — the single most concrete result in this
+  section. (The DuckDB side of this comparison, including a wrong first
+  diagnosis and its correction, is in Annex E.)
 - The "does writing spike code count as code" question from the
   original draft got resolved in practice by just doing it — a ~30-line
   disposable Rust binary in the session's scratchpad directory, not
@@ -690,7 +664,17 @@ point below):**
 **Not tested at the time**: vector search (§4) — this file had no
 vector column. §7.4 covers a follow-up once one existed.
 
-### 7.4 Follow-up: a real vectors-included file, and a correction
+### 7.4 Follow-up: a real vectors-included file
+
+> **This section's original DuckDB correction has moved.** Testing the
+> larger file here also produced a second round of DuckDB
+> misdiagnosis-and-correction (§7.3's original "ZSTD unsupported"
+> conclusion turned out to be wrong too, for a different reason than
+> first thought). That's kept, unedited, in
+> [Annex E](#annex-e-73-74-duckdb-comparison-results-historical---duckdb-not-used)
+> alongside §7.3's DuckDB content, since it's the same historical thread.
+> Everything below is the vectors-included file's data validation and
+> storage-cost findings, which have nothing to do with DuckDB.
 
 A vectors-included version landed: `tmp/us_flat_embedded.feather` — the
 same US SIC data plus a new `embedding_text` column and four
@@ -735,35 +719,8 @@ chosen production model (worth strongly considering for company data,
 where the multiplier is the difference between fitting Mediumroast's
 row cap comfortably and not).
 
-**Correction to §7.3's DuckDB finding**: testing this larger file
-surfaced that DuckDB's `arrow` extension actually reads it
-successfully — despite it also being ZSTD-compressed (confirmed:
-re-writing it at `compression='zstd'` reproduces it byte-for-byte).
-That directly contradicted §7.3's "ZSTD isn't supported" conclusion, so
-it got isolated properly this time instead of accepting the first
-plausible explanation: the original `us_flat.feather`'s schema metadata
-contains a `pandas` `RangeIndex` entry (`index_columns: [{"kind":
-"range", "start": 0, "stop": 1005, "step": 1}]`), left over from however
-it was originally written from a pandas DataFrame; the embedded file
-doesn't have this (written with `preserve_index=False`). Stripping
-*only* that one metadata field from a copy of the original file — same
-data, same ZSTD compression, nothing else touched — made DuckDB read it
-without error. **The actual bug is DuckDB's `arrow` extension mishandling
-a `pandas` RangeIndex metadata entry**, not a compression-codec gap; the
-"Compression type... not supported" error was a misleading message for
-an unrelated fault. DataFusion was never bothered by the RangeIndex
-metadata either way.
-
-This doesn't reverse §6.4's overall lean toward DataFusion — DuckDB's
-`arrow` extension still failed on real, unmodified Mediumroast output
-while DataFusion didn't, on two separate files now, for two different
-reasons — but it does mean **the specific mechanism cited in this doc's
-own earlier conclusion was wrong**, and it's a useful reminder of why
-§7's whole premise (verify empirically, don't stop at the first
-plausible-looking error) exists in the first place. A workaround exists
-for DuckDB here too (drop the RangeIndex metadata field, same shape of
-fix as decompressing was for the wrong diagnosis) — still an extra
-ingestion-side step DataFusion doesn't need.
+The DuckDB re-test against this file (and the correction it forced to
+§7.3's original diagnosis) is in Annex E.
 
 ### 7.5 Model performance: which of the 4 embedding models to actually support at query time
 
@@ -1083,8 +1040,8 @@ Superseded sections, kept verbatim (not edited after the fact) as a
 record of the actual decision process — how the reasoning moved from
 "here are the live options" to §6.5's (and §5's) answers — not as
 current guidance. Nothing here should be read as a live comparison to
-act on; `§4.x`/`§8`/`§6.1`-`§6.4` references elsewhere in this doc point
-at this content.
+act on; `§4.x`/`§8`/`§6.1`-`§6.4`/`§7.3`-`§7.4`'s DuckDB content
+elsewhere in this doc point at this content.
 
 ### Annex A (§4): Backend: SQLite vs. DuckDB (historical — superseded by §6.5)
 
@@ -1536,3 +1493,111 @@ on files this project will actually receive. This bears
 directly on this project's core workload in a way the KVS question
 doesn't. Worth deciding on that basis — and on team fit — rather than the
 caching-library premise that raised the question.
+
+### Annex E (§7.3-7.4): DuckDB comparison results (historical — DuckDB not used)
+
+> **Historical.** §7 originally ran DataFusion and DuckDB side by side
+> against real Mediumroast `.feather` files, since both were live
+> candidates at the time (§6.3/Annex D). §6.5 has since settled on Rust +
+> DataFusion; DuckDB isn't part of this project's architecture. This is
+> the full, unedited DuckDB half of that testing — two real failures,
+> two rounds of misdiagnosis and correction, kept here because it's
+> genuine empirical history (it's what actually proved DataFusion was
+> the better fit, not just documentation claims), not because there's
+> any live decision left to make about it. §7.3/§7.4's live text is
+> DataFusion-only and cites this annex for the DuckDB side.
+
+#### 7.3: DuckDB testing against `tmp/us_flat.feather`
+
+**DuckDB: fails on the file as shipped.**
+
+```
+INSTALL arrow FROM community; LOAD arrow;
+SELECT * FROM read_arrow('tmp/us_flat.feather') LIMIT 5;
+```
+```
+Invalid Input Error: arrow_scan: get_next failed(): InternalException:
+"...Compression type with value 1 not supported by this build of
+nanoarrow..."
+```
+
+> **Correction (from the §7.4 re-test below)**: the paragraph originally
+> here concluded this was a ZSTD compression-support gap, based on the
+> error message and on decompressing the file making it work. The
+> follow-up test below found that conclusion was **wrong** — it isolated
+> the actual trigger to a `pandas` `RangeIndex` entry in the file's
+> schema metadata, not the compression codec at all. DuckDB's `arrow`
+> extension still has a real bug here, just a different one than first
+> diagnosed; the "no ZSTD/LZ4 for reads" line from DuckDB's own roadmap
+> (Annex D §6.3) is still accurate as *documentation*, it just isn't what
+> actually caused *this* failure. Left the original (wrong) reasoning
+> below struck through rather than deleted, so the correction has
+> something concrete to point at.
+
+~~Confirmed this is a compression-support gap, not a corrupt file or a
+one-off bug: decompressing the file to an uncompressed copy first
+(`pyarrow.feather.write_feather(..., compression='uncompressed')`) makes
+DuckDB's `arrow` extension read it and query it correctly. Also
+confirmed the extension is already at its latest version
+(`UPDATE EXTENSIONS` → `NO_UPDATE_AVAILABLE` for both `arrow` and
+`nanoarrow`) — this isn't "go update and it's fixed," it's the current
+state of DuckDB's community Arrow extension. This is exactly the gap
+Annex D §6.3 flagged from DuckDB's own documented roadmap ("no ZSTD/LZ4
+compression... for reads") — now verified directly against a real
+Mediumroast file, not just read about.~~ **See the correction above and
+the re-test below for what was actually going on.**
+
+DataFusion's query result on this same file (§7.3, live text) **matched
+DuckDB's result on an uncompressed copy of it exactly** — same 20-row
+count, same values — a real cross-validation that both engines agree on
+the data itself; the only difference was which one could open the file
+Mediumroast actually shipped.
+
+**What this originally settled, concretely (see the correction below for
+where the first point turned out to be wrong):**
+
+- ~~Annex D §6.3's DuckDB-Arrow-maturity-gap claim... it's specifically
+  that DuckDB's Arrow extension can't open a compressed file, and
+  Mediumroast's real output is compressed by default.~~ **Wrong — see
+  the §7.4 re-test below.** DataFusion still read the file with no
+  workaround needed, and DuckDB still failed on it, but the *reason*
+  DuckDB failed wasn't compression.
+- This didn't mean DuckDB was unusable here — the §7.4 re-test also
+  found a workaround (dropping one schema-metadata field). But it was
+  still an extra step DataFusion didn't need, and still the kind of
+  small-but-real friction that adds up when picking the tool that's the
+  *worse* fit for a format you'll use constantly — the underlying
+  pattern from the original (wrong) conclusion held even though the
+  specific mechanism didn't.
+
+#### 7.4: DuckDB re-test against `tmp/us_flat_embedded.feather`, and the correction
+
+**Correction to the §7.3 DuckDB finding above**: testing the larger,
+vectors-included file surfaced that DuckDB's `arrow` extension actually
+reads it successfully — despite it also being ZSTD-compressed (confirmed:
+re-writing it at `compression='zstd'` reproduces it byte-for-byte).
+That directly contradicted §7.3's "ZSTD isn't supported" conclusion, so
+it got isolated properly this time instead of accepting the first
+plausible explanation: the original `us_flat.feather`'s schema metadata
+contains a `pandas` `RangeIndex` entry (`index_columns: [{"kind":
+"range", "start": 0, "stop": 1005, "step": 1}]`), left over from however
+it was originally written from a pandas DataFrame; the embedded file
+doesn't have this (written with `preserve_index=False`). Stripping
+*only* that one metadata field from a copy of the original file — same
+data, same ZSTD compression, nothing else touched — made DuckDB read it
+without error. **The actual bug is DuckDB's `arrow` extension mishandling
+a `pandas` RangeIndex metadata entry**, not a compression-codec gap; the
+"Compression type... not supported" error was a misleading message for
+an unrelated fault. DataFusion was never bothered by the RangeIndex
+metadata either way.
+
+This didn't reverse Annex D §6.4's overall lean toward DataFusion —
+DuckDB's `arrow` extension still failed on real, unmodified Mediumroast
+output while DataFusion didn't, on two separate files, for two different
+reasons — but it did mean **the specific mechanism cited in the original
+(wrong) conclusion was wrong**, and it's a useful reminder of why §7's
+whole premise (verify empirically, don't stop at the first
+plausible-looking error) exists in the first place. A workaround existed
+for DuckDB here too (drop the RangeIndex metadata field, same shape of
+fix as decompressing was for the wrong diagnosis) — still an extra
+ingestion-side step DataFusion didn't need.
