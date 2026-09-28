@@ -23,10 +23,14 @@ TiKV/minikv distributed-KVS research that originally motivated part of
 the Go-vs-Rust question is now purely historical — moved to Annex C.
 **Versioning/repo decided (2026-09-27, §9): this is V4.0.0, built on a
 branch within the current `company_dns` repo** — not a new repository.
-**DataFusion 55.1.0 re-validated (2026-09-28, §7.9)**: still pinned to
-42.2.0 for now, but a real upgrade path exists and has been checked
-against real data, not just assumed safe — see §7.9 before treating a
-future version bump as risky or untested.
+**DataFusion version decided (2026-09-28, §7.9): 55.1.0, not 42.2.0.**
+Upgrading to align with `edgarkit`'s `chrono` requirement
+(`edgar-backend.md`'s Option 2/`edgarkit` decision) — already
+re-validated against real data before this decision was made, not
+assumed safe after the fact; see §7.9 for the re-validation. §7.1-§7.8's
+own results were measured against 42.2.0 and are unaffected (§7.9
+reproduced them exactly on 55.1.0), so they're left as-is rather than
+rewritten for a version number that doesn't change what they found.
 Owner: michael.hay@mediumroast.io
 Scope: a from-scratch rewrite of `company_dns` in Rust with DataFusion as
 the query/data-access engine, backed by Mediumroast `.feather` (Arrow IPC)
@@ -1027,18 +1031,17 @@ the query/schema code:**
   workaround necessary in the first place, since that's a separate,
   smaller question this re-validation didn't specifically test.
 
-**What this settles**: the specific concern raised in `edgar-backend.md`
-§4 — "does moving to DataFusion 55.x break anything this doc already
-validated" — is answered: no, for the two things that actually exercise
-DataFusion (`df-spike`'s file read, `ic-similarity-service`'s vector
-search), on the real data files, with no behavior change. **What this
-doesn't settle**: whether to actually move the committed spikes/rewrite
-to 55.x — that's a decision about the target architecture, not just
-"does it still work," and belongs with whoever's deciding
-`edgar-backend.md`'s Option 1 vs. Option 2 (and by extension, whether
-`edgarkit`'s single-binary story is worth pursuing). This section only
-removes "we don't know if it'd break" as a reason to delay that
-decision.
+**What this settled**: the specific concern raised in
+`edgar-backend.md` §4 — "does moving to DataFusion 55.x break anything
+this doc already validated" — is answered: no, for the two things that
+actually exercise DataFusion (`df-spike`'s file read,
+`ic-similarity-service`'s vector search), on the real data files, with
+no behavior change. **Decided (2026-09-28, this doc's status line and
+`edgar-backend.md`'s status line): move to DataFusion 55.x**, alongside
+`edgar-backend.md`'s choice of `edgarkit` (Option 2) for EDGAR — the two
+decisions are linked, since 55.x is what makes `edgarkit` and DataFusion
+share a single process at all. This re-validation is what made that
+decision safe to make, not a substitute for making it.
 
 ## 8. Go-specific open questions (historical)
 

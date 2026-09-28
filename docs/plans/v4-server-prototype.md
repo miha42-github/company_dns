@@ -111,18 +111,19 @@ v4/
                                real HTTP routes, §5/§6)
 ```
 
-**Decided by necessity, not preference: this prototype requires
-DataFusion 55.x, not the 42.2.0 this project's earlier spikes are
-pinned to.** Items 1 and 2 together mean SIC (DataFusion) and EDGAR
-(`edgarkit`) have to live in the *same server process* — that's the
-whole point of combining them into one prototype. `edgar-backend.md`
-§2.1 already found that `edgarkit` and DataFusion 42 cannot share a
-`Cargo.toml` at all (a real `chrono`-version conflict, not a
-workaround-able one), and `go-duckdb-rewrite.md` §7.9 already
-re-validated that DataFusion 55.1.0 changes nothing about the
-already-proven SIC results. This isn't a new judgment call introduced
-by this doc — it's what the requirement itself already implies, now
-made explicit as a concrete precondition for starting.
+**Decided (2026-09-28): DataFusion 55.x, and `edgarkit` for EDGAR** —
+both confirmed explicitly (`go-duckdb-rewrite.md` and
+`edgar-backend.md`'s status lines), not just implied by this
+prototype's own requirements. The two decisions are linked: items 1 and
+2 together mean SIC (DataFusion) and EDGAR (`edgarkit`) live in the
+*same server process* — that's the whole point of combining them into
+one prototype — and `edgar-backend.md` §2.1 already found that
+`edgarkit` and DataFusion 42 cannot share a `Cargo.toml` at all (a real
+`chrono`-version conflict, not a workaround-able one). `go-duckdb-
+rewrite.md` §7.9 re-validated that DataFusion 55.1.0 changes nothing
+about the already-proven SIC results, before either decision was made —
+so this prototype starts from a settled architecture, not an open
+question.
 
 ## 4. Data staging: the EDGAR catalog, written to `./tmp`
 
@@ -339,11 +340,11 @@ something real to design a UX around rather than a hypothetical one.
 
 ## 10. Open questions
 
-- **DataFusion 55.x**: §3 states this as a necessity, not a choice, but
-  it's still worth an explicit go-ahead before scaffolding the
-  workspace — it's a real version commitment `go-duckdb-rewrite.md` §7.9
-  flagged as "someone's decision to make," and this prototype is that
-  moment.
+- ~~DataFusion 55.x: needs an explicit go-ahead before scaffolding...~~
+  **Decided (2026-09-28)**: DataFusion 55.x and `edgarkit`, confirmed
+  explicitly (§3, `go-duckdb-rewrite.md`/`edgar-backend.md` status
+  lines) — no longer a precondition to confirm, a settled starting
+  point.
 - **§6's matching-semantics decision** (V4's `LIKE`-equivalent vs. some
   other search behavior for SIC-description and EDGAR-name search)
   needs to be settled once, consistently, before those endpoints are
@@ -362,9 +363,9 @@ something real to design a UX around rather than a hypothetical one.
 
 ## 11. Next steps
 
-1. Confirm §3's DataFusion 55.x requirement explicitly before
-   scaffolding anything — a real version commitment, not just this
-   doc's recommendation.
+1. ~~Confirm §3's DataFusion 55.x requirement explicitly before
+   scaffolding anything...~~ **Done (2026-09-28)** — DataFusion 55.x and
+   `edgarkit` both confirmed explicitly (§3).
 2. Scaffold the `v4/` workspace (§3) — crate skeletons, no logic yet.
 3. Promote `edgar-cache-spike` into `v4/crates/cache/` — smallest,
    most self-contained piece, and everything else depends on it.

@@ -1,19 +1,25 @@
 # EDGAR backend for the Rust + DataFusion rewrite
 
-Status: **Draft — research, plus one disposable spike; no production
-code, no decision between Option 1/2 yet.** This doc exists to work out
-what the current Python EDGAR implementation actually does, survey what
-exists in the Rust ecosystem for the same job, and lay out the real
-options — not to commit to one yet. `experiments/edgar-spike/` (§2.1)
-validated `edgarkit` against real, live SEC data — a real result, not
-just documentation research, but still only one input into the Option 1
-vs. Option 2 choice (§3), not a decision on its own. **Decided
-(2026-09-28):
-the CIK/10-K/10-Q index (§1.1) is a direct `company_dns` concern, not
-something that moves upstream to Mediumroast's own pipeline.** This
-resolves §3/§4's earlier open question about whether index-building was
-even `company_dns`'s decision to make — it is, both options in §3 stay
-fully live, and neither is moot.
+Status: **Decided: Option 2, `edgarkit`, on DataFusion 55.x.** This doc
+started as research (what the current Python EDGAR implementation does,
+what exists in the Rust ecosystem) and worked through two open questions
+before landing here — both now closed:
+
+- **Decided (2026-09-28): the CIK/10-K/10-Q index (§1.1) is a direct
+  `company_dns` concern**, not something that moves upstream to
+  Mediumroast's own pipeline. Resolved §3/§4's original open question
+  about whether index-building was even `company_dns`'s decision to
+  make — it is.
+- **Decided (2026-09-28): `edgarkit` (§3's Option 2) is the EDGAR
+  backend**, for both index-building and live firmographics — not
+  `pyedgar`-as-CLI (Option 1, kept below as the historical alternative,
+  not chosen). **Decided alongside it: this project moves to DataFusion
+  55.x**, aligning with what `edgarkit` requires — resolving the
+  `chrono`-version conflict §2.1 found on DataFusion 42, already
+  re-validated safe against real data (`go-duckdb-rewrite.md` §7.9).
+  `experiments/edgar-spike/`, `experiments/edgar-index-query/`, and
+  `experiments/edgar-cache-spike/` (§2.1) are the real, passing evidence
+  this decision rests on — not just documentation research.
 Owner: michael.hay@mediumroast.io
 Scope: how the new `company_dns` (V4.0.0, Rust + DataFusion — see
 [`go-duckdb-rewrite.md`](go-duckdb-rewrite.md) §6.5/§9) gets its EDGAR
@@ -217,14 +223,24 @@ mistaken for a hit later.)
 `edgarkit` is the one real candidate for a native-Rust path, and it's
 promising specifically because its feature boundaries (`index`,
 `company`) line up with this project's actual two-part need (§1.1,
-§1.2) — but it's new enough that "promising on paper" and "actually
-works against real SEC data the way this project needs" are still two
-different claims. Nothing here rules out option 2 below; nothing here
-proves it either.
+§1.2) — new enough at the time this section was written that "promising
+on paper" and "actually works against real SEC data" were still two
+different claims. §2.1's spikes closed that gap since. **Decided
+(2026-09-28): `edgarkit` is the choice** (§3's Option 2) — this
+section's caution held up as the right posture to take before deciding,
+not a reason to have decided differently.
 
-## 3. Two options, not yet decided between
+## 3. Two options — decided: Option 2
 
-### Option 1: `pyedgar` as a CLI, feeding a conversion-to-`.feather` pipeline
+> **Decided (2026-09-28): Option 2 (`edgarkit`)**, on DataFusion 55.x —
+> see the status line above. Option 1 is kept below unedited, as the
+> real alternative that was weighed, not because it lost on evidence —
+> no spike was ever run for it (§5 next steps item 3, never done). This
+> was a pragmatic choice to move forward with the option already backed
+> by real, passing spikes, not a finding that Option 1 would have been
+> worse.
+
+### Option 1 (not chosen): `pyedgar` as a CLI, feeding a conversion-to-`.feather` pipeline
 
 Keep `pyedgar` doing what it already does well (§1.1's index-building),
 run it as an external step (script or small CLI wrapper) outside the
@@ -253,26 +269,20 @@ arrive (`go-duckdb-rewrite.md` §0/§1).
   as an external step" vs. Option 2's "does it build that index natively
   in Rust," not "does `company_dns` build it at all."
 
-### Option 2: A small Rust module replicating what `pyedgar` does
+### Option 2 (chosen): A small Rust module replicating what `pyedgar` does
 
 Either build directly against `data.sec.gov`'s index files (the same
 raw format `pyedgar` parses, §1.1) using plain `reqwest` + a tab-
 delimited/gzip parser, or adopt `edgarkit`'s `index` feature (§2.1) to
 avoid re-implementing that parsing from scratch.
 
-- **Pro, with a caveat that's specific to DataFusion 42 (§2.1)**:
-  single-*language* story stays intact either way — no Python anywhere.
-  Single-*binary* holds too if the project moves to DataFusion 55.x
-  (verified end to end, including against real data — §2.1) — but *not*
-  on the DataFusion 42 this project's spikes are currently pinned to,
-  where `edgarkit` and DataFusion can't share a process (a genuine
-  `chrono`-version conflict). On 42, this becomes two Rust
-  processes/crates talking via files on disk — still no Python, but not
-  the one-binary story this bullet originally assumed. Whether to
-  actually upgrade, or accept the two-process design on 42 regardless,
-  is a real decision either way — but it's no longer blocked on "would
-  upgrading even be safe," which §2.1/`go-duckdb-rewrite.md` §7.9 has
-  now answered.
+- **Pro**: single-*language* and single-*binary* both hold. The
+  DataFusion-42-specific caveat originally here (`edgarkit` and
+  DataFusion 42 can't share a process — a genuine `chrono`-version
+  conflict, §2.1) is resolved by the DataFusion 55.x decision above
+  (status line) — verified end to end, including against real data
+  (§2.1, `go-duckdb-rewrite.md` §7.9), not just assumed safe. No Python
+  anywhere, one process, not two.
 - **Pro**: item 1.2 (live firmographics) is low-risk either way — a
   JSON GET request and some field reshaping, well within "write it
   ourselves" territory regardless of what happens with index-building.
@@ -311,13 +321,16 @@ avoid re-implementing that parsing from scratch.
   enriched-company data, this isn't something Mediumroast supplies as a
   `.feather` package — `company_dns` builds and owns it, via whichever
   of §3's two options wins.
-- **If `edgarkit` is seriously considered for Option 2**: a real spike
-  against actual SEC data (not just reading its README) is needed
-  before depending on it — consistent with this project's own standard
-  for validating claims (`go-duckdb-rewrite.md` §7). Specifically worth
-  testing: does its `index` feature correctly parse a real quarterly
-  index file end to end, and does its rate limiter actually behave
-  under SEC's fair-access rules in practice, not just in theory.
+- ~~If `edgarkit` is seriously considered for Option 2: a real spike
+  against actual SEC data is needed before depending on it...~~ **Done,
+  and `edgarkit` is now the decision** (status line) —
+  `experiments/edgar-spike/`, `experiments/edgar-index-query/`, and
+  `experiments/edgar-cache-spike/` (§2.1) covered exactly this: `index`
+  feature parsing a real quarterly index end to end, and the full
+  live-fallback path (including caching) against real data. Rate-limiter
+  behavior under sustained/concurrent load specifically (not just light
+  spike traffic) remains untested — worth confirming once real traffic
+  patterns exist, not blocking the decision itself.
 - **CIK-as-durable-identifier** (`go-duckdb-rewrite.md` §2, issue #33)
   needs to be preserved regardless of which option wins — whatever
   builds the cached/seeded EDGAR set must key by CIK, not company name.
@@ -347,49 +360,35 @@ avoid re-implementing that parsing from scratch.
   similarity scores (`"growing wheat"` still scores 48.6% on
   `all-MiniLM-L6-v2`, matching §7.8's documented figure exactly). The
   risk this bullet originally flagged (upgrading might silently break
-  §7's already-validated results) is closed. **Still open, and still not
-  this doc's decision alone**: whether to actually move the committed
-  spikes/rewrite to 55.x, given it also restores Option 2's
-  single-binary story (§2.1). That's a target-architecture decision, not
-  a safety one — this re-validation just removes "we don't know if it'd
-  break" as a reason to delay making it.
+  §7's already-validated results) is closed. **Decided (2026-09-28,
+  status line): yes, this project moves to DataFusion 55.x** —
+  alongside choosing `edgarkit` for Option 2, since the two decisions
+  are directly linked (55.x is what makes `edgarkit` + DataFusion viable
+  as a single-binary service in the first place).
 
 ## 5. Next steps
 
 1. ~~Settle the "does `company_dns` still own index-building" question
    (§4)...~~ **Done** — yes, it's a direct `company_dns` concern (this
-   doc's status line). Both of §3's options are live; next is choosing
-   between them, not settling whether either is needed.
+   doc's status line).
 2. ~~A small, disposable spike... testing `edgarkit`'s `index` and
    `company` features against real SEC data...~~ **Done (§2.1)** —
    `experiments/edgar-spike/`, both features passed against real, live
-   SEC data. A real spike result now exists for Option 2, not just a
-   README reading; still doesn't settle Option 1 vs. Option 2 on its
-   own (item 3 below is still open).
-3. Confirm what a `pyedgar`-as-CLI step (Option 1) would actually look
-   like — is it a thin wrapper around today's `lib/prepare_edgar_data.py`
-   logic, or does it need rework to emit `.feather` instead of
-   populating SQLite directly? No equivalent spike exists yet for
-   Option 1 — worth one before comparing the two options head-to-head,
-   for the same reason item 2 got one. **Still true as of
-   [`v4-server-prototype.md`](v4-server-prototype.md)** — that plan
-   moves forward with Option 2 (`edgarkit`) for its EDGAR catalog
-   ingest, a scoped, practical choice for getting a first real server
-   running, not a resolution of this item. Option 1 vs. Option 2 stays
-   genuinely open pending this spike.
+   SEC data — the evidence base the Option 2 decision rests on.
+3. ~~Confirm what a `pyedgar`-as-CLI step (Option 1) would actually look
+   like...~~ **Moot (2026-09-28)** — Option 2 (`edgarkit`) is decided
+   (status line, §3), so Option 1's spike is no longer needed to compare
+   the two head-to-head. `§3`'s Option 1 section stays as the record of
+   the alternative that was weighed, not something still being spiked.
 4. ~~Item 1.2 (live firmographics fallback) can likely move forward
-   independently and sooner...~~ **Strengthened (2026-09-28,
-   `experiments/edgar-spike/`)** — not just "likely straightforward"
-   anymore: `edgarkit`'s `submissions()` call was verified to rebuild
-   `get_firmographics()`'s full output shape for real data, no `pyedgar`
-   needed. Still doesn't depend on the Option 1 vs. 2 choice for
-   index-building, and can move forward once `go-duckdb-rewrite.md`
-   §5.3's fallback-path questions (connection reuse, caching) are
-   answered — those are the remaining open pieces, not whether
-   `edgarkit` covers the data itself.
-5. Beyond the disposable spike in item 2, no production code yet, per
-   spike proposals, not commitments. **New**: the actual plan for
-   turning these spikes into a running server is
+   independently and sooner...~~ **Done (2026-09-28,
+   `experiments/edgar-spike/` + `experiments/edgar-cache-spike/`)** —
+   `edgarkit`'s `submissions()` call rebuilds `get_firmographics()`'s
+   full output shape, and the full live-fallback path (fetch + §5.1's
+   cache) works end to end against real data, no `pyedgar` needed.
+5. Beyond the disposable spikes in items 2/4, no production code yet.
+   The actual plan for turning these spikes into a running server is
    [`v4-server-prototype.md`](v4-server-prototype.md) — still a plan,
    not code, but it's where "when do these get promoted out of
-   `experiments/`" now has a real answer.
+   `experiments/`" now has a real answer, built on the Option 2 +
+   DataFusion 55.x decisions above.
