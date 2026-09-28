@@ -68,38 +68,46 @@ ENDPOINTS = [
     {
         "key": "sic_lookup",
         "path": "/V3.0/na/sic/description/{sic_desc}",
+        "v4_path": "/V4.0/na/sic/description/{sic_desc}",
         "category": "control",
         "per_company": False,
         "fixed_param": "oil",
-        "description": "SQLite-only SIC description search (no external calls)",
+        "description": "SIC description search (SQLite on V3, DataFusion/.feather on V4 - see docs/plans/v4-server-prototype.md sec6 for the matching-semantics decision behind this being a fair comparison)",
     },
     {
         "key": "edgar_ciks",
         "path": "/V3.0/na/companies/edgar/ciks/{company_name}",
+        "v4_path": "/V4.0/na/companies/edgar/ciks/{company_name}",
         "category": "control",
         "per_company": True,
         "param_field": "edgar_name",
-        "description": "SQLite-only CIK lookup by fuzzy name (no external calls)",
+        "description": "CIK lookup by fuzzy name (SQLite `companies` table on V3, DataFusion/.feather catalog on V4 - see docs/plans/v4-server-prototype.md sec6, the EDGAR-catalog-scope caveat, for why V4 may legitimately miss companies outside its ingested quarter)",
     },
     {
         "key": "edgar_detail",
         "path": "/V3.0/na/companies/edgar/detail/{company_name}",
+        "v4_path": "/V4.0/na/companies/edgar/detail/{company_name}",
         "category": "external-io",
         "per_company": True,
         "param_field": "edgar_name",
         "description": (
             "Fuzzy EDGAR filing search + one live data.sec.gov call per "
             "unique matched company (fixed from a per-filing-row bug - see "
-            "lib/edgar.py get_all_details)"
+            "lib/edgar.py get_all_details). V4's equivalent is catalog-only "
+            "(no per-match live enrichment yet - docs/plans/"
+            "v4-server-prototype.md sec5.3), so this is not yet an "
+            "apples-to-apples I/O comparison against V3 for this one "
+            "endpoint specifically, only a correctness/coverage one."
         ),
     },
     {
         "key": "edgar_firmographics_by_cik",
         "path": "/V3.0/na/company/edgar/firmographics/{cik_no}",
+        "v4_path": "/V4.0/na/company/edgar/firmographics/{cik_no}",
         "category": "external-io",
         "per_company": True,
         "param_field": "cik",
-        "description": "Single direct live data.sec.gov call by CIK",
+        "description": "Single direct live data.sec.gov call by CIK - the one true apples-to-apples external-io comparison in the V4 profile (same live upstream call on both sides, V3's requests.Session() vs. V4's edgarkit + docs/plans/go-duckdb-rewrite.md sec5.1's cache)",
     },
     {
         "key": "wikipedia_firmographics",
@@ -109,7 +117,10 @@ ENDPOINTS = [
         "param_field": "wiki_name",
         "description": (
             "Wikipedia/Wikidata lookup via wptools (fixed from a "
-            "duplicate-fetch bug - see lib/wikipedia.py get_firmographics)"
+            "duplicate-fetch bug - see lib/wikipedia.py get_firmographics). "
+            "No v4_path - staged, not implemented on V4 yet "
+            "(docs/plans/v4-server-prototype.md sec8.1), excluded from the "
+            "--profile v4 run rather than compared against a stub."
         ),
     },
     {
@@ -120,10 +131,25 @@ ENDPOINTS = [
         "param_field": "wiki_name",
         "description": (
             "The heaviest real-world path: Wikipedia lookup, conditionally "
-            "EDGAR too, plus ArcGIS geocoding"
+            "EDGAR too, plus ArcGIS geocoding. No v4_path - depends on "
+            "Wikipedia (sec8.1, staged not built), excluded from the "
+            "--profile v4 run for the same reason as wikipedia_firmographics."
         ),
     },
 ]
+
+# docs/plans/v4-server-prototype.md sec7: the V4 prototype implements a
+# real subset of V3's endpoints (US SIC + EDGAR, per that doc's sec1
+# scope) - Wikipedia and merged firmographics are staged, not built
+# (sec8), so comparing them against V3 would be comparing real latency
+# against a stub's 404. --profile v4 restricts the run to endpoints that
+# have a v4_path, so the comparison stays honest rather than either
+# refusing to run (today's verify_endpoints_exist behavior) or silently
+# producing a misleading result for the endpoints V4 doesn't have yet.
+PROFILES = {
+    "v3": {"version_key": "path", "require_v4_path": False},
+    "v4": {"version_key": "v4_path", "require_v4_path": True},
+}
 
 # Endpoints exercised in the concurrency experiment. Kept to a subset (not
 # every endpoint x every company) to keep total request volume modest
@@ -156,27 +182,73 @@ class CallResult:
     run_index: int
 
 
-def build_call_matrix(companies=COMPANIES) -> list[Call]:
+def profile_endpoints(profile: str) -> list[dict]:
+    """docs/plans/v4-server-prototype.md sec7: V4 implements a real
+    subset of V3's endpoints (US SIC + EDGAR). --profile v4 restricts
+    the call matrix to endpoints that have a v4_path, so the comparison
+    stays honest instead of either failing outright (today's
+    verify_endpoints_exist behavior) or silently producing a misleading
+    result for endpoints V4 doesn't have yet (Wikipedia, merged
+    firmographics - staged, not built, sec8)."""
+    cfg = PROFILES[profile]
+    if not cfg["require_v4_path"]:
+        return ENDPOINTS
+    included = [ep for ep in ENDPOINTS if "v4_path" in ep]
+    excluded = [ep["key"] for ep in ENDPOINTS if "v4_path" not in ep]
+    if excluded:
+        print(
+            f"==> --profile v4: excluding {excluded} (no v4_path - not yet "
+            "implemented on V4, docs/plans/v4-server-prototype.md sec8)"
+        )
+    return included
+
+
+def endpoint_path(ep: dict, profile: str) -> str:
+    return ep[PROFILES[profile]["version_key"]]
+
+
+def build_call_matrix(companies=COMPANIES, profile: str = "v3") -> list[Call]:
     calls = []
-    for ep in ENDPOINTS:
+    for ep in profile_endpoints(profile):
+        path = endpoint_path(ep, profile)
         if not ep["per_company"]:
             param = ep.get("fixed_param", "")
-            url = ep["path"].format(**{ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")]: param}) if "{" in ep["path"] else ep["path"]
+            url = path.format(**{path[path.find("{") + 1: path.find("}")]: param}) if "{" in path else path
             calls.append(Call(ep["key"], ep["category"], "-", url))
             continue
         for company in companies:
             value = company[ep["param_field"]]
-            field_name = ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")]
-            url = ep["path"].format(**{field_name: quote(value, safe="")})
+            field_name = path[path.find("{") + 1: path.find("}")]
+            url = path.format(**{field_name: quote(value, safe="")})
             calls.append(Call(ep["key"], ep["category"], company["key"], url))
     return calls
 
 
-def verify_endpoints_exist(base_url: str, timeout: float) -> None:
-    resp = requests.get(f"{base_url}/openapi.json", timeout=timeout)
-    resp.raise_for_status()
-    spec_paths = set(resp.json().get("paths", {}).keys())
-    missing = [ep["path"] for ep in ENDPOINTS if ep["path"] not in spec_paths]
+def verify_endpoints_exist(base_url: str, timeout: float, profile: str = "v3") -> None:
+    """Best-effort: FastAPI (V3) serves /openapi.json, so this can check
+    real drift there. The hand-rolled V4 prototype server doesn't serve
+    one (docs/plans/v4-server-prototype.md sec9 notes an OpenAPI-
+    equivalent discovery endpoint as worth adding later, not built yet)
+    - rather than hard-failing a V4 run over a missing spec, this warns
+    and skips verification when the spec isn't available at all."""
+    try:
+        resp = requests.get(f"{base_url}/openapi.json", timeout=timeout)
+        resp.raise_for_status()
+        spec_paths = set(resp.json().get("paths", {}).keys())
+    except (requests.RequestException, ValueError) as e:
+        print(
+            f"==> WARNING: could not fetch/parse {base_url}/openapi.json "
+            f"({e}) - skipping endpoint-drift verification for this target. "
+            "This is expected for the V4 prototype server, which has no "
+            "OpenAPI spec yet."
+        )
+        return
+
+    missing = [
+        endpoint_path(ep, profile)
+        for ep in profile_endpoints(profile)
+        if endpoint_path(ep, profile) not in spec_paths
+    ]
     if missing:
         raise SystemExit(
             "ERROR: the following endpoint(s) this suite depends on are not "
@@ -228,13 +300,19 @@ def run_sequential(base_url: str, calls: list[Call], delay: float, timeout: floa
 
 
 def run_concurrency_experiment(
-    base_url: str, companies, levels: list[int], repeat: int, timeout: float
+    base_url: str, companies, levels: list[int], repeat: int, timeout: float, profile: str = "v3"
 ) -> list[CallResult]:
     results = []
-    endpoints_by_key = {ep["key"]: ep for ep in ENDPOINTS}
+    profiled = profile_endpoints(profile)
+    endpoints_by_key = {ep["key"]: ep for ep in profiled}
+    concurrency_keys = [k for k in CONCURRENCY_ENDPOINT_KEYS if k in endpoints_by_key]
+    skipped = [k for k in CONCURRENCY_ENDPOINT_KEYS if k not in endpoints_by_key]
+    if skipped:
+        print(f"==> --profile {profile}: skipping concurrency test for {skipped} (not in this profile)")
 
-    for key in CONCURRENCY_ENDPOINT_KEYS:
+    for key in concurrency_keys:
         ep = endpoints_by_key[key]
+        path = endpoint_path(ep, profile)
         for level in levels:
             for run_index in range(repeat):
                 # Build `level` calls to this endpoint, cycling through the
@@ -245,11 +323,11 @@ def run_concurrency_experiment(
                 expected_marker_by_url = {}
                 if ep["per_company"]:
                     batch_companies = [companies[i % len(companies)] for i in range(level)]
-                    field_name = ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")]
+                    field_name = path[path.find("{") + 1: path.find("}")]
                     batch = []
                     for c in batch_companies:
                         raw_value = c[ep["param_field"]]
-                        url = ep["path"].format(**{field_name: quote(raw_value, safe="")})
+                        url = path.format(**{field_name: quote(raw_value, safe="")})
                         batch.append(Call(key, ep["category"], c["key"], url))
                         # Different companies can share a URL only if the same
                         # company appears twice in one batch (level > len(companies)) -
@@ -273,8 +351,8 @@ def run_concurrency_experiment(
                         expected_marker_by_url[url] = c["cik"]
                 else:
                     param = ep.get("fixed_param", "")
-                    field_name = ep["path"][ep["path"].find("{") + 1: ep["path"].find("}")] if "{" in ep["path"] else None
-                    url = ep["path"].format(**{field_name: param}) if field_name else ep["path"]
+                    field_name = path[path.find("{") + 1: path.find("}")] if "{" in path else None
+                    url = path.format(**{field_name: param}) if field_name else path
                     batch = [Call(key, ep["category"], "-", url) for _ in range(level)]
 
                 print(f"  concurrency={level:>2}  run={run_index + 1}/{repeat}  endpoint={key}")
@@ -435,6 +513,17 @@ def capture_provenance(namespace: str = "company-dns", deployment: str = "compan
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL, help=f"default: {DEFAULT_BASE_URL}")
+    parser.add_argument(
+        "--profile", choices=sorted(PROFILES), default="v3",
+        help=(
+            "'v3' (default): the full current-deployment endpoint catalog. "
+            "'v4': restricted to endpoints the V4 prototype actually "
+            "implements (US SIC + EDGAR - docs/plans/v4-server-prototype.md "
+            "sec1/sec7), against V4.0-prefixed paths. Run once per profile "
+            "against each target, then feed both reports into "
+            "perf_tests/compare.py."
+        ),
+    )
     parser.add_argument("--concurrency", nargs="+", type=int, default=[1, 4, 8], help="concurrency levels to test, default: 1 4 8")
     parser.add_argument("--repeat", type=int, default=2, help="repeats per concurrency level, default: 2")
     parser.add_argument("--delay", type=float, default=0.15, help="seconds between sequential calls, default: 0.15")
@@ -444,7 +533,7 @@ def main():
     parser.add_argument("--out", type=Path, default=None, help="JSON output path, default: perf_tests/results/<timestamp>.json")
     args = parser.parse_args()
 
-    calls = build_call_matrix()
+    calls = build_call_matrix(profile=args.profile)
 
     if args.list:
         for c in calls:
@@ -453,13 +542,15 @@ def main():
         return
 
     provenance = capture_provenance()
+    provenance["profile"] = args.profile
     print(
         f"==> Provenance: git_commit={provenance['git_commit'] or '(unavailable)'} "
-        f"deployed_image={provenance['deployed_image'] or '(unavailable)'}"
+        f"deployed_image={provenance['deployed_image'] or '(unavailable)'} "
+        f"profile={args.profile}"
     )
 
     print(f"==> Verifying endpoints against {args.base_url}/openapi.json")
-    verify_endpoints_exist(args.base_url, args.timeout)
+    verify_endpoints_exist(args.base_url, args.timeout, args.profile)
 
     print(f"\n==> Running {len(calls)} sequential calls against {args.base_url}")
     sequential_results = run_sequential(args.base_url, calls, args.delay, args.timeout)
@@ -468,13 +559,14 @@ def main():
     concurrency_results = []
     if not args.skip_concurrency:
         print(f"\n==> Running concurrency experiment: levels={args.concurrency}, repeat={args.repeat}")
-        concurrency_results = run_concurrency_experiment(args.base_url, COMPANIES, args.concurrency, args.repeat, args.timeout)
+        concurrency_results = run_concurrency_experiment(args.base_url, COMPANIES, args.concurrency, args.repeat, args.timeout, args.profile)
         print_concurrency_summary(concurrency_results, sequential_results)
 
     out_path = args.out or Path(__file__).resolve().parent / "results" / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     report = {
         "base_url": args.base_url,
+        "profile": args.profile,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "git_commit": provenance["git_commit"],
         "deployed_image": provenance["deployed_image"],

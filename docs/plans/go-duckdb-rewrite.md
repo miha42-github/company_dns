@@ -1118,10 +1118,16 @@ rather than left to read as still-open.
    relabel as agreed).
 9. New: work through [`company-dns-ux.md`](company-dns-ux.md) together —
    the UX layer this doc's §1/§6.5 now points to.
-10. New: [`v4-server-prototype.md`](v4-server-prototype.md) — the plan
-    for combining §5's cache, §7's DataFusion/SIC work, and
+10. ~~New: [`v4-server-prototype.md`](v4-server-prototype.md) — the
+    plan for combining §5's cache, §7's DataFusion/SIC work, and
     `edgar-backend.md`'s `edgarkit` work into one real running server
-    for the first time, measured against V3 on shared ground.
+    for the first time...~~ **Built (2026-09-28)**: `v4/` is real,
+    running code, not just the plan — `cargo run` starts a server
+    answering real SIC/EDGAR queries against `tmp/us_flat_embedded
+    .feather` and a real `edgarkit`-ingested EDGAR catalog. See
+    `v4/README.md` and that doc's status line for what's built and
+    what's still deferred (UX, Wikipedia, a real V3-vs-V4 comparison
+    run).
 
 ---
 

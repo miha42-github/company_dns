@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cache",
+    "crates/edgar",
+    "crates/sic",
+    "crates/wikipedia",
+    "crates/firmographics",
+    "crates/server",
+]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+# Decided in docs/plans/go-duckdb-rewrite.md sec7.9/status line and
+# docs/plans/edgar-backend.md status line (2026-09-28): DataFusion 55.x,
+# chosen alongside edgarkit for EDGAR (Option 2) - the two decisions are
+# linked, since 55.x is what lets edgarkit and DataFusion share a single
+# process at all (a chrono-version conflict on DataFusion 42.2.0,
+# edgar-backend.md sec2.1).
+[workspace.dependencies]
+datafusion = "55"
+edgarkit = "0.4.0"
+moka = { version = "0.12", features = ["future"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+axum = "0.7"
+tower-http = { version = "0.6", features = ["fs", "cors"] }

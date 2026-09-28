@@ -1,11 +1,24 @@
 # V4 prototype server: US SIC (feather) + EDGAR (edgarkit + cache), V3-parity endpoints
 
-Status: **Draft — plan only, no code written yet.** This doc lays out
-what a first running V4 server looks like, combining what's already
-been individually proven in `experiments/` into one real process for
-the first time — not a new round of research, but the point where the
-separately-validated pieces get wired together and measured against the
-current V3 Python service on a consistent set of endpoints.
+Status: **Built (2026-09-28) — `v4/` is a real, running server.**
+Implements §3's crate layout, §4's ingest binary (real run: 9,241 rows
+written to `./tmp/edgar_10x_catalog.feather` via `edgarkit` + DataFusion
+55 in one process), §5's endpoints (all tested against real SIC/EDGAR
+data — `sic/description`, `sic/code`, `sic/similarity`, `edgar/ciks`,
+`edgar/firmographics/{cik}` all returned correct results, including a
+live cached `edgarkit` fetch for IBM), §7's `--profile v4` harness
+extension (ran cleanly against the live server, 31/31 requests OK), and
+§8's staged Wikipedia/merged stubs (typed not-implemented, merged
+endpoint correctly falls back to EDGAR-only with an explicit note). See
+`v4/README.md` for how to run it. **Not done**: a real V3-vs-V4
+`compare.py` run (needs a V3 target to run the harness against, not
+attempted here), CI/release packaging, and everything §1 already scoped
+out (UX, Wikipedia/merged for real, non-US SIC systems). This section
+below is the plan that was executed, kept as written rather than
+rewritten after the fact — where the build diverged from it in a small,
+practical way (e.g. `detail`/`summary` returning the same catalog rows
+rather than V3's per-match live-enrichment split), that's noted inline
+where it happens (§5.3).
 Owner: michael.hay@mediumroast.io
 Scope: a prototype `company_dns` V4 server (Rust + DataFusion, per
 [`go-duckdb-rewrite.md`](go-duckdb-rewrite.md) §6.5/§9) covering US SIC
@@ -226,6 +239,16 @@ catalog from §4 (DataFusion, name search — see §6 for the fuzzy-match
 question again); `firmographics/{cik_no}` is the cached live-fallback
 path from §4's last bullet — `edgar-cache-spike`'s pattern, not a new
 design.
+
+**Built (2026-09-28), one small divergence from this section as
+written**: `detail` and `summary` both return the same catalog rows for
+now (no per-match live `edgarkit` enrichment for `detail`, unlike V3's
+`get_all_details(firmographics=True)` vs. `get_all_details
+(firmographics=False)` split) — deferred until real usage shows the
+enrichment is worth N live fetches per name search by default, not
+designed against speculatively. All four endpoints tested against real
+data (IBM's CIK, catalog, and a live cached `edgarkit` fetch) and
+returned correct results.
 
 ## 6. V3 parity: real semantic differences to watch, not just latency
 

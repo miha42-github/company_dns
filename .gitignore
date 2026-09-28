@@ -78,3 +78,4 @@ experiments/embed-bench/embedding_texts.txt
 # never commit, re-downloaded automatically on first run
 experiments/embed-bench/.fastembed_cache/
 experiments/ic-similarity-service/.fastembed_cache/
+v4/crates/server/.fastembed_cache/

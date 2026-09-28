@@ -386,9 +386,10 @@ avoid re-implementing that parsing from scratch.
    `edgarkit`'s `submissions()` call rebuilds `get_firmographics()`'s
    full output shape, and the full live-fallback path (fetch + §5.1's
    cache) works end to end against real data, no `pyedgar` needed.
-5. Beyond the disposable spikes in items 2/4, no production code yet.
-   The actual plan for turning these spikes into a running server is
-   [`v4-server-prototype.md`](v4-server-prototype.md) — still a plan,
-   not code, but it's where "when do these get promoted out of
-   `experiments/`" now has a real answer, built on the Option 2 +
-   DataFusion 55.x decisions above.
+5. ~~Beyond the disposable spikes in items 2/4, no production code
+   yet...~~ **Done (2026-09-28)**: `v4/` (per
+   [`v4-server-prototype.md`](v4-server-prototype.md)) is a real,
+   running server built on the `edgar-spike`/`edgar-index-query`/
+   `edgar-cache-spike` code, promoted rather than rewritten - the CIK
+   catalog ingest, cached live firmographics fetch, and both real
+   endpoints tested against real EDGAR data.
