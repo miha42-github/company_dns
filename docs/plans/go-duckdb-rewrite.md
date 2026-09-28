@@ -1115,6 +1115,10 @@ rather than left to read as still-open.
    relabel as agreed).
 9. New: work through [`company-dns-ux.md`](company-dns-ux.md) together —
    the UX layer this doc's §1/§6.5 now points to.
+10. New: [`v4-server-prototype.md`](v4-server-prototype.md) — the plan
+    for combining §5's cache, §7's DataFusion/SIC work, and
+    `edgar-backend.md`'s `edgarkit` work into one real running server
+    for the first time, measured against V3 on shared ground.
 
 ---
 

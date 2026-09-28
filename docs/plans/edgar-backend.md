@@ -371,7 +371,12 @@ avoid re-implementing that parsing from scratch.
    logic, or does it need rework to emit `.feather` instead of
    populating SQLite directly? No equivalent spike exists yet for
    Option 1 — worth one before comparing the two options head-to-head,
-   for the same reason item 2 got one.
+   for the same reason item 2 got one. **Still true as of
+   [`v4-server-prototype.md`](v4-server-prototype.md)** — that plan
+   moves forward with Option 2 (`edgarkit`) for its EDGAR catalog
+   ingest, a scoped, practical choice for getting a first real server
+   running, not a resolution of this item. Option 1 vs. Option 2 stays
+   genuinely open pending this spike.
 4. ~~Item 1.2 (live firmographics fallback) can likely move forward
    independently and sooner...~~ **Strengthened (2026-09-28,
    `experiments/edgar-spike/`)** — not just "likely straightforward"
@@ -383,4 +388,8 @@ avoid re-implementing that parsing from scratch.
    answered — those are the remaining open pieces, not whether
    `edgarkit` covers the data itself.
 5. Beyond the disposable spike in item 2, no production code yet, per
-   spike proposals, not commitments.
+   spike proposals, not commitments. **New**: the actual plan for
+   turning these spikes into a running server is
+   [`v4-server-prototype.md`](v4-server-prototype.md) — still a plan,
+   not code, but it's where "when do these get promoted out of
+   `experiments/`" now has a real answer.
