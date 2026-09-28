@@ -57,10 +57,12 @@ throwaway.
   quarterly index-building, plus `lib/edgar.py`'s hand-rolled JSON REST
   firmographics fetch), against real, live SEC EDGAR data. See
   [`docs/plans/edgar-backend.md`](../docs/plans/edgar-backend.md) §2.1/§5.
-  Both halves passed cleanly: a real company lookup (IBM) returned every
-  field `get_firmographics` needs, already structured; a real quarterly
-  index download+parse took ~1.65s and reproduced almost exactly the
-  ~3% `10-%`-form-type ratio already documented in
+  Both halves passed cleanly: `get_firmographics()`'s exact output
+  shape was rebuilt from a real IBM lookup using only `edgarkit`, no
+  `pyedgar` or hand-rolled JSON parsing (and surfaced a real bug in the
+  current Python code's ticker-list handling along the way); a real
+  quarterly index download+parse took ~1.65s and reproduced almost
+  exactly the ~3% `10-%`-form-type ratio already documented in
   `lib/prepare_edgar_data.py`'s own comment — a genuine cross-validation,
   not just a passing test.
 

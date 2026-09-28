@@ -201,12 +201,16 @@ avoid re-implementing that parsing from scratch.
 
 - **Pro**: single-language, single-binary story stays intact — no
   Python anywhere, matching the rest of the architecture.
-- **Pro**: item 1.2 (live firmographics) is genuinely simple either way
-  — a JSON GET request and some field reshaping, well within "write it
+- **Pro**: item 1.2 (live firmographics) is low-risk either way — a
+  JSON GET request and some field reshaping, well within "write it
   ourselves" territory regardless of what happens with index-building.
-  `edgarkit`'s `company` feature could also cover this, or a hand-rolled
-  `reqwest` call — low risk either way, this piece doesn't need much
-  external help.
+  **Spiked (2026-09-28, `experiments/edgar-spike/`)**: `edgarkit`'s
+  `submissions()` call, alone, was enough to rebuild
+  `get_firmographics()`'s exact output shape (URL construction,
+  `"Unknown"`-filling, address flattening) for real IBM data — no
+  `pyedgar`, no hand-rolled JSON parsing. A hand-rolled `reqwest` call
+  remains a fallback if `edgarkit` itself is dropped, but it's no longer
+  the only proven path.
 - **Con**: index-building (§1.1) is the piece with real parsing
   complexity (quarterly file boundaries, format quirks `pyedgar` has
   presumably already hit and fixed) — hand-rolling it means re-earning
@@ -268,12 +272,15 @@ avoid re-implementing that parsing from scratch.
    populating SQLite directly? No equivalent spike exists yet for
    Option 1 — worth one before comparing the two options head-to-head,
    for the same reason item 2 got one.
-4. Item 1.2 (live firmographics fallback) can likely move forward
-   independently and sooner — it's the lower-risk half of this doc's
-   scope, doesn't depend on the Option 1 vs. 2 choice, and is small
-   enough to just build directly in Rust once `go-duckdb-rewrite.md`
-   §5.3's fallback-path questions are answered. `edgar-spike`'s company
-   test (item 2) is already a real data point that this is
-   straightforward.
+4. ~~Item 1.2 (live firmographics fallback) can likely move forward
+   independently and sooner...~~ **Strengthened (2026-09-28,
+   `experiments/edgar-spike/`)** — not just "likely straightforward"
+   anymore: `edgarkit`'s `submissions()` call was verified to rebuild
+   `get_firmographics()`'s full output shape for real data, no `pyedgar`
+   needed. Still doesn't depend on the Option 1 vs. 2 choice for
+   index-building, and can move forward once `go-duckdb-rewrite.md`
+   §5.3's fallback-path questions (connection reuse, caching) are
+   answered — those are the remaining open pieces, not whether
+   `edgarkit` covers the data itself.
 5. Beyond the disposable spike in item 2, no production code yet, per
    spike proposals, not commitments.

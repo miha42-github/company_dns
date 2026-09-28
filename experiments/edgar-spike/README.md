@@ -36,6 +36,32 @@ flattening `lib/edgar.py` does today. `company_facts(51143)` (XBRL
 facts, not currently used by `company_dns` but available) also
 succeeded. No missing fields, no surprises.
 
+**Firmographics-shape test — the full `get_firmographics()` output,
+rebuilt from `edgarkit` alone.** Beyond just checking the raw fields
+are present (above), built the actual output shape
+`get_firmographics()` returns — URL construction
+(`companyFactsURL`/`firmographicsURL`/`filingsURL`/
+`transactionsByIssuer`/`transactionsByOwner`, same paths as
+`lib/edgar.py`'s `EDGARDATA`/`EDGARFACTS`/`EDGARURI`+`EDGARSERVER`
+constants), `"Unknown"`-filling for blank optional fields, and address
+flattening (`city`/`stateProvince`/`zipPostal`/`address` from the
+mailing address, matching `lib/edgar.py`'s exact logic including the
+street1+street2 concatenation) — entirely from the `Submission` struct,
+no `pyedgar`, no hand-rolled `reqwest`+JSON call. Real IBM output, side
+by side with the current Python shape's key names, matched field for
+field. **One real discrepancy found in the process, not introduced by
+this spike**: `lib/edgar.py`'s current "cleanup stock information" step
+(`firmographics['tickers'] = [firmographics['exchanges'][0],
+firmographics['tickers'][0]]`) overwrites `tickers` with
+`[exchange, ticker]` instead of the actual ticker list — looks like a
+real bug in the existing Python code, not something worth replicating.
+The scope here is deliberately EDGAR-only: `get_firmographics`'s SIC
+cross-reference (`division`/`majorGroup`/`industryGroup`, via
+`lib/sic.py` against local SIC data) is a separate system — the
+IC/classification work already covered elsewhere
+(`go-duckdb-rewrite.md`, `ic-similarity-search-poc.md`) — not something
+`edgarkit` provides or this spike tests.
+
 **Index test — also a clean match, with a real cross-validation.**
 `edgar.get_period_filings(EdgarPeriod::new(2025, Quarter::Q2), None)`
 downloaded and parsed the real Q2 2025 quarterly full-text index in
@@ -75,9 +101,14 @@ This is a real, positive data point for Option 2 (native Rust module) —
 data, not just in its own README examples, and the two output-shape
 gaps found (accession number, date parts) are both cheap, verified
 derivations from what `IndexEntry` already returns — not missing
-functionality. It doesn't settle the Option 1 vs. Option 2 choice on
-its own (that's still open, per edgar-backend.md §5), but the crate's
-biggest risk flagged in §2.1 (new, solo-maintained, low-adoption) is
-now paired with a real, passing empirical test against this project's
-actual data shape, not just a maturity concern taken on faith either
-way.
+functionality. **For §1.2 (live firmographics) specifically, `edgarkit`
+is now a stronger contender than a hand-rolled `reqwest` client**: it
+already returns the raw fields as structured Rust types (no manual JSON
+poking), and rebuilding `get_firmographics()`'s exact output shape from
+it required no `pyedgar` and surfaced one real bug in the current
+implementation as a side effect. This doesn't settle the Option 1 vs.
+Option 2 choice on its own (that's still open, per edgar-backend.md
+§5), but the crate's biggest risk flagged in §2.1 (new, solo-maintained,
+low-adoption) is now paired with a real, passing empirical test against
+this project's actual data shape, not just a maturity concern taken on
+faith either way.

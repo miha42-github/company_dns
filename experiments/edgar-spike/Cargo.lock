@@ -179,6 +179,7 @@ version = "0.1.0"
 dependencies = [
  "edgarkit",
  "reqwest",
+ "serde_json",
  "tokio",
 ]
 
