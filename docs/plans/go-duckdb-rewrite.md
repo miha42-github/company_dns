@@ -16,6 +16,11 @@ sections/annexes that discuss parquet as part of an earlier comparison
 (e.g. DuckDB's native Parquet support, `arrow-go`/`parquet-go` library
 maturity) are left as-is where they're evaluating general ecosystem
 tooling rather than asserting what this project's own data looks like.
+**Caching decided (2026-09-27, §5): no shared KVS at all** — a
+process-local, in-memory TTL+LRU cache per replica for EDGAR/Wikipedia
+fallback responses, nothing external, nothing shared across pods. The
+TiKV/minikv distributed-KVS research that originally motivated part of
+the Go-vs-Rust question is now purely historical — moved to Annex C.
 Owner: michael.hay@mediumroast.io
 Scope: a from-scratch rewrite of `company_dns` in Rust with DataFusion as
 the query/data-access engine, backed by Mediumroast `.feather` (Arrow IPC)
@@ -185,38 +190,109 @@ draft are now settled:
   ingest path generic enough that both consumption modes (embedded in
   the service, standalone download) can share it rather than diverging.
 
-**Still open: does a cache miss get *any* ephemeral, non-persistent
-caching**, given there's no write-back to the real store? A few distinct
-options, not mutually exclusive:
+**Decided: process-local, in-memory TTL + LRU cache, no shared KVS.**
+Four ephemeral-caching options were on the table (listed below for the
+record); #2 is the one settled on. The distributed-KVS options explored
+for this question (TiKV, minikv — §6.1's original content) turned out
+to be solving a much bigger problem than this actually is; see
+[Annex C](#annex-c-61-the-two-kv-stores-themselves-historical---kvs-eliminated-entirely)
+for that research, kept for the record but no longer live.
 
-1. **No caching at all beyond the feather-seeded set.** Simplest — every
+1. No caching at all beyond the feather-seeded set. Simplest — every
    miss re-fetches live, every time, no matter how recently the same
    company was looked up. Correct by construction (nothing to go stale),
    but repeat lookups for anything outside the seeded set always pay
-   full live-service latency.
-2. **Process-local, in-memory cache with TTL + LRU eviction**, scoped to
-   raw fallback responses only — never promoted to the vector-backed
-   store, never appears in semantic search, purely a fast-path for
-   *direct* repeat lookups within a process's lifetime. Lost on restart/
-   redeploy, and not shared across replicas (each pod warms its own).
-   This is the option flagged as interesting, especially for Wikipedia,
-   where live latency is the highest (per V3.3.0's numbers, even the
-   v2 backend is ~700-1000ms median vs. a local lookup's sub-100ms).
-3. **Shared in-memory cache across replicas** (e.g., Redis, or similar)
-   — same idea as #2 but pooled, so a miss on one pod warms it for every
-   pod. Removes the "N replicas, N cold caches" downside of #2, at the
-   cost of a new external dependency this service doesn't have today.
-4. **Rely on standard HTTP caching semantics** (respect Wikipedia/SEC's
-   own `Cache-Control`/`ETag` headers via a local HTTP cache like Go's
-   `httpcache`) instead of inventing a bespoke cache — piggybacks on
-   protocol-level caching, works uniformly for both EDGAR and Wikipedia,
-   less code to own.
+   full live-service latency. **Rejected** — throws away easy wins on
+   repeat lookups for no real benefit.
+2. **Process-local, in-memory cache with TTL + LRU eviction, scoped to
+   raw fallback responses only.** **This is the decision.** Never
+   promoted to the vector-backed store, never appears in semantic
+   search — purely a fast-path for *direct* repeat lookups within a
+   process's lifetime. Especially valuable for Wikipedia, where live
+   latency is the highest (per V3.3.0's numbers, even the v2 backend is
+   ~700-1000ms median vs. a local lookup's sub-100ms).
+3. Shared in-memory cache across replicas (e.g., Redis, or similar) —
+   same idea as #2 but pooled, so a miss on one pod warms it for every
+   pod. **Rejected** — the whole point of eliminating the KVS/shared-store
+   direction (§6.1/Annex C) was to not take on an external dependency and
+   its operational surface for what's fundamentally a best-effort,
+   non-authoritative fast-path cache. Pulling Redis back in for the same
+   purpose would undo that.
+4. Rely on standard HTTP caching semantics (respect Wikipedia/SEC's own
+   `Cache-Control`/`ETag` headers via a local HTTP cache) instead of a
+   bespoke cache. **Not chosen as the primary mechanism** — TTL+LRU gives
+   direct control over cache size and eviction that pure protocol-level
+   caching doesn't, but nothing stops layering HTTP-cache-aware behavior
+   (respecting `304 Not Modified`, etc.) into the outbound fallback calls
+   later as a refinement, independent of this decision.
+
+### 5.1 What the process-local cache actually looks like
+
+Basics, to make #2 concrete rather than just "an in-memory cache":
+
+- **Scope**: one cache instance per running process (per Kubernetes pod
+  / per Docker container). EDGAR and Wikipedia get separate cache
+  instances (or at least separate keyspaces) — different key shapes
+  (CIK vs. article title/QID), different TTLs likely appropriate given
+  the latency and staleness profile of each upstream.
+- **Key**: CIK for EDGAR (matches §2's "CIK, not company name" lesson —
+  same durable-identifier reasoning applies to the cache key, not just
+  the feather-backed data), Wikipedia page title or QID for Wikipedia.
+- **Eviction**: LRU bounds memory (a fixed capacity, not unbounded
+  growth over a long-running pod's lifetime); TTL bounds staleness (a
+  cached fallback answer expires and gets re-fetched live after some
+  window, rather than being trusted indefinitely). Both apply together —
+  an entry can be evicted by either running out of room or aging out,
+  whichever comes first.
+- **Candidate implementation**: Rust's `moka` crate (already named in
+  §6.1/Annex C as the right-sized tool for this, ahead of any KVS) —
+  an in-process, thread-safe cache with built-in TTL and
+  size/LRU-eviction support, no external process or network hop.
+- **Lifecycle**: purely in-memory, gone on restart/redeploy/crash — by
+  design, matching "no write-back to the persistent store, ever" above.
+  Nothing about correctness depends on this cache surviving a restart;
+  losing it just means the next few requests pay live-service latency
+  again until it warms back up.
+
+### 5.2 The real tradeoff: no cross-replica awareness
+
+Because there's no shared KVS, **each Kubernetes pod / Docker container
+runs its own cache with zero knowledge of any other replica's cache
+state.** Worth being explicit about both sides of this, not just
+asserting it's fine:
+
+- **The upside**: no new external dependency (no Redis/KVS to deploy,
+  operate, monitor, or lose sleep over), no network hop on the cache-hit
+  path (pure in-process memory access), no coordination protocol, no
+  distributed-cache consistency question to get wrong. This is a large
+  simplification relative to §6.1/Annex C's original TiKV/minikv framing,
+  and fits this project's actual scale and "reference/example project,
+  not a production service" posture (§1) far better than operating a
+  distributed cache would.
+- **The downside**: cache hit rate is diluted across replicas. With N
+  pods behind a load balancer and no session affinity, a repeat lookup
+  for the same company has roughly a `1/N` chance of landing on the pod
+  that already cached it — so effective cache warmth degrades as
+  replica count grows, and scaling out (or a rolling redeploy cycling
+  every pod) means starting from N cold caches, not one warm one.
+- **Why this is an acceptable tradeoff here, not just a shrug**: the
+  fallback cache is explicitly a *best-effort, non-authoritative*
+  fast-path (§5's "no write-back, ever" decision already established
+  that correctness never depends on it) — a cache miss just means paying
+  live-service latency once, not a wrong answer. Given this project's
+  actual traffic profile (a reference/example service, not a
+  high-throughput production API — §1), the diluted-hit-rate cost is
+  real but low-stakes, while the avoided cost (running and operating a
+  shared cache/KVS) was the more consequential one. Worth revisiting
+  only if actual usage patterns (many replicas, genuinely hot repeat
+  lookups) make the dilution cost visible in practice — not something to
+  pre-solve speculatively.
 
 No vectors get computed for anything cached this way, by design —
-matches "we don't want to compute the vectors" — so none of these
-options interact with §4's vector-search backend decision at all; they
-only affect *direct*-lookup latency on a cache miss, not similarity
-search.
+matches "we don't want to compute the vectors" — so this caching
+decision doesn't interact with §4's vector-search backend decision at
+all; it only affects *direct*-lookup latency on a cache miss, not
+similarity search.
 
 - Does the EDGAR fallback path inherit anything from the current Python
   service's item-5 connection-reuse work, or is a Go-native equivalent
@@ -236,59 +312,22 @@ Raised by evaluating [tikv/tikv](https://github.com/tikv/tikv) and
 [whispem/minikv](https://github.com/whispem/minikv) for the §5 caching
 question — both Rust, which raised the question of whether Rust would
 be a better overall fit than Go "for compatibility with these emerging
-distributed KVS systems." Research below, current as of 2026-09-27.
+distributed KVS systems." §6.1's research (below, now in Annex C)
+concluded neither actually fit what §5 needed, and §5 has since settled
+on a plain process-local TTL+LRU cache with no KVS/shared store at all —
+so this was never actually the deciding factor; see §6.4/§6.5 for what
+was.
 
-### 6.1 The two KV stores themselves
+### 6.1 The two KV stores themselves (historical — KVS eliminated entirely)
 
-**TiKV**: a serious, heavyweight, genuinely proven system — CNCF
-*graduated* project (not just "hosted"), originally built by PingCAP to
-back TiDB, in wide production use, handles 100+TB-scale deployments via
-Raft-sharded regions and a Placement Driver. Written in Rust, yes — but
-it's a full distributed database, not a caching library: running it
-means operating a Placement Driver cluster plus RocksDB-backed storage
-nodes, with Raft consensus and 2PC transactions. That's a lot of
-operational surface for what §5 actually needs (an ephemeral cache for
-EDGAR/Wikipedia fallback misses) — the same "overkill relative to actual
-need" pattern as DuckDB's HNSW index in §4.3, just one level up in
-infrastructure weight.
-
-**minikv**: describes itself as "production-ready," with Raft consensus,
-2PC, 256 virtual shards, an S3-compatible API, and even built-in vector
-search — on paper, a lot of overlap with what this rewrite needs
-generally. Worth the same skepticism applied to DuckDB VSS's self-
-description earlier in this doc, though: it reads as a new, likely
-solo/small-team project (recent "Show HN" post, a `v1.0.0` "GA line"),
-with no independent production track record found comparable to TiKV's.
-"Production-ready" is the author's own claim, not (yet) an outside
-assessment. **One detail that undercuts the "need Rust for
-compatibility" premise directly**: the same author also publishes
-[`whispem/mini-kvstore-go`](https://github.com/whispem/mini-kvstore-go),
-a Go implementation of essentially the same segmented-log/compaction/
-bloom-filter design. If minikv-style compatibility is genuinely the
-goal, a Go-native peer already exists from the same source — this isn't
-a Rust-exclusive ecosystem.
-
-**Lighter-weight Rust options exist too**, worth knowing about even
-though they're a different category (embedded, single-node, no
-clustering — closer to BoltDB/sled than to TiKV): `redb` (pure Rust,
-copy-on-write B+trees, LMDB-like) and `fjall` (LSM-based, built for
-higher write throughput). Neither is a distributed KVS; both are
-reasonable if the actual need turns out to be "an embedded on-disk KV
-store," which isn't what §5 described.
-
-**Bottom line on the KVS question specifically**: none of these are
-actually sized to §5's stated need. An ephemeral, process-local or
-shared TTL+LRU cache for fallback-miss responses doesn't need Raft
-consensus, sharding, or S3-compatible object storage — it needs
-something closer to an in-process LRU cache (Go: `ristretto`; Rust:
-`moka`) or, if cross-replica sharing matters, plain Redis (mature,
-battle-tested, first-class clients in both languages, not something
-either candidate here improves on for this use case). **Recommend not
-letting the caching-layer choice drive the language choice** — the
-caching decision (§5's four options) and the language decision are
-close to independent, and treating them as linked risks a much bigger
-decision (the whole rewrite's language) being anchored on a much smaller
-one (how to cache Wikipedia lookups).
+> **Historical, moved to [Annex C](#annex-c-61-the-two-kv-stores-themselves-historical---kvs-eliminated-entirely).**
+> This section researched TiKV and minikv as candidate distributed KV
+> stores for the §5 caching question. §5 has since settled on a
+> process-local, in-memory TTL+LRU cache with **no KVS, shared or
+> otherwise** — not just "TiKV/minikv specifically rejected," the whole
+> category of shared/distributed key-value store is out of the picture
+> for this project. Kept below, unedited, as the reasoning trail; not
+> live guidance.
 
 ### 6.2 Go vs. Rust, on the dimensions that actually matter for this project
 
@@ -1050,11 +1089,13 @@ once company vectors exist to test against.
    DataFusion's `array_distance`. §4's original analysis moved to
    [Annex A](#annex-a-4-backend-sqlite-vs-duckdb-historical---superseded-by-65).
    Issue #53 can be updated to point at the DataFusion approach.
-3. §5's cache-with-fallback questions are now mostly settled (no
-   write-back, company semantic search in scope, Mediumroast sets the
-   cap) — remaining: pick one of the four ephemeral-cache options for
-   direct-lookup misses (or confirm "none," option 1), and get an actual
-   row-count estimate for the company `.feather` package for scale planning.
+3. ~~§5's cache-with-fallback questions... pick one of the four
+   ephemeral-cache options...~~ **Done (§5/§5.1)** — process-local,
+   in-memory TTL+LRU cache per replica, no shared KVS (the TiKV/minikv
+   research that raised this moved to
+   [Annex C](#annex-c-61-the-two-kv-stores-themselves-historical---kvs-eliminated-entirely)).
+   Remaining: get an actual row-count estimate for the company `.feather`
+   package for scale planning.
 4. ~~Settle §6 (Go vs. Rust)...~~ **Done (§6.5)** — Rust + DataFusion,
    on both proof (four working prototypes) and the business reframing
    argument, not the original KVS-compatibility premise.
@@ -1085,9 +1126,10 @@ once company vectors exist to test against.
 
 Superseded sections, kept verbatim (not edited after the fact) as a
 record of the actual decision process — how the reasoning moved from
-"here are the live options" to §6.5's answer — not as current guidance.
-Nothing here should be read as a live comparison to act on; `§4.x`/`§8`
-references elsewhere in this doc point at this content.
+"here are the live options" to §6.5's (and §5's) answers — not as
+current guidance. Nothing here should be read as a live comparison to
+act on; `§4.x`/`§8`/`§6.1` references elsewhere in this doc point at
+this content.
 
 ### Annex A (§4): Backend: SQLite vs. DuckDB (historical — superseded by §6.5)
 
@@ -1333,3 +1375,63 @@ to think through together, not decided here:
   entire-service rewrite? Given the scope, a side-by-side period seems
   likely to be worth it, but at what granularity (whole-service, or
   endpoint-by-endpoint)?
+
+### Annex C (§6.1): The two KV stores themselves (historical — KVS eliminated entirely)
+
+> **Historical.** Written while researching whether TiKV or minikv (both
+> Rust) should drive the language choice, per the "compatibility with
+> these emerging distributed KVS systems" question that opened §6. The
+> conclusion below (bottom line: none of these are sized to what §5
+> needs) held up, and §5 has since gone further — settling on a plain
+> process-local, in-memory TTL+LRU cache with no KVS, shared or
+> distributed, at all. Kept unedited for the reasoning trail.
+
+**TiKV**: a serious, heavyweight, genuinely proven system — CNCF
+*graduated* project (not just "hosted"), originally built by PingCAP to
+back TiDB, in wide production use, handles 100+TB-scale deployments via
+Raft-sharded regions and a Placement Driver. Written in Rust, yes — but
+it's a full distributed database, not a caching library: running it
+means operating a Placement Driver cluster plus RocksDB-backed storage
+nodes, with Raft consensus and 2PC transactions. That's a lot of
+operational surface for what §5 actually needs (an ephemeral cache for
+EDGAR/Wikipedia fallback misses) — the same "overkill relative to actual
+need" pattern as DuckDB's HNSW index in §4.3 (Annex A), just one level up
+in infrastructure weight.
+
+**minikv**: describes itself as "production-ready," with Raft consensus,
+2PC, 256 virtual shards, an S3-compatible API, and even built-in vector
+search — on paper, a lot of overlap with what this rewrite needs
+generally. Worth the same skepticism applied to DuckDB VSS's self-
+description elsewhere in this doc, though: it reads as a new, likely
+solo/small-team project (recent "Show HN" post, a `v1.0.0` "GA line"),
+with no independent production track record found comparable to TiKV's.
+"Production-ready" is the author's own claim, not (yet) an outside
+assessment. **One detail that undercuts the "need Rust for
+compatibility" premise directly**: the same author also publishes
+[`whispem/mini-kvstore-go`](https://github.com/whispem/mini-kvstore-go),
+a Go implementation of essentially the same segmented-log/compaction/
+bloom-filter design. If minikv-style compatibility is genuinely the
+goal, a Go-native peer already exists from the same source — this isn't
+a Rust-exclusive ecosystem.
+
+**Lighter-weight Rust options exist too**, worth knowing about even
+though they're a different category (embedded, single-node, no
+clustering — closer to BoltDB/sled than to TiKV): `redb` (pure Rust,
+copy-on-write B+trees, LMDB-like) and `fjall` (LSM-based, built for
+higher write throughput). Neither is a distributed KVS; both are
+reasonable if the actual need turns out to be "an embedded on-disk KV
+store," which isn't what §5 described.
+
+**Bottom line on the KVS question specifically**: none of these are
+actually sized to §5's stated need. An ephemeral, process-local or
+shared TTL+LRU cache for fallback-miss responses doesn't need Raft
+consensus, sharding, or S3-compatible object storage — it needs
+something closer to an in-process LRU cache (Go: `ristretto`; Rust:
+`moka`) or, if cross-replica sharing matters, plain Redis (mature,
+battle-tested, first-class clients in both languages, not something
+either candidate here improves on for this use case). **Recommend not
+letting the caching-layer choice drive the language choice** — the
+caching decision (§5's four options) and the language decision are
+close to independent, and treating them as linked risks a much bigger
+decision (the whole rewrite's language) being anchored on a much smaller
+one (how to cache Wikipedia lookups).
