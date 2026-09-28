@@ -313,18 +313,37 @@ decision doesn't interact with §4's vector-search backend decision at
 all; it only affects *direct*-lookup latency on a cache miss, not
 similarity search.
 
-- Does the EDGAR fallback path inherit anything from the current Python
-  service's item-5 connection-reuse work, or is a Rust-native equivalent
-  (e.g., a shared `reqwest::Client`, which pools/reuses connections by
-  default) the right call instead? **Keeping all options on the table**
-  — evaluate for best fit in Rust/`tokio` rather than assuming a straight
-  port.
-- Same question for the Wikipedia fallback path and item 6's direct-
-  HTTP approach (`lib/wikipedia_v2.py`) — the *idea* (narrow the
-  MediaWiki/Wikidata requests to only the fields actually used, real
-  identifying User-Agent, respect `maxlag`/429/503) carries over
-  conceptually, but the Rust implementation should be evaluated on its
-  own merits rather than assumed to mirror the Python approach.
+### 5.3 EDGAR backend
+
+The current Python implementation is actually two distinct pieces, not
+one: an index-building step (`lib/prepare_edgar_data.py`, using
+`pyedgar`'s `IndexMaker` to download and parse SEC's quarterly full-text
+index into the local `companies` SQLite cache) and a live
+firmographics-fetch step (`lib/edgar.py`'s `get_firmographics`, plain
+JSON REST calls to `data.sec.gov` — no `pyedgar` involved there at all).
+Does the EDGAR fallback path inherit anything from the current Python
+service's item-5 connection-reuse work, or is a Rust-native equivalent
+(e.g., a shared `reqwest::Client`, which pools/reuses connections by
+default) the right call instead? **Keeping all options on the table** —
+evaluate for best fit in Rust/`tokio` rather than assuming a straight
+port. This is substantial enough to deserve its own planning space: see
+[`docs/plans/edgar-backend.md`](edgar-backend.md) for the full research
+and options (reusing `pyedgar` as an external CLI/pipeline step producing
+`.feather` output, vs. a native Rust client).
+
+### 5.4 Wikipedia backend
+
+Unlike EDGAR, Wikipedia's current implementation (`lib/wikipedia_v2.py`)
+has no third-party dependency comparable to `pyedgar` standing in the
+way — it's already direct HTTP calls to the MediaWiki/Wikidata APIs,
+narrowed to only the fields actually used, with a real identifying
+User-Agent and `maxlag`/429/503 handling. That *idea* carries over
+conceptually to Rust, but the implementation should be evaluated on its
+own merits (e.g., `reqwest` + `tokio`) rather than assumed to mirror the
+Python approach line-for-line. This backend deserves its own planning
+doc too, once EDGAR's is further along — likely a smaller effort than
+EDGAR's, precisely because there's no "external tool vs. native
+reimplementation" decision to make here in the first place.
 
 ## 6. Language & engine: Rust + DataFusion (decided, §6.5)
 
