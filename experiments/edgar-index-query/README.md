@@ -89,10 +89,10 @@ reports — 2,659 of the 9,241 rows, more than all 10-K/10-K/A combined),
 Not a bug — the current Python code is internally consistent about it
 (`lib/edgar.py`'s own query also filters `form LIKE '10-%'`, the same
 broad match) — but worth flagging before the rewrite's docs/comments
-repeat "10-K, 10-K/A, 10-Q" as the literal, complete set. Whether the
-rewrite should narrow the filter to exactly those three form types, or
-keep the broader `'10-%'` match, is a real, small decision this spike
-surfaced rather than settled.
+repeat "10-K, 10-K/A, 10-Q" as the literal, complete set. **Decided
+(2026-09-28, see `docs/plans/edgar-backend.md` §2.1): keep the broader
+`'10-%'` match** — the fix is to the description ("10-K, 10-K/A, 10-Q"
+undersells what it actually catches), not the filter itself.
 
 ## Bottom line for edgar-backend.md
 

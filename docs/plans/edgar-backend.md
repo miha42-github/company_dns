@@ -154,15 +154,20 @@ forward:
   two-sided shape Option 1 already has (Python feeding Rust), just with
   Rust on both sides instead. Still single-*language*; not
   single-*binary* if `edgarkit` is in the mix.
-- **The `'10-%'` filter catches more than documented**: grouping the
+- **The `'10-%'` filter catches more than documented.** Grouping the
   9,241 rows by `form_type` shows `10-D`/`10-D/A` (2,659 rows — more
   than all `10-K`/`10-K/A` combined), `10-12G`/`10-12G/A`/`10-12B`/
   `10-12B/A`, and `10-KT`/`10-KT/A` alongside the `10-K`/`10-K/A`/`10-Q`
   `lib/prepare_edgar_data.py`'s own comment names explicitly. Not a bug
   — `lib/edgar.py`'s query uses the same broad `LIKE '10-%'` match, so
-  the two pipelines agree — but worth a real decision (narrow the filter
-  to exactly three form types, or keep the broader match and update the
-  comment) rather than carrying an inaccurate comment into the rewrite.
+  the two pipelines already agree. **Decided (2026-09-28): the rewrite
+  keeps the broader `'10-%'` match**, not narrowed to exactly
+  `10-K`/`10-K/A`/`10-Q` — the current comment describing it as just
+  those three is the thing that's wrong, not the filter itself. Whatever
+  ends up documenting this for the rewrite (this doc, or wherever the
+  index-building implementation itself gets written up) should describe
+  the filter as "any form starting with `10-`" and name the fuller set
+  found here, not repeat the narrower three-type description.
   See `experiments/edgar-index-query/README.md` for the full breakdown.
 
 ### 2.2 `sec_edgar` (crates.io, `tieje/rs_sec_edgar`)
