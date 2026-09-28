@@ -285,6 +285,22 @@ and its configuration, not the mechanism itself:
   losing it just means the next few requests pay live-service latency
   again until it warms back up.
 
+**Spiked (2026-09-28)**: `experiments/edgar-cache-spike/` builds exactly
+this (a generic `moka`-backed TTL+LRU cache type) and wires it to
+`edgarkit`'s real live-fallback fetch — not a synthetic benchmark, real
+SEC data. A cache hit was **~46,000x faster** than a miss (11.75µs vs.
+544ms); 5 concurrent requests for the same uncached CIK produced only
+**1** real network fetch (`moka`'s single-flight de-duplication, a real
+advantage over hand-rolling this check-then-fetch pattern); TTL expiry
+and LRU eviction (capacity-2 cache) were both confirmed with real
+re-fetches, not just internal cache statistics; and the same `Cache<K,
+V>` type was reused with a completely different key/value shape as a
+stand-in for a future Wikipedia instance, confirming "one mechanism, not
+two" holds in code, not just in this doc's prose. `edgarkit` itself has
+no caching functionality at all (checked directly, zero docs.rs hits for
+"cache") — confirming this layer genuinely sits on top of the fetch
+client, not inside it, as designed above.
+
 ### 5.2 The real tradeoff: no cross-replica awareness
 
 Because there's no shared KVS, **each Kubernetes pod / Docker container

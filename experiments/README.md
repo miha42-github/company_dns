@@ -78,6 +78,23 @@ throwaway.
   catches more than its own comment describes (`10-D`, `10-12G/B`,
   `10-KT` too, not just `10-K`/`10-K/A`/`10-Q`) — see this experiment's
   README for the full breakdown.
+- **`edgar-cache-spike/`** — builds
+  [`go-duckdb-rewrite.md`](../docs/plans/go-duckdb-rewrite.md) §5.1's
+  general caching mechanism (`moka`, TTL+LRU, process-local) and wires
+  it to `edgarkit`'s real live-fallback fetch — the piece that actually
+  answers whether the whole EDGAR path works end to end, not just
+  fetch-and-shape (`edgar-spike/`) or write-and-query
+  (`edgar-index-query/`). Checked `edgarkit` for any built-in caching
+  first (none — confirmed by a docs.rs search, zero hits). Five tests
+  against real SEC data: a cache hit was **~46,000x faster** than a miss
+  (11.75µs vs. 544ms); 5 concurrent requests for the same uncached CIK
+  produced only **1** real network fetch (`moka`'s single-flight
+  de-duplication, not something a hand-rolled cache gets for free); TTL
+  expiry and LRU eviction (under a capacity-2 cache) both confirmed with
+  real re-fetches, not just cache statistics; and the same `Cache<K, V>`
+  type was reused with a completely different key/value shape as a
+  stand-in for a future Wikipedia instance, proving "one mechanism, not
+  two" holds in code.
 
 ## Conventions for adding a new experiment
 

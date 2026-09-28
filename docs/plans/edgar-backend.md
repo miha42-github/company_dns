@@ -282,7 +282,15 @@ avoid re-implementing that parsing from scratch.
   `"Unknown"`-filling, address flattening) for real IBM data — no
   `pyedgar`, no hand-rolled JSON parsing. A hand-rolled `reqwest` call
   remains a fallback if `edgarkit` itself is dropped, but it's no longer
-  the only proven path.
+  the only proven path. **Further spiked (2026-09-28,
+  `experiments/edgar-cache-spike/`)**: the full live-fallback path — not
+  just the fetch, but §5.1's TTL+LRU cache wired on top of it — works
+  end to end against real EDGAR data, including concurrent-request
+  de-duplication and confirmed eviction under a small cache. This is the
+  piece that actually answers the standing question about `edgarkit`
+  raised when this doc was first drafted: yes, it's usable for the whole
+  live-fallback path, cache included, not just the raw fetch in
+  isolation.
 - **Con**: index-building (§1.1) is the piece with real parsing
   complexity (quarterly file boundaries, format quirks `pyedgar` has
   presumably already hit and fixed) — hand-rolling it means re-earning
@@ -324,7 +332,12 @@ avoid re-implementing that parsing from scratch.
   live-fallback path (§1.2 above) is one consumer of that shared
   process-local TTL+LRU cache — its own instance/keyspace, CIK-keyed,
   but the same underlying mechanism Wikipedia's fallback path (§5.4 of
-  that doc) uses too.
+  that doc) uses too. **Built and verified (2026-09-28,
+  `experiments/edgar-cache-spike/`)**: not just decided in principle —
+  the cache actually works against real EDGAR data (hit/miss, TTL,
+  eviction, concurrent single-flight), and the same generic type was
+  proven reusable with a non-EDGAR key/value shape as a Wikipedia
+  stand-in.
 - ~~Does this project move to DataFusion 55.x? Needs its own
   re-validation pass...~~ **Re-validation done (2026-09-28,
   `go-duckdb-rewrite.md` §7.9)**: both DataFusion-dependent spikes
