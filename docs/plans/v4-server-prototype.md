@@ -8,29 +8,37 @@ data — `sic/description`, `sic/code`, `sic/similarity`, `edgar/ciks`,
 `edgar/firmographics/{cik}` all returned correct results, including a
 live cached `edgarkit` fetch for IBM), §7's `--profile v4` harness
 extension (ran cleanly against the live server, 31/31 requests OK), and
-§8's staged Wikipedia/merged stubs (typed not-implemented, merged
-endpoint correctly falls back to EDGAR-only with an explicit note). See
-`v4/README.md` for how to run it. **`detail`/`summary` are at real
-parity with V3** (§5.3) — an initial pass deferred `detail`'s per-match
-live firmographics enrichment as a speculative-design concern; corrected
-the same day, since for a *port* specifically, matching V3's actual
-data is the point, not a nice-to-have. **Not done**: a real V3-vs-V4
-`compare.py` run (needs a V3 target to run the harness against, not
-attempted here), CI/release packaging, and everything §1 already scoped
-out (UX, Wikipedia/merged for real, non-US SIC systems).
+§8's Wikipedia + merged firmographics — originally staged stubs,
+**promoted to real, tested, live-verified implementations the same day
+(§8.1/§8.2)** after `experiments/wikipedia-spike/` validated the full
+approach (crate evaluation, wptools infobox/claims parsing port,
+side-by-side diff against V3's live output across 10 companies, a
+corporate-suffix hint restoration that goes further than V3's own
+swallowed-by-a-404-bug version, an infobox-presence gate, and a
+Wikidata canonical-title fix). See `v4/README.md` for how to run it.
+**`detail`/`summary` are at real parity with V3** (§5.4) — an initial
+pass deferred `detail`'s per-match live firmographics enrichment as a
+speculative-design concern; corrected the same day, since for a *port*
+specifically, matching V3's actual data is the point, not a
+nice-to-have. **Not done**: a real V3-vs-V4 `compare.py` run (needs a
+V3 target to run the harness against, not attempted here), CI/release
+packaging, and everything §1 already scoped out (UX, non-US SIC
+systems, and bare-name-to-page-title resolution beyond V3's own
+suffix-hint heuristic — see §8.1).
 Owner: michael.hay@mediumroast.io
 Scope: a prototype `company_dns` V4 server (Rust + DataFusion, per
 [`go-duckdb-rewrite.md`](go-duckdb-rewrite.md) §6.5/§9) covering US SIC
 similarity/lookup and EDGAR (initial catalog + live spillover, per
 [`edgar-backend.md`](edgar-backend.md)), implementing the subset of V3
 endpoints needed for a real side-by-side performance comparison, plus
-new SIC-similarity endpoints V3 has no equivalent for. Explicitly
-**not** in this prototype: a UX/UI (stays with
-[`company-dns-ux.md`](company-dns-ux.md), deferred until we work on it
-together — §9), a real Wikipedia client or merged-firmographics
-implementation (§8 stages the module boundaries only), and the other
-four SIC systems (UK/ISIC/EU-NACE/Japan) — US SIC only, matching what's
-actually been spiked.
+new SIC-similarity endpoints V3 has no equivalent for, plus a real
+Wikipedia client and merged-firmographics implementation (§8, promoted
+the same day this status line was last updated — no longer just staged
+module boundaries). Explicitly **not** in this prototype: a UX/UI
+(stays with [`company-dns-ux.md`](company-dns-ux.md), deferred until we
+work on it together — §9), and the other four SIC systems
+(UK/ISIC/EU-NACE/Japan) — US SIC only, matching what's actually been
+spiked.
 
 ---
 
@@ -60,7 +68,7 @@ integration — and the first point where this project can honestly say
 
 1. **Implement the relevant V3 APIs for EDGAR and US SIC** — §5/§6
    below, the exact endpoint list and what backs each one.
-2. **New V4 endpoints for SIC similarity** — §5.3, following the same
+2. **New V4 endpoints for SIC similarity** — §5.1, following the same
    URL-shape convention V3 already uses.
 3. **Source/repo structure** — §3.
 4. **EDGAR staging data written to `./tmp`** — §4.
@@ -115,10 +123,9 @@ v4/
                                service — DataFusion data access +
                                fastembed-rs query-time embedding for
                                US SIC)
-    wikipedia/                (stub only — §8.1, trait/module boundary,
-                               no real HTTP client yet)
-    firmographics/             (stub only — §8.2, the merge shape, no
-                               real merge logic yet)
+    wikipedia/                (promoted from experiments/wikipedia-spike/
+                               — real HTTP client, §8.1, built 2026-09-28)
+    firmographics/             (real merge logic, §8.2, built 2026-09-28)
     server/                  (binary — Axum, wires the above crates to
                                real HTTP routes, §5/§6)
 ```
@@ -224,7 +231,39 @@ already-confirmed schema) instead of `lib/sic.py`'s SQLite queries. See
 §6 for the one real semantic question this raises (exact-match vs. V3's
 `LIKE`-based fuzzy match).
 
-### 5.3 EDGAR (V3 parity)
+### 5.3 Health
+
+```
+GET /health
+```
+
+Not versioned (V3's own `/health` isn't either — `baseline.py`'s
+`"category": "control"` liveness endpoint, no DB/network calls), and
+not wrapped in V3's `{code, message, module, data, dependencies}`
+envelope, since V3's `/health` isn't wrapped in it either
+(`company_dns.py`'s `health_check`) — this is the one V3 endpoint that
+was never inside that envelope to begin with, so "parity" here means
+matching its actual bare-object shape, not V4's usual envelope.
+**Real V3 parity, corrected**: an earlier pass had V4's handler return
+a bare `"ok"` string instead of matching V3's response body — fixed.
+Both now return the same three fields:
+
+```json
+{"status": "healthy", "version": "4.0.0", "timestamp": "2026-09-28T16:53:51Z"}
+```
+
+(`version` is expected to differ — V3 reports `"3.2.0"`, V4 reports
+its own `"4.0.0"`; `status`/`timestamp` shape match exactly, ISO 8601
+UTC with a trailing `Z`, via `chrono::Utc::now().to_rfc3339_opts(...,
+true)` matching V3's `datetime.utcnow().isoformat() + "Z"`.) **Not yet
+in the `--profile v4` harness catalog** (§7): `baseline.py`'s
+`ENDPOINTS["health"]` entry has no `v4_path`, so `profile_endpoints("v4")`
+excludes it today even though the route exists and now matches V3 —
+a one-line gap (add `"v4_path": "/health"` to that entry), not a
+missing implementation, worth fixing before the next comparison run
+rather than in this doc pass.
+
+### 5.4 EDGAR (V3 parity)
 
 | V3 | V4 |
 |---|---|
@@ -338,37 +377,268 @@ produces the two reports `compare.py` wants. The real work is the
 `ENDPOINTS`-catalog scoping bullet above, plus using the two tools
 together and writing up what the comparison actually shows.
 
-## 8. Staged, not built: Wikipedia and merged firmographics
+## 8. Wikipedia and merged firmographics — built (2026-09-28)
 
-Per item 7/8 — these get their module boundaries defined now, so the
-crate structure (§3) doesn't need reshaping later, but no real
-implementation in this prototype.
+Originally staged as module boundaries only (per item 7/8, so the
+crate structure in §3 wouldn't need reshaping later); promoted to real,
+tested, live-verified implementations the same day, after
+`experiments/wikipedia-spike/` validated the full approach.
 
 ### 8.1 Wikipedia searching, V3-shaped
 
-`v4/crates/wikipedia/` — a trait (working name `WikipediaClient`) with
-the same method shape `lib/wikipedia_v2.py`'s `get_firmographics`
-already validated conceptually (narrowed field requests, real
-identifying User-Agent, `maxlag`/429/503 handling —
-`go-duckdb-rewrite.md` §5.4), wired into §3's `cache` crate the same
-way `edgar`'s client is (own instance, own keyspace, title/QID-keyed —
-exactly what `edgar-cache-spike`'s Test 5 already demonstrated is
-possible with the same generic cache type). **The implementation
-returns "not yet implemented"** (a clear, typed stub response, not a
-silent 404) — this section is about the shape being right when real
-work starts, not about shipping a working Wikipedia client in this
-prototype.
+`v4/crates/wikipedia/` — a real `WikipediaClient` struct (not a trait —
+no second implementation exists to justify one) with a
+`get_firmographics(&self, company_name: &str)` method matching
+`lib/wikipedia_v2.py`'s method of the same name, wired to its own
+instance of §3's `cache` crate (`FallbackCache<String, Arc<Value>>`,
+`DEFAULT_TTL` 1 hour, `DEFAULT_CACHE_CAPACITY` 10,000 — same type
+`edgar`'s client uses, own keyspace, string-keyed by page title/QID
+rather than `edgar`'s `u64` CIK, cache-aside via `try_get_with` exactly
+like `EdgarClient`) — what `edgar-cache-spike`'s Test 5 already
+demonstrated the generic cache type supports.
+
+**What's real**: the full pipeline `experiments/wikipedia-spike/`
+proved out - narrowed `action=parse`/`action=query`/`wbgetentities`
+requests, `maxlag`/429/503/Retry-After backoff, a wptools-derived
+infobox/claims parser (`infobox.rs`), V3's field-construction logic
+(`firmographics.rs`), V3's corporate-suffix hint restored and actually
+executed as REST calls rather than just suggested
+(`client::resolve_candidate`/`lookup_firmographics`), gated on infobox
+presence (not just page existence - the fix that made bare "Alphabet"/
+"Meta" resolve correctly instead of returning a misleadingly
+"successful" all-`"Unknown"` response), and Wikidata-canonical-title-
+correct (so a resolved redirect's claims aren't silently lost). 5
+passing tests (`cargo test -p company-dns-wikipedia`), diff-verified
+against V3's live output across 10 companies in the spike, and
+live-verified again after promotion: `GET /V4.0/global/company/
+wikipedia/firmographics/Alphabet` (bare) returns full correct data
+(real CIK `0001652044`, ISIN, tickers); a genuine miss returns a real
+`404` with V3's exact hint message as the JSON `message` — the
+improvement over V3's own swallowed-hint bug (`company_dns.py`'s
+custom 404 handler discards `HTTPException.detail` for every 404,
+confirmed live against the deployment), delivered for real since V4's
+`not_found` responses are always JSON, never HTML.
+
+**Deliberately not ported**: the spike's `resolve_title` (MediaWiki
+full-text-search-based bare-name resolution, 60% success on its 5 test
+cases) — it answers a different, narrower question (a name phrased
+completely unlike its Wikipedia title) than V3 parity needs, and stays
+available in the spike as a starting point if that becomes a real
+V4-only feature request later, per that spike's own README.
+
+The server's `wikipedia_firmographics` handler
+(`v4/crates/server/src/main.rs`) maps `WikipediaError::NotFound` to a
+V3-envelope `not_found` response (HTTP 404) carrying that error's own
+message - V3's exact hint text, byte-identical - in the `message`
+field, and `WikipediaError::Request` (a genuine network/parse failure,
+not "this company doesn't exist") to a `server_error` response (HTTP
+500) instead, so a caller can tell the two apart. Route:
+`GET /V4.0/global/company/wikipedia/firmographics/{company_name}`,
+same URL shape V3 uses.
+
+**History: `experiments/wikipedia-spike/` (2026-09-28)** — settled the
+two open questions this section originally raised, before promotion.
+First, **no
+existing crate is worth building on**: `mediawiki`, `wikibase_rest_api`,
+`wikidata`, and `wikipedia` were all checked against crates.io's API
+(maintenance activity, downloads, feature surface); none provide
+wptools' actual infobox/claims parsing logic (`lib/wikipedia_v2.py`'s
+verbatim port, the genuinely hard part) or first-class `maxlag`/
+429-503-backoff/field-narrowing support — the three things that
+module's own docstring credits for beating wptools. Hand-rolling on
+`reqwest`, the way `lib/wikipedia_v2.py` hand-rolled on `requests`,
+gives direct control over exactly those three things instead of
+working around a generic client. Second, **the approach reproduces in
+Rust against the real, live API**: ran against IBM, Apple Inc., and
+Tesla, Inc. — real infobox parsing (33-39 fields per company), real
+Wikidata claims resolved with correct labels (Apple's real CIK
+`0000320193` came back attached to the right property), concurrent
+fetch (`tokio::join!`, mirroring `lib/wikipedia_v2.py`'s
+`ThreadPoolExecutor(3)`) completing in ~0.9-1.3s per company for all
+three calls together, in the neighborhood of the Python version's own
+measured numbers, not a regression. `maxlag` sent on every request.
+
+**Extended the same day: the parsing itself is now real, tested Rust
+code, not a stand-in.** `experiments/wikipedia-spike/src/infobox.rs`
+ports wptools' `_template_to_dict`/`_template_to_dict_iter`/
+`_template_to_text` (`lib/wikipedia_v2.py`'s own verbatim-port source),
+including nested-template-in-value handling and per-element tail text,
+not just flat top-level pairs — `_template_to_dict_find`/
+`_text_with_children` (the `find=True` branch) deliberately left
+unported, since `_get_infobox` never calls into that branch on the path
+this project exercises. `experiments/wikipedia-spike/src/firmographics.rs`
+ports `get_firmographics`'s field-construction logic (`_get_item`,
+`_transform_isin`, `_transform_stock_ticker`, the Wikidata-vs-infobox
+fallback chains, the `Private Company (Assumed)` default) — the spike
+now prints V3's actual firmographics shape end to end. Real output for
+IBM: correct ISIN (`US4592001014`), correct ticker/exchange split
+(`["NYSE", "IBM"]`), correct CIK/city/country/industry — same for Apple
+Inc. and Tesla, Inc. And **the 429/503/Retry-After backoff path is now
+proven, not just implemented**: `cargo test` in that crate mocks a real
+503 response with `Retry-After: 1` and asserts the retry both happens
+and is timed correctly (plus a second test confirming a persistent 503
+exhausts retries and errors rather than hanging), closing the one gap
+the original spike run flagged (Wikimedia didn't lag live during
+testing, so the path was unexercised until now).
+
+**Diffed against live V3 output the same day, field by field** —
+fetched V3's real `/V3.0/global/company/wikipedia/firmographics/{name}`
+response for IBM, Apple Inc., and Tesla, Inc. (that route already uses
+the `WikipediaQueriesV2` v2 backend by default,
+`company_dns.py` line 508) and compared every field programmatically
+against the spike's output. Found and fixed two real V3-parity bugs
+that the "extended" pass above had actually gotten wrong, not just
+left undone: (1) `description` still had raw HTML tags — V3's Python
+runs the extract through `html2text` before returning it, a step this
+spike's `fetch_query` was missing entirely, now fixed with the Rust
+`html2text` crate; (2) `cik`/`country` were always forced into a
+1-element list, but V3 returns them as bare strings for a single value
+— the earlier pass's claim that this was "an intentional simplification,
+not a fidelity gap" was wrong, since wptools' own single-vs-list
+collapse rule is part of the real output shape, and
+`get_firmographics` doesn't re-wrap `country`/`cik` the way it re-wraps
+`industry`/`exchanges`/`website`. After both fixes, every field matches
+V3 exactly for all three companies except `description`'s whitespace (a
+benign difference between the two `html2text` implementations' handling
+of stripped empty inline markup, not a data-fidelity gap).
+
+**Both remaining gaps closed the same day.** Widened the diff to all
+10 companies in `perf_tests/companies.py` (not a hand-picked easy
+sample) — zero non-`description` field mismatches across all 10, same
+benign whitespace-only gap on `description` (0-8 characters, one
+company matched exactly), confirming the fixes above weren't a
+3-company coincidence. And implemented company-name-to-page-title
+resolution (`resolve_title` in `experiments/wikipedia-spike/src/
+main.rs`, using MediaWiki's full-text search) - genuinely new work,
+since V3 takes `wiki_name` as a near-exact page title already and
+neither V3 nor `lib/wikipedia_v2.py` resolve bare names at all.
+**Honest result: 3/5 (60%)** - "JPMorgan"→"JPMorgan Chase" and
+"Exxon"→"ExxonMobil" resolved correctly, but "Alphabet" and "Meta"
+resolved to their own generic-word Wikipedia articles instead of the
+company (naive top-hit full-text search loses to an established
+primary-topic page when a company's name collides with a common word).
+
+**Then checked whether this is actually a V3-parity gap by testing the
+same bare names against the live V3 deployment - it is not.** V3 has
+the identical problem and doesn't even attempt to solve it:
+`lib/wikipedia_v2.py` calls MediaWiki's `titles=`/`redirects=1`
+directly, no search step. `IBM`/`Walmart` work as exact titles;
+`JPMorgan`/`Exxon` work only because Wikipedia itself has literal
+redirect pages under those exact strings (MediaWiki's own mechanism,
+not V3 logic); `Alphabet`/`Meta` 404 outright on the live deployment
+too; and `MetaX` returns **wrong company data silently** (a real,
+unrelated Chinese chip company's page) with no error signal at all -
+a sharper failure mode than anything this spike hit. **Conclusion:
+company-name resolution is not a V3-parity gap** - V3's real behavior
+already is "caller supplies the near-exact title, full stop," matching
+`perf_tests/companies.py`'s documented assumption exactly. This
+spike's `resolve_title` and its 60% result stay available as a
+starting point for a genuine V4-only feature later, but nothing about
+promoting into `v4/crates/wikipedia/` needs to wait on it.
+
+**Tracing V3's "not found" path further turned up a real bug, and it's
+now fixed here.** V3's Python does compute a hint message ("try
+[{query} Inc./Corp./Corporation]" - `lib/wikipedia.py`/
+`lib/wikipedia_v2.py`'s identical `lookup_error`), but
+`company_dns.py`'s custom 404 handler (`company_dns.py:129-146`)
+unconditionally serves a static themed HTML error page for any 404 and
+discards that hint text (`HTTPException.detail`) - confirmed live
+against the deployment, the hint never reaches a client at all, dead
+code on the response path. Restored it in the spike (`hint_message`,
+byte-identical wording to V3's), then went one step further per direct
+instruction: `resolve_candidate`/`lookup_firmographics`
+(`experiments/wikipedia-spike/src/main.rs`) actually issue the
+suggested REST calls server-side - raw name first, then V3's exact
+three suffix candidates in order - instead of just telling the caller
+to retry manually, so a hit returns real, usable firmographics data
+directly. Proved the mechanism deterministically with a mock-server test
+(`cargo test`: a missing bare name resolved via its " Inc." suffix).
+
+**Then a first live run exposed a real gap: page existence alone isn't
+enough.** `resolve_candidate` originally accepted the *first* candidate
+with any page at all - exactly how "Alphabet" and "Meta" defeated it,
+since both exist as real, unrelated Wikipedia pages (confirmed:
+running `lookup_firmographics` for bare "Alphabet" returned a
+**200 with every field "Unknown"** except a real-sounding
+`description` about the linguistic concept of an alphabet and
+`type: "Private Company (Assumed)"` - a misleadingly "successful"
+response, worse than a 404, since nothing signals anything's wrong).
+Traced why: pulled the real page's parsetree, 98 templates, zero with
+"box" in any title (same on "Meta": 6 templates, zero). **Fixed**:
+`resolve_candidate` now requires both a page AND an infobox
+(`fetch_infobox`) before accepting a candidate. Re-verified live -
+bare "Alphabet" now correctly rejects the wrong page, retries with
+" Inc.", and returns fully correct data (real CIK, ISIN, tickers,
+identical to querying "Alphabet Inc." directly).
+
+**Fixing that surfaced a second real bug, found by testing "Meta"**:
+it resolved to "Meta Inc." (a real page), but `cik`/`industry`/
+`exchanges` came back "Unknown" and `country` came back garbled.
+Traced it: Wikipedia's own API correctly follows the "Meta Inc." →
+"Meta Platforms" redirect, but Wikidata's separate sitelink API does
+**not** follow Wikipedia-side redirects - it only indexes the
+canonical title, so a claims lookup for the redirect alias silently
+returns nothing. **Fixed**: `QueryData` now carries the canonical
+title Wikipedia's own redirect resolution already provides, and the
+Wikidata call uses that instead of the literal candidate string.
+Re-verified live - "Meta" bare now matches "Meta Platforms" queried
+directly, field for field.
+
+Along the way: `Lear` → `Lear Corp.` became the mechanism's first
+genuine non-synthetic real-world hit (not a mock), and `Timken` (whose
+real title is "Timken Company") surfaced an honest, unfixed gap -
+"Company" isn't one of V3's three suffix guesses, faithfully
+reproduced rather than patched with a fourth guess V3's own hint text
+doesn't include. V4's `not_found` responses are always JSON
+(`envelope.rs`), never HTML, so there's no equivalent swallowing bug to
+reproduce.
+
+**Promoted into `v4/crates/wikipedia/` (2026-09-28) — real, tested,
+running, not a stub.** `client.rs`/`infobox.rs`/`firmographics.rs` are
+the spike's own modules of the same names, carried over rather than
+rewritten — same infobox/claims parsing, same suffix-hint mechanism
+(infobox-gated, canonical-title-correct), same 5 passing tests
+(`cargo test -p company-dns-wikipedia`). `WikipediaClient` now wraps
+the real HTTP client in the same cache-aside pattern
+`company-dns-edgar`'s client uses (`try_get_with`, title-keyed, 1hr TTL
+— `WikipediaError::NotFound` results aren't cached, matching V3's own
+behavior of never caching a miss). Wired into the server with a real
+User-Agent (`company_dns_wikipedia::USER_AGENT`, matching
+`lib/wikipedia_v2.py`'s own real-identity convention), and the
+`wikipedia_firmographics` handler now distinguishes `NotFound` (→ 404,
+V3's exact hint message, byte-identical) from `Request` (→ 500, a
+genuine network/parse failure) instead of treating every error the
+same way. **Verified live against the real server**: `GET /V4.0/
+global/company/wikipedia/firmographics/Alphabet` (bare, no suffix)
+returns full correct Alphabet Inc. data (real CIK, ISIN, tickers);
+`.../Meta` returns full correct Meta Platforms data; a genuine miss
+(`.../Zzzznotarealcompany123`) returns a real `404` with V3's exact
+hint text as the JSON `message` — the improvement over V3's own
+swallowed-hint bug, delivered for real.
 
 ### 8.2 Merged firmographics
 
 `v4/crates/firmographics/` — mirrors `lib/firmographics.py`'s
 `GeneralQueriesV2` shape (combine EDGAR + Wikipedia results for one
-company), depending on both the `edgar` crate (real, per §5.3) and the
-`wikipedia` crate (stub, per §8.1). The merge endpoint itself
+company), depending on both the `edgar` crate (real, per §5.4) and the
+`wikipedia` crate (now also real, per §8.1). The merge endpoint
 (`GET /V4.0/global/company/merged/firmographics/{company_name}`, V3's
-own shape) can exist and route correctly in this prototype, but its
-response necessarily reflects §8.1's stub until that's real —
-documented as such in the response, not silently incomplete.
+own shape) routes correctly.
+
+**Fixed the same day, found while verifying the §8.1 promotion live**:
+`merge()` previously took `wikipedia_error: Option<String>` only — no
+parameter existed for successful Wikipedia data at all, a leftover
+from when §8.1 was a stub that always errored. Once §8.1 started
+actually succeeding, this became a real, visible bug: a successful
+merge claimed `"source": "edgar+wikipedia"` while silently omitting
+the Wikipedia data from the response entirely. `merge` now takes
+`wikipedia: Result<Value, String>` and genuinely includes the data on
+success — verified live: `.../merged/firmographics/International%20
+Business%20Machines` returns `"source": "edgar+wikipedia"` with both
+`edgar` and `wikipedia` keys actually populated; `.../merged/
+firmographics/IBM` (a name EDGAR's fuzzy catalog match misses, a
+pre-existing, separate, unrelated limitation) correctly falls back to
+`"source": "wikipedia-only"` with real Wikipedia data still present.
 
 ## 9. UX: explicitly deferred
 
@@ -400,7 +670,7 @@ something real to design a UX around rather than a hypothetical one.
   V4-only ones (2026-09-28).** V3's `{code, message, module, data,
   dependencies}` envelope (`go-duckdb-rewrite.md` §2) **must stay
   identical, verbatim, for every V4 endpoint that's a V3-parity
-  replacement** (§5.2/§5.3) — anything downstream still expecting that
+  replacement** (§5.2/§5.4) — anything downstream still expecting that
   shape, and the §7 perf comparison itself, depend on it not changing.
   For genuinely new V4-only endpoints (§5.1's SIC similarity search,
   anything else V3 has no equivalent for), breaking changes to the
@@ -425,7 +695,10 @@ something real to design a UX around rather than a hypothetical one.
 6. Build `v4/crates/server/`: §5's endpoints, wired to §3's crates,
    settling §6's matching-semantics question as part of this work, not
    before it.
-7. Stub `v4/crates/wikipedia/` and `v4/crates/firmographics/` (§8).
+7. ~~Stub `v4/crates/wikipedia/` and `v4/crates/firmographics/` (§8).~~
+   **Done (2026-09-28), and promoted to real implementations the same
+   day** — `experiments/wikipedia-spike/` validated the approach, then
+   both crates got the real code, not just stubs (§8.1/§8.2).
 8. Scope a V4-appropriate `ENDPOINTS` subset for `baseline.py` (§7),
    run it against both V3 and V4, and feed both reports into the
    already-existing `perf_tests/compare.py` for the first real

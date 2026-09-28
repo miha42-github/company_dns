@@ -1,0 +1,42 @@
+[package]
+name = "wikipedia-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "wikipedia-spike"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+# Deliberately NOT the `mediawiki` crate (evaluated - see README "Existing
+# crate evaluation") - it has no maxlag parameter, no 429/503/Retry-After
+# handling, and doesn't narrow field requests, which are exactly the three
+# things lib/wikipedia_v2.py's docstring calls out as its real fixes over
+# wptools. Raw reqwest gives this spike direct control over the request
+# shape, matching wikipedia_v2.py's proven approach instead of working
+# around a general-purpose client's defaults.
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Parses the `action=parse&prop=parsetree` MediaWiki XML response - the
+# infobox template tree lib/wikipedia_v2.py walks with lxml.etree.xpath.
+# roxmltree is a read-only, non-validating parser (no xpath, walked by
+# hand below) - enough for this spike's proof, not a full port yet (see
+# README "What this spike does NOT prove").
+roxmltree = "0.20"
+regex = "1"
+# lib/wikipedia_v2.py runs the raw HTML `extract` through Python's
+# html2text before use (`_fetch_query`) - the side-by-side diff against
+# V3's live output (see README "Side-by-side diff") found this spike's
+# description field still had raw HTML tags because that step was
+# missing entirely. This is the closest Rust equivalent.
+html2text = "0.17"
+
+[dev-dependencies]
+# Mocks a real 429/503 + Retry-After response to deliberately exercise
+# get_with_backoff's retry path - the README flagged this as untested
+# against real throttling (Wikimedia didn't lag during the live run).
+wiremock = "0.6"

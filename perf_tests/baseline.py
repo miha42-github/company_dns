@@ -61,9 +61,15 @@ ENDPOINTS = [
     {
         "key": "health",
         "path": "/health",
+        "v4_path": "/health",
         "category": "control",
         "per_company": False,
-        "description": "Liveness endpoint, no DB/network calls",
+        "description": (
+            "Liveness endpoint, no DB/network calls. V4's handler "
+            "(docs/plans/v4-server-prototype.md sec5.3) matches V3's "
+            "response shape exactly ({status, version, timestamp}) - "
+            "version differs on purpose (each server reports its own)."
+        ),
     },
     {
         "key": "sic_lookup",
@@ -112,40 +118,53 @@ ENDPOINTS = [
     {
         "key": "wikipedia_firmographics",
         "path": "/V3.0/global/company/wikipedia/firmographics/{company_name}",
+        "v4_path": "/V4.0/global/company/wikipedia/firmographics/{company_name}",
         "category": "external-io",
         "per_company": True,
         "param_field": "wiki_name",
         "description": (
-            "Wikipedia/Wikidata lookup via wptools (fixed from a "
-            "duplicate-fetch bug - see lib/wikipedia.py get_firmographics). "
-            "No v4_path - staged, not implemented on V4 yet "
-            "(docs/plans/v4-server-prototype.md sec8.1), excluded from the "
-            "--profile v4 run rather than compared against a stub."
+            "Wikipedia/Wikidata lookup - V3 via wptools (fixed from a "
+            "duplicate-fetch bug - see lib/wikipedia.py get_firmographics), "
+            "V4 via a hand-rolled reqwest client (docs/plans/"
+            "v4-server-prototype.md sec8.1, promoted 2026-09-28 from "
+            "experiments/wikipedia-spike/ - narrowed field requests, "
+            "maxlag/429/503 backoff, V3's corporate-suffix hint restored "
+            "and actually executed as a REST call instead of just "
+            "suggested). V4's cache is separate from V3's request-per-call "
+            "model (docs/plans/go-duckdb-rewrite.md sec5.1's moka TTL+LRU "
+            "cache, 1hr TTL) - a repeat name within that window is a pure "
+            "cache hit on V4 with no real network call, unlike V3."
         ),
     },
     {
         "key": "merged_firmographics",
         "path": "/V3.0/global/company/merged/firmographics/{company_name}",
+        "v4_path": "/V4.0/global/company/merged/firmographics/{company_name}",
         "category": "external-io",
         "per_company": True,
         "param_field": "wiki_name",
         "description": (
-            "The heaviest real-world path: Wikipedia lookup, conditionally "
-            "EDGAR too, plus ArcGIS geocoding. No v4_path - depends on "
-            "Wikipedia (sec8.1, staged not built), excluded from the "
-            "--profile v4 run for the same reason as wikipedia_firmographics."
+            "V3's heaviest real-world path: Wikipedia lookup, conditionally "
+            "EDGAR too, plus ArcGIS geocoding. V4's merged endpoint "
+            "(sec8.2, promoted 2026-09-28) is EDGAR + Wikipedia only - no "
+            "ArcGIS geocoding call at all - a real, disclosed scope "
+            "difference, not an apples-to-apples latency comparison for "
+            "this specific endpoint (V4 is missing a whole network call "
+            "V3 makes), same caveat sec6 already applies to the EDGAR "
+            "catalog-scope difference."
         ),
     },
 ]
 
 # docs/plans/v4-server-prototype.md sec7: the V4 prototype implements a
-# real subset of V3's endpoints (US SIC + EDGAR, per that doc's sec1
-# scope) - Wikipedia and merged firmographics are staged, not built
-# (sec8), so comparing them against V3 would be comparing real latency
-# against a stub's 404. --profile v4 restricts the run to endpoints that
-# have a v4_path, so the comparison stays honest rather than either
-# refusing to run (today's verify_endpoints_exist behavior) or silently
-# producing a misleading result for the endpoints V4 doesn't have yet.
+# real subset of V3's endpoints - as of 2026-09-28 that's US SIC, EDGAR,
+# AND Wikipedia/merged (sec8.1/8.2, promoted from experiments/
+# wikipedia-spike/ the same day) - only the five non-US SIC systems and
+# UX are still out of scope (sec1). --profile v4 restricts the run to
+# endpoints that have a v4_path, so the comparison stays honest rather
+# than either refusing to run (today's verify_endpoints_exist behavior)
+# or silently producing a misleading result for an endpoint V4 doesn't
+# have at all.
 PROFILES = {
     "v3": {"version_key": "path", "require_v4_path": False},
     "v4": {"version_key": "v4_path", "require_v4_path": True},

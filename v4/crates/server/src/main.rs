@@ -8,7 +8,7 @@ use axum::{
 };
 use company_dns_edgar::{EdgarCatalog, EdgarClient};
 use company_dns_sic::{model_info, Embedders, SicCatalog};
-use company_dns_wikipedia::WikipediaClient;
+use company_dns_wikipedia::{WikipediaClient, WikipediaError};
 use envelope::{not_found, ok, server_error};
 use serde::Deserialize;
 use serde_json::json;
@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let edgar_client = EdgarClient::new(company_dns_edgar::USER_AGENT)?;
-    let wikipedia = WikipediaClient::new();
+    let wikipedia = WikipediaClient::new(company_dns_wikipedia::USER_AGENT)?;
 
     let models_to_load: Vec<&'static str> = match std::env::var("SIC_MODELS").ok().as_deref() {
         Some("all_mpnet_base_v2") => vec!["all_mpnet_base_v2"],
@@ -123,8 +123,12 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health() -> impl IntoResponse {
+    axum::Json(json!({
+        "status": "healthy",
+        "version": "4.0.0",
+        "timestamp": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+    }))
 }
 
 // -------------------------------------------------------------- //
@@ -443,15 +447,27 @@ async fn edgar_firmographics(
 }
 
 // -------------------------------------------------------------- //
-// Staged: Wikipedia + merged firmographics (sec8.1/8.2)
+// Wikipedia (sec8.1, built 2026-09-28) + merged firmographics (sec8.2,
+// still EDGAR-only until firmographics/ gets its own real merge logic)
 
 async fn wikipedia_firmographics(
     Path(company_name): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
+    let module = "WikipediaClient->get_firmographics";
     match state.wikipedia.get_firmographics(&company_name).await {
-        Ok(data) => ok("WikipediaClient->get_firmographics", "ok", (*data).clone()).into_response(),
-        Err(e) => not_found("WikipediaClient->get_firmographics", e.to_string()).into_response(),
+        Ok(data) => ok(module, "ok", (*data).clone()).into_response(),
+        // NotFound carries V3's own hint message verbatim (byte-identical
+        // to lib/wikipedia_v2.py's lookup_error, restored here after
+        // confirming V3's own custom 404 handler silently discards it -
+        // docs/plans/v4-server-prototype.md sec8.1); Request is a real
+        // network/parse failure, mapped to 500 instead of 404 so a
+        // caller can tell "this company doesn't exist" apart from
+        // "Wikipedia/Wikidata was unreachable."
+        Err(e) => match e.as_ref() {
+            WikipediaError::NotFound(msg) => not_found(module, msg.clone()).into_response(),
+            WikipediaError::Request(_) => server_error(module, e.to_string()).into_response(),
+        },
     }
 }
 
@@ -468,14 +484,14 @@ async fn merged_firmographics(
         None
     };
 
-    let wiki_err = state
+    let wikipedia_result = state
         .wikipedia
         .get_firmographics(&company_name)
         .await
-        .err()
-        .map(|e| e.to_string());
+        .map(|data| (*data).clone())
+        .map_err(|e| e.to_string());
 
-    let merged = company_dns_firmographics::merge(&company_name, edgar_data, wiki_err);
+    let merged = company_dns_firmographics::merge(&company_name, edgar_data, wikipedia_result);
     ok(
         "merge",
         format!("Merged firmographics for [{company_name}]"),

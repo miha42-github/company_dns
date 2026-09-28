@@ -16,6 +16,7 @@ company-dns-wikipedia = { path = "../wikipedia" }
 company-dns-firmographics = { path = "../firmographics" }
 datafusion.workspace = true
 edgarkit.workspace = true
+chrono.workspace = true
 axum.workspace = true
 tower-http.workspace = true
 tokio.workspace = true

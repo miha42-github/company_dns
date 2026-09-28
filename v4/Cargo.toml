@@ -22,6 +22,7 @@ publish = false
 [workspace.dependencies]
 datafusion = "55"
 edgarkit = "0.4.0"
+chrono = "0.4"
 moka = { version = "0.12", features = ["future"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
@@ -29,3 +30,14 @@ serde_json = "1"
 anyhow = "1"
 axum = "0.7"
 tower-http = { version = "0.6", features = ["fs", "cors"] }
+# Promoted from experiments/wikipedia-spike/ (docs/plans/
+# v4-server-prototype.md sec8.1): the real Wikipedia/Wikidata HTTP
+# client in company-dns-wikipedia. Deliberately raw reqwest, not a
+# general-purpose MediaWiki crate - see that spike's README "Existing
+# crate evaluation" for why (no candidate provides wptools' infobox-
+# parsing logic or maxlag/backoff/field-narrowing).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+roxmltree = "0.20"
+regex = "1"
+html2text = "0.17"
+thiserror = "2"

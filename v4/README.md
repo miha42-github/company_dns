@@ -5,9 +5,8 @@ The first real running server combining what
 [`docs/plans/edgar-backend.md`](../docs/plans/edgar-backend.md), and
 [`experiments/`](../experiments/) validated individually — see
 [`docs/plans/v4-server-prototype.md`](../docs/plans/v4-server-prototype.md)
-for the full plan this implements. **Prototype**: US SIC + EDGAR only,
-no UX, Wikipedia and merged-firmographics are staged (not real) — see
-that doc's §1 scope.
+for the full plan this implements. **Prototype**: US SIC + EDGAR +
+Wikipedia (real, per §8.1), no UX — see that doc's §1 scope.
 
 ## Layout
 
@@ -18,8 +17,10 @@ crates/
                   (promoted from experiments/edgar-spike, edgar-index-query, edgar-cache-spike)
   sic/            US SIC data access: V3-parity lookups + similarity search
                   (promoted from experiments/df-spike, ic-similarity-service)
-  wikipedia/      staged, not built - typed "not implemented" client
-  firmographics/  staged - EDGAR/Wikipedia merge shape, EDGAR-only until wikipedia/ is real
+  wikipedia/      real MediaWiki/Wikidata client - infobox/claims parsing, V3's
+                  corporate-suffix hint (restored, actually executed as REST calls),
+                  429/503 backoff (promoted from experiments/wikipedia-spike)
+  firmographics/  real EDGAR+Wikipedia merge (both sides real now)
   server/         the Axum binary wiring it all to HTTP routes
 ```
 
@@ -72,11 +73,13 @@ New, V4-only (§5.1):
 GET /V4.0/na/sic/similarity/{query}?model=all_minilm_l6_v2&k=10
 ```
 
-Staged, not real (§8):
+Real, built 2026-09-28 (§8.1/§8.2 — near-exact company/page title, same
+as V3; V3's corporate-suffix hint restored and actually executed as a
+REST call, not just suggested):
 
 ```
-GET /V4.0/global/company/wikipedia/firmographics/{company_name}   (always 404, typed not-implemented)
-GET /V4.0/global/company/merged/firmographics/{company_name}      (EDGAR-only, notes the gap)
+GET /V4.0/global/company/wikipedia/firmographics/{company_name}
+GET /V4.0/global/company/merged/firmographics/{company_name}
 ```
 
 ## Comparing against V3

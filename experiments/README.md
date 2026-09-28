@@ -95,6 +95,104 @@ throwaway.
   type was reused with a completely different key/value shape as a
   stand-in for a future Wikipedia instance, proving "one mechanism, not
   two" holds in code.
+- **`wikipedia-spike/`** — tests whether `lib/wikipedia_v2.py`'s
+  approach (narrowed field requests, one targeted Wikidata labels call,
+  a real User-Agent, `maxlag`/429/503/Retry-After handling — the fixes
+  that module's docstring credits for beating wptools on speed and
+  leanness) reproduces in Rust against the real, live MediaWiki/Wikidata
+  API, and whether an existing crate (`mediawiki`, `wikibase_rest_api`,
+  `wikidata`, `wikipedia`) is worth building on instead of hand-rolling,
+  the way `edgarkit` was for EDGAR. See
+  [`docs/plans/v4-server-prototype.md`](../docs/plans/v4-server-prototype.md)
+  §8.1. Decided against adopting a crate — none of the candidates
+  provide the actually-hard part (wptools' infobox/claims parsing logic,
+  which `lib/wikipedia_v2.py` ports verbatim) or the `maxlag`/backoff/
+  field-narrowing that module's own advantage over wptools rests on.
+  Ran live against IBM, Apple Inc., and Tesla, Inc.: real infobox
+  parsing (33–39 fields each), real Wikidata claims resolved with
+  correct labels (e.g. Apple's real CIK `0000320193` came back attached
+  to the right property), concurrent fetch completing in ~0.9–1.3s per
+  company for all three calls together — in the neighborhood of the
+  Python version's own measured numbers. **Extended (2026-09-28)**: the
+  infobox/claims parsing (`src/infobox.rs`) and `get_firmographics`
+  field-construction logic (`src/firmographics.rs`) are now real, ported
+  Rust code — verbatim ports of wptools' `_template_to_dict`/
+  `_template_to_dict_iter`/`_template_to_text` and
+  `lib/wikipedia_v2.py`'s `_transform_isin`/`_transform_stock_ticker`/
+  fallback-chain logic, not stand-ins. Real output for IBM: correct ISIN
+  (`US4592001014`), correct ticker/exchange split (`["NYSE", "IBM"]`),
+  correct CIK/city/country/industry, V3's actual field shape. The
+  429/503/Retry-After backoff path is also now proven, not just
+  implemented — `cargo test` mocks a real 503+`Retry-After` response and
+  asserts the retry actually happens and is actually timed correctly.
+  **Diffed against live V3 output (2026-09-28)**: fetched V3's real
+  `/V3.0/global/company/wikipedia/firmographics/{name}` response for
+  all three companies and compared field-by-field. Found and fixed two
+  real V3-parity bugs — `description` still had raw HTML tags (V3's
+  Python runs the extract through `html2text` first; this spike's fetch
+  didn't, now fixed with the `html2text` crate), and `cik`/`country`
+  were always wrapped in a 1-element list when V3 returns them as bare
+  strings for a single value (wptools' own single-vs-list collapse rule
+  wasn't actually a harmless simplification, as an earlier pass had
+  assumed — it's part of the real output shape). After both fixes,
+  every field matches V3 exactly across all three companies except
+  `description`'s whitespace (a benign difference between the two
+  `html2text` implementations, not a data-fidelity gap). **Widened and
+  extended further (2026-09-28)**: the diff now covers all 10 companies
+  from `perf_tests/companies.py` (not a hand-picked easy sample) — zero
+  non-`description` field mismatches across all 10, with the same
+  benign whitespace-only gap on `description` (0-8 characters, one
+  company matched exactly). Also implemented and tested
+  company-name-to-page-title resolution via MediaWiki's full-text
+  search (`resolve_title`) — genuinely new work, not a port of
+  existing V3/Python behavior, since V3 takes a near-exact page title
+  as input already. **Honest result: 3/5 (60%)** — "JPMorgan"→"JPMorgan
+  Chase" and "Exxon"→"ExxonMobil" resolved correctly, but "Alphabet"
+  and "Meta" resolved to their own generic-word Wikipedia articles
+  instead of the company. **Then checked the live V3 deployment with
+  the same bare names (2026-09-28) and found it has the same problem,
+  worse — it doesn't even attempt resolution.** `IBM`/`Walmart` work
+  because they're exact titles; `JPMorgan`/`Exxon` work only because
+  Wikipedia itself has literal redirect pages under those exact
+  strings (MediaWiki's own `redirects=1`, not any V3 logic); `Alphabet`/
+  `Meta` 404 outright; and `MetaX` returns **wrong company data
+  silently** (a real, unrelated Chinese chip company's page) with no
+  error at all. Conclusion: company-name resolution is not a
+  V3-parity gap — V3's actual behavior already is "caller supplies the
+  near-exact title," so this spike's 60% naive-search result is a
+  real V4-only feature question worth its own design discussion later,
+  not something blocking promotion into `v4/crates/wikipedia/`.
+  **Found something more interesting while tracing the "not found"
+  path, and fixed it (2026-09-28)**: V3's Python *does* compute a hint
+  message ("try [{query} Inc./Corp./Corporation]" — `lib/wikipedia.py`
+  and `lib/wikipedia_v2.py`'s identical `lookup_error`), but
+  `company_dns.py`'s custom 404 handler unconditionally serves a static
+  themed HTML error page for any 404 and discards that hint text —
+  confirmed live, it never reaches the client at all. Restored the hint
+  in this spike (`hint_message`, byte-identical wording), then went
+  further per instruction: `resolve_candidate`/`lookup_firmographics`
+  actually issue the suggested REST calls server-side instead of just
+  suggesting them, so a hit returns usable data directly.
+  **Then found and fixed two more real bugs the same day, both
+  discovered by testing "Alphabet"/"Meta" directly against the new
+  mechanism**: (1) `resolve_candidate` originally accepted the first
+  candidate with *any* page, which is how "Alphabet"/"Meta" broke it in
+  the first place (both exist as real, unrelated pages) — fixed by also
+  requiring an infobox (`fetch_infobox`) before accepting a candidate,
+  verified live: bare "Alphabet" now correctly rejects the
+  writing-system-concept page and resolves via " Inc." to the real
+  company, with fully correct data (real CIK, ISIN, tickers). (2) Fixing
+  that exposed a second bug on "Meta": Wikidata's sitelink API doesn't
+  follow Wikipedia's own redirects, so looking up claims for a resolved
+  redirect alias ("Meta Inc.") silently returned nothing — fixed by
+  capturing the canonical title MediaWiki's redirect resolution already
+  provides and using that for the Wikidata call. Both fixes proven with
+  new deterministic tests plus live re-verification. Along the way,
+  found the mechanism's first genuine non-synthetic real-world hit
+  ("Lear" → "Lear Corp.") and a genuine remaining gap (the real Timken
+  company's title is "Timken Company" — outside V3's three-suffix list
+  entirely, not fixed, since it's not part of the heuristic being
+  restored). See this experiment's own README for the full breakdown.
 
 ## Conventions for adding a new experiment
 
