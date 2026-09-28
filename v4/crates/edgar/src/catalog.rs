@@ -14,6 +14,7 @@ use datafusion::arrow::record_batch::RecordBatch;
 use datafusion::datasource::file_format::options::ArrowReadOptions;
 use datafusion::prelude::*;
 use edgarkit::{Edgar, EdgarPeriod, IndexOperations};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -135,6 +136,72 @@ pub struct CatalogEntry {
     pub accession: String,
 }
 
+/// One filing, as `lib/edgar.py`'s `get_all_details` attaches it under
+/// a company's `forms` dict - same two fields, same key shape
+/// (`"{year}-{month}-{day}-{accession_no_dashes}"`), same
+/// `filing_idx_url` construction (`EDGARURI`+`EDGARSERVER`+
+/// `EDGARARCHIVES`, `lib/edgar.py`'s constants).
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormEntry {
+    pub filing_index: String,
+    pub form_type: String,
+}
+
+/// One company, grouped from its individual filing rows - matches
+/// `lib/edgar.py`'s `get_all_details` grouping-by-company-name loop
+/// (`tmp_companies[company_name]['forms'][accession_key] = form`), not
+/// just a flat list of filing rows. `company_name` is normalized the
+/// same way V3 does (`.upper()`, trailing `.` stripped) so V3 and V4
+/// group the same real-world rows into the same companies.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GroupedCompany {
+    pub cik: u64,
+    pub company_name: String,
+    pub forms: BTreeMap<String, FormEntry>,
+}
+
+fn filing_index_url(cik: u64, accession: &str) -> String {
+    let accession_no_dashes = accession.replace('-', "");
+    format!(
+        "https://www.sec.gov/Archives/edgar/data/{cik}/{accession_no_dashes}/{accession}-index.html"
+    )
+}
+
+/// Groups flat `CatalogEntry` rows into per-company entries with a
+/// `forms` map - the shape `lib/edgar.py`'s `get_all_details` builds
+/// query-time from its own SQL result set. `company_name` is the group
+/// key (matching V3's `tmp_companies[company_name]` dict exactly), not
+/// `(cik, company_name)` - real-world data should never have one name
+/// mapping to two CIKs within a single quarter's filings, and grouping
+/// on the same key V3 uses is what makes this a fair parity comparison.
+fn group_by_company(matches: Vec<CatalogEntry>) -> Vec<GroupedCompany> {
+    let mut by_name: BTreeMap<String, GroupedCompany> = BTreeMap::new();
+    for m in matches {
+        let company_name = m.company_name.to_uppercase();
+        let company_name = company_name.trim_end_matches('.').to_string();
+        let accession_no_dashes = m.accession.replace('-', "");
+        let accession_key = format!("{}-{}-{}-{}", m.year, m.month, m.day, accession_no_dashes);
+        let filing_index = filing_index_url(m.cik, &m.accession);
+
+        let entry = by_name
+            .entry(company_name.clone())
+            .or_insert_with(|| GroupedCompany {
+                cik: m.cik,
+                company_name: company_name.clone(),
+                forms: BTreeMap::new(),
+            });
+        entry.forms.insert(
+            accession_key,
+            FormEntry {
+                filing_index,
+                form_type: m.form_type,
+            },
+        );
+    }
+    by_name.into_values().collect()
+}
+
 pub struct EdgarCatalog {
     ctx: SessionContext,
 }
@@ -174,6 +241,19 @@ impl EdgarCatalog {
              ORDER BY year DESC, month DESC, day DESC"
         );
         self.run_catalog_query(&sql).await
+    }
+
+    /// V3-parity company-name search, grouped exactly like
+    /// `lib/edgar.py`'s `get_all_details`: one entry per company, each
+    /// with a `forms` map of every matching filing, not one entry per
+    /// filing row. Backs `detail`/`summary` (`v4-server-prototype.md`
+    /// §5.3) - callers decide whether to additionally merge in live
+    /// firmographics per company (`detail`) or not (`summary`), the
+    /// same `firmographics=True`/`False` split V3's single method makes
+    /// via a parameter.
+    pub async fn find_grouped_by_name(&self, name: &str) -> anyhow::Result<Vec<GroupedCompany>> {
+        let matches = self.find_by_name(name).await?;
+        Ok(group_by_company(matches))
     }
 
     /// Direct CIK lookup - the durable-identifier path

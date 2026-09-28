@@ -323,53 +323,94 @@ async fn edgar_ciks(
     }
 }
 
+/// V3's `EdgarQueries.get_all_details(firmographics=True)` - the same
+/// method `edgar_summary` calls with `firmographics=False`. Groups
+/// matching filings by company (`EdgarCatalog::find_grouped_by_name`,
+/// same grouping V3's own loop does) and, for every matched company,
+/// merges in a real, cached live `edgarkit` firmographics fetch
+/// (`EdgarClient::get_firmographics` - `go-duckdb-rewrite.md` §5.1's
+/// cache) in place of the bare `{cik, companyName}` V3 seeds before
+/// overwriting it with the same live call. **Decided
+/// (2026-09-28): parity with V3 matters more than the extra live calls
+/// this costs per unique matched company** - not deferring this the
+/// way an earlier draft of this endpoint did.
 async fn edgar_detail(
     State(state): State<Arc<AppState>>,
     Path(company_name): Path<String>,
 ) -> impl IntoResponse {
-    edgar_detail_or_summary(state, company_name).await
+    edgar_grouped_response(&state, &company_name, true).await
 }
 
+/// V3's `get_all_details(firmographics=False)` - same grouping as
+/// `edgar_detail`, no live firmographics call, just `{cik,
+/// companyName, forms}` per matched company - a cheap, catalog-only
+/// name search.
 async fn edgar_summary(
     State(state): State<Arc<AppState>>,
     Path(company_name): Path<String>,
 ) -> impl IntoResponse {
-    edgar_detail_or_summary(state, company_name).await
+    edgar_grouped_response(&state, &company_name, false).await
 }
 
-/// V3's `detail` and `summary` endpoints both call
-/// `EdgarQueries.get_all_details`, differing only in whether live
-/// EDGAR firmographics get merged in per match (`firmographics=False`
-/// for summary). V4's catalog-backed equivalent returns the same
-/// catalog rows for both for now - the firmographics-per-match
-/// enrichment `detail` adds in V3 is deferred until real usage shows
-/// it's needed here too, rather than N live fetches per name search by
-/// default.
-async fn edgar_detail_or_summary(
-    state: Arc<AppState>,
-    company_name: String,
+async fn edgar_grouped_response(
+    state: &Arc<AppState>,
+    company_name: &str,
+    with_firmographics: bool,
 ) -> axum::response::Response {
+    let module = if with_firmographics {
+        "EdgarCatalog->find_grouped_by_name(firmographics=true)"
+    } else {
+        "EdgarCatalog->find_grouped_by_name(firmographics=false)"
+    };
     let Some(catalog) = &state.edgar_catalog else {
         return server_error(
-            "EdgarCatalog->find_by_name",
+            module,
             "EDGAR catalog not loaded - run `cargo run --bin ingest-edgar` first",
         )
         .into_response();
     };
-    match catalog.find_by_name(&company_name).await {
-        Ok(matches) if !matches.is_empty() => ok(
-            "EdgarCatalog->find_by_name",
-            format!("{} filings found for [{company_name}]", matches.len()),
-            json!(matches),
-        )
-        .into_response(),
-        Ok(_) => not_found(
-            "EdgarCatalog->find_by_name",
-            format!("No company found for [{company_name}]"),
-        )
-        .into_response(),
-        Err(e) => server_error("EdgarCatalog->find_by_name", e.to_string()).into_response(),
+    let groups = match catalog.find_grouped_by_name(company_name).await {
+        Ok(g) if !g.is_empty() => g,
+        Ok(_) => {
+            return not_found(module, format!("No company found for [{company_name}]"))
+                .into_response()
+        }
+        Err(e) => return server_error(module, e.to_string()).into_response(),
+    };
+
+    // Same shape as V3's tmp_companies dict: company_name -> company
+    // info (bare {cik, companyName} for summary, full live firmographics
+    // for detail) with a "forms" field attached either way.
+    let mut companies = serde_json::Map::new();
+    for group in &groups {
+        let mut company_info = if with_firmographics {
+            match state.edgar_client.get_firmographics(group.cik).await {
+                Ok(fg) => (*fg).clone(),
+                // A catalog match with no live firmographics available
+                // (e.g. a transient EDGAR error) still gets a real
+                // entry, not a dropped company - same bare fallback
+                // shape V3 starts from before its own live call.
+                Err(_) => json!({
+                    "cik": group.cik.to_string(),
+                    "companyName": group.company_name,
+                }),
+            }
+        } else {
+            json!({
+                "cik": group.cik.to_string(),
+                "companyName": group.company_name,
+            })
+        };
+        company_info["forms"] = json!(group.forms);
+        companies.insert(group.company_name.clone(), company_info);
     }
+
+    ok(
+        module,
+        format!("{} companies found for [{company_name}]", companies.len()),
+        json!({ "companies": companies, "totalCompanies": companies.len() }),
+    )
+    .into_response()
 }
 
 async fn edgar_firmographics(

@@ -2,7 +2,7 @@ pub mod catalog;
 pub mod client;
 pub mod firmographics;
 
-pub use catalog::{CatalogEntry, EdgarCatalog};
+pub use catalog::{CatalogEntry, EdgarCatalog, FormEntry, GroupedCompany};
 pub use client::EdgarClient;
 pub use firmographics::build_firmographics;
 
