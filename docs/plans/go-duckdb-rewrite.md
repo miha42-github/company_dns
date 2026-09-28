@@ -1,21 +1,28 @@
-# company_dns rewrite: Go, DuckDB, parquet data products, cache-with-fallback
+# company_dns rewrite: Rust + DataFusion, parquet data products, cache-with-fallback
 
-Status: **Draft — planning only, no code written yet.** This document is a
-working draft to iterate on together; most sections below are starting
-points or open questions, not decisions. Where a decision has actually
-been made, it's marked `**Decided:**` explicitly — everything else is
-still up for discussion.
+Status: **Language/engine decided: Rust + DataFusion (§6.5).** Most of
+what follows is still a working draft to iterate on together — where a
+decision has actually been made, it's marked `**Decided:**` explicitly;
+everything else is still up for discussion. Title/scope below updated
+from the original "Go, DuckDB" framing now that §6.5 has resolved that
+question — earlier sections that still discuss Go or DuckDB as live
+options are kept as-is (not rewritten after the fact) since the
+reasoning that led to the decision is worth keeping visible.
 Owner: michael.hay@mediumroast.io
-Scope: a from-scratch rewrite of `company_dns` in Go, replacing SQLite
-with DuckDB, backed by Mediumroast parquet data packages for SIC/NACE
-classification data (US legacy SIC, Japanese SIC, UK SIC, EU NACE), plus
-a "cache a limited number of rows, fall back to the live service"
-pattern for both EDGAR and Wikipedia data. Explicitly **not** an
-incremental migration of the current Python/FastAPI/SQLite codebase —
-the current implementation is preserved at tag
+Scope: a from-scratch rewrite of `company_dns` in Rust with DataFusion as
+the query/data-access engine, backed by Mediumroast parquet/feather data
+packages for SIC/NACE classification data (US legacy SIC, Japanese SIC,
+UK SIC, EU NACE), plus a "cache a limited number of rows, fall back to
+the live service" pattern for both EDGAR and Wikipedia data. Explicitly
+**not** an incremental migration of the current Python/FastAPI/SQLite
+codebase — the current implementation is preserved at tag
 [`V3.3.0`](https://github.com/miha42-github/company_dns/releases/tag/V3.3.0)
 and branch `archive/python-v3.3.0` for reference and rollback, and stays
-in production until the rewrite is ready to replace it.
+in production until the rewrite is ready to replace it. **Purpose
+reframed (§6.5): this is now explicitly a reference/example OSS project**
+demonstrating how to use the IC-classification and enriched-company data
+Mediumroast is giving away as free samples — not a bulk-processing
+service; see §1's use-case list.
 
 ---
 
@@ -34,29 +41,54 @@ As stated, five things are driving this:
    EDGAR service** when a lookup misses the cache.
 3. **Wikipedia: same pattern** — cache a limited number of rows, fall
    back to the live Wikipedia/Wikidata service on a cache miss.
-4. **Go**, replacing Python/FastAPI.
-5. **DuckDB**, replacing SQLite.
+4. **Rust**, replacing Python/FastAPI (§6.5 — decided; originally
+   framed as Go, changed after direct comparison against Rust).
+5. **DataFusion**, replacing SQLite (§6.5 — decided; originally framed
+   as "DuckDB replacing SQLite," resolved differently — DataFusion alone
+   covers what both SQLite and DuckDB were being considered for, see
+   §6.5's "resolves §4" note).
 
-*Open question (flagging, not deciding here): why these five together,
-as one rewrite, rather than incrementally? Worth capturing the actual
-reasoning (performance ceiling of the Python service even after V3.3.0's
-work, operational burden of the current SQLite-rebuilt-on-every-image-
-build pattern, wanting a compiled single-binary deploy story, something
-else?) so this doc's "why" holds up later. Fill in once we talk through
-it.*
+**"Why these five together" — resolved (2026-09-27), was an open
+question here**: `company_dns`'s purpose has been reframed. Mediumroast
+is giving away several IC classification systems (legacy Japanese SIC,
+US SIC, an older NACE vintage) and a sample of enriched Wikipedia/EDGAR
+company data — including precomputed-embeddings versions — as free
+"taste" packages, expecting most recipients won't immediately know what
+to do with them. **`company_dns` is the example OSS project answering
+that** — a reference implementation demonstrating real use cases against
+real Mediumroast data, not a production bulk-processing service (bulk
+operations explicitly out of scope). Concretely, the use cases this
+needs to demonstrate:
 
-**A sixth, confirmed real use case, found through the §7/§9 spike
-work, not originally listed above**: given a company's descriptive
-text, resolve it to its best-fit classification code(s) with the full
-hierarchical structure — a batch/API-oriented capability, distinct from
-interactive search, needed to actually classify companies against the
-IC/SIC/NACE data products in item 1. Design thinking (chunking long
-input, confidence/triage for automated use, multi-code assignment,
-ingest-time vs. query-time) is in
-[`docs/plans/ic-similarity-search-poc.md`](ic-similarity-search-poc.md)
-§10.2 — flagged there as likely deserving its own plan document rather
-than growing inside a doc scoped to a local test tool. Linked from here
-so it's visible from the main rewrite doc, not just the POC one.
+- Search for SIC/industry codes and get results back across the
+  various IC systems (parity with today's multi-system search).
+- **Match a company description to one or more IC systems** — given a
+  company's descriptive text (which may be long), resolve it to its
+  best-fit classification code(s) with the full hierarchical structure.
+  This is a single-company-at-a-time capability (not a batch/bulk
+  operation — corrected after an earlier draft of this doc
+  mischaracterized it as "batch/API-oriented"), and a company can
+  legitimately resolve to more than one code (real companies span
+  multiple classifications). Design thinking (chunking long input,
+  confidence/triage, multi-code output) is in
+  [`docs/plans/ic-similarity-search-poc.md`](ic-similarity-search-poc.md)
+  §10.2 — flagged there as likely deserving its own plan document.
+- **Find companies based on a search.**
+- **Find companies similar to a given company** (company-to-company
+  similarity, using the enriched/embedded company data samples).
+- **Issue a SQL query directly against the included cached data** —
+  DataFusion's own SQL interface, already proven in
+  `experiments/ic-similarity-service`, covers this directly (§6.5).
+
+Not every use case works identically across every data source: some
+searches can spill over to the live EDGAR/Wikipedia services on a cache
+miss (per items 2/3 above), some genuinely can't (the IC/classification
+data is a static, self-contained sample with no live-service
+equivalent to fall back to). Same asymmetry for direct SQL access — it
+works against whatever's cached/local, not against anything requiring a
+live API call. Worth keeping this distinction explicit in the UX rather
+than presenting every feature as uniformly available — see the new UX
+planning doc.
 
 ## 2. What stays true from the current implementation
 
@@ -95,6 +127,13 @@ module boundaries turn out to be harder to decide than expected, might
 be worth doing in Python first as a testbed).*
 
 ## 4. Backend: SQLite vs. DuckDB, specifically for vector/semantic search
+
+> **Superseded by §6.5** — kept as-is below since the reasoning is still
+> useful context, but the actual resolution ended up being neither
+> option: DataFusion alone (Rust, §6) handles parquet reads, vector
+> search, and ad-hoc SQL access, already proven in
+> `experiments/ic-similarity-service`, making this SQLite-vs-DuckDB
+> framing moot rather than answered.
 
 This is the concrete question issue #53 turns on, and the one place
 where "which backend" isn't just a taste call — it's worth grounding in
@@ -576,6 +615,58 @@ on files this project will actually receive. This bears
 directly on this project's core workload in a way the KVS question
 doesn't. Worth deciding on that basis — and on team fit — rather than the
 caching-library premise that raised the question.
+
+### 6.5 Decided: Rust + DataFusion
+
+**Settled.** Rust, with DataFusion as the query/data-access engine, is
+the architecture going forward. Two things resolved this, together:
+
+**1. It's proven, not theoretical, at this point.** §6.4 was written
+when this was still a documentation-grounded lean. Since then, four
+things got actually built and run against real Mediumroast data, all in
+Rust, all working: `df-spike` (reads `.feather` files, including the
+zstd-compressed ones, after finding and fixing the real `arrow-ipc`
+feature gap `df-spike`'s own earlier test had missed), `embed-bench`
+and `quality-eval` (benchmark and validate embedding models against
+real IC data), and `ic-similarity-service` (a working REST service +
+UI doing real vector similarity search, chunking design, and a
+live-typed truncation check). The language decision isn't picking a
+horse anymore; it's confirming the horse that's already run the race.
+
+**2. The business context settles the remaining "why" question §1
+flagged as open.** `company_dns`'s purpose has been reframed (direct
+context, 2026-09-27): Mediumroast is giving away several IC
+classification systems (legacy Japanese SIC, US SIC, an older NACE
+vintage) and a sample of enriched Wikipedia/EDGAR company data —
+including the precomputed-embeddings versions — as free "taste"
+packages. Most people who download those packages won't know what to
+do with them. **`company_dns` becomes the example OSS project showing
+how to actually use this data** — reference use cases (SIC/IC search
+across systems, company-to-classification matching, company search,
+company-to-company similarity, ad-hoc SQL against the cached data), not
+a production bulk-processing service (bulk operations explicitly not a
+goal). That purpose is a direct, strong argument for DataFusion
+specifically: it's the tool that reads Mediumroast's Arrow-native
+parquet/feather output with zero translation, and demonstrating "here's
+how to work with this data" is easiest to do faithfully in the engine
+built for that data's own format. This is what item 1's "why these five
+together" open question was actually missing — the goal was never just
+a faster service, it's a reference implementation for data Mediumroast
+is about to publish.
+
+**Resolves §4's SQLite-vs-DuckDB question too, by making it moot.**
+`ic-similarity-service` already demonstrated DataFusion alone —
+no SQLite, no DuckDB — handling parquet/feather reads, vector
+similarity search (`array_distance` via DataFusion's own SQL interface,
+§7.3-onward), *and* ad-hoc SQL queries against the same in-memory
+table, all through one engine. That directly satisfies the newly-named
+"issue a SQL query against the included cached data" use case (item 5
+of the use-case list above) for free — it's the same code path already
+built for search. §4's careful SQLite-vs-DuckDB vector-search analysis
+isn't wrong, it's just answering a question that no longer needs
+answering: DataFusion was never one of the two options being compared
+there, and it turned out to be the one that didn't need the tradeoff at
+all.
 
 ## 7. Spike plan: DataFusion against a real Mediumroast `.feather` file
 

@@ -625,15 +625,26 @@ belongs.
 
 ### 10.2 This points to a different, separate use case: company → classification-code matching
 
+**Correction (2026-09-27): the paragraph below originally characterized
+this as "batch/API-first," assuming it existed to backfill classification
+codes across an existing company database. That was wrong — corrected
+directly.** The actual context (see
+[`go-duckdb-rewrite.md`](go-duckdb-rewrite.md) §1's use-case list):
+`company_dns` is becoming a reference OSS project demonstrating how to
+use IC-classification and enriched-company data Mediumroast is giving
+away as free samples — this is a **single-company-at-a-time**
+capability, matching one company's description against the IC systems
+on request, not a bulk-processing pipeline. Bulk operations are
+explicitly not a goal.
+
 Chunking a long company description to search against IC/SIC data isn't
 really "the interactive test tool, but for longer input." It's the core
-mechanism for a materially different capability — one **explicitly
-intended for the new `company_dns`** (per direct confirmation, not
-speculation): **given a company's descriptive text, resolve it to its
-best-fit classification code(s), with the complete hierarchical
-structure**, not a ranked list for a human to eyeball.
+mechanism for a materially different capability: **given a company's
+descriptive text, resolve it to its best-fit classification code(s),
+with the complete hierarchical structure**, not a ranked list for a
+human to eyeball.
 
-**Why this is a different tool, not a mode of this one:**
+**Why this is a different tool, not a mode of this one — corrected:**
 
 - **Input**: the same kind of long, multi-topic company description
   that motivated §10.1's chunking work in the first place — this is the
@@ -641,28 +652,24 @@ structure**, not a ranked list for a human to eyeball.
 - **Output shape**: interactive search returns a ranked list for a
   human to scan and judge (§5's whole discussion — labels, bars, raw
   scores — is about helping a *person* interpret ambiguity). A
-  classification tool needs to *resolve* to something a downstream
-  system can act on: a definitive code (or a small, explicitly-confident
-  set of codes), with the full section→division→group→class→subclass
-  structure attached — not a top-10 list someone has to manually
-  review, unless review is exactly what's being flagged (see confidence
-  below).
-- **Usage pattern**: almost certainly batch/API-first — classifying an
-  existing company database (Mediumroast's own data is the obvious
-  case) means calling this many times programmatically, not one
-  interactive query at a time in a browser. Worth designing for
-  throughput (batch requests, not just single-query latency) from the
-  start, unlike this test tool, which was never meant to handle volume.
-- **Confidence/triage becomes a requirement, not a nice-to-have.** §5.6
-  floated a "per-query clear leader" signal (is there one standout
-  result, or several similarly-plausible candidates) and shelved it as
-  "a second iteration, not required" for the interactive tool — because
-  a human looking at a ranked list can make that judgment themselves.
-  A batch classification pipeline can't; it needs the tool itself to
-  flag "confident, single answer" vs. "ambiguous, needs human review"
-  so a downstream process knows which companies to trust automatically
-  and which to queue for a person. This is now a real requirement, not
-  a deferred idea.
+  classification tool needs to *resolve* to something usable directly:
+  a definitive code (or a small, explicitly-confident set of codes),
+  with the full section→division→group→class→subclass structure
+  attached — not a top-10 list someone has to manually review, unless
+  review is exactly what's being flagged (see confidence below). This
+  distinction holds regardless of whether it's called once per company
+  interactively or looped by a caller — it's about what comes back, not
+  how often it's invoked.
+- **Confidence/triage still matters, for a different reason than
+  originally stated.** §5.6 floated a "per-query clear leader" signal
+  (is there one standout result, or several similarly-plausible
+  candidates) and shelved it as "a second iteration, not required" for
+  the interactive tool, since a human looking at a ranked list can make
+  that judgment themselves. For a *reference example* meant to show
+  someone how to classify a company from its description, the tool
+  itself demonstrating "here's how confident this match is, and here's
+  what an ambiguous case looks like" is part of the point — it's
+  example/teaching value, not a bulk-pipeline throughput requirement.
 - **Multi-code reality**: real companies (IBM being the obvious example
   already in hand) legitimately span multiple classification codes —
   hardware, software, and services are all genuinely "IBM's business,"
@@ -672,14 +679,6 @@ structure**, not a ranked list for a human to eyeball.
   services-chunk's winner can both be legitimate, simultaneous
   classifications), rather than forcing a single top answer the way
   interactive search implicitly does today.
-- **Timing**: does this run once, at ingest — when a company enters
-  Mediumroast's dataset, classify it immediately and store the result —
-  or on demand, at query time? Ingest-time seems the more natural fit
-  for "populate a durable classification field," but worth deciding
-  explicitly rather than assuming; it also sidesteps needing to keep an
-  embedding model warm in a request-serving process at all, which
-  matters for the rewrite's resource footprint (§7.8's memory-measurement
-  habit applies here too, once this gets built for real).
 
 **Not designed further here** — this section exists to name the use
 case precisely and flag how it differs from the interactive tool, since
