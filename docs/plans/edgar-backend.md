@@ -214,11 +214,14 @@ avoid re-implementing that parsing from scratch.
   descriptive `User-Agent` — worth deciding whether the rewrite adds
   real rate-limiting (which `edgarkit` provides out of the box) as an
   improvement, independent of which option is chosen for the rest.
-- Not yet addressed: how this interacts with `go-duckdb-rewrite.md`
-  §5.2's no-shared-KVS caching decision — presumably EDGAR's
-  live-fallback path (§1.2 above) just becomes another consumer of that
-  same process-local TTL+LRU cache, but worth confirming once this
-  doc's own questions are further along rather than assuming it.
+- ~~Not yet addressed: how this interacts with `go-duckdb-rewrite.md`
+  §5.2's no-shared-KVS caching decision...~~ **Decided (2026-09-28,
+  `go-duckdb-rewrite.md` §5.1): one general caching mechanism, shared by
+  EDGAR and Wikipedia**, not two separate implementations. The EDGAR
+  live-fallback path (§1.2 above) is one consumer of that shared
+  process-local TTL+LRU cache — its own instance/keyspace, CIK-keyed,
+  but the same underlying mechanism Wikipedia's fallback path (§5.4 of
+  that doc) uses too.
 
 ## 5. Next steps
 

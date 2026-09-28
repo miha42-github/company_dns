@@ -247,13 +247,21 @@ for that research, kept for the record but no longer live.
 
 ### 5.1 What the process-local cache actually looks like
 
-Basics, to make #2 concrete rather than just "an in-memory cache":
+Basics, to make #2 concrete rather than just "an in-memory cache".
+**Decided (2026-09-28): one general caching mechanism, not two
+bespoke ones** — a single generic cache type/module that both EDGAR
+(`docs/plans/edgar-backend.md` §1.2's live-fallback path) and Wikipedia
+(§5.4 below) instantiate and use, rather than each backend growing its
+own ad hoc caching logic. What differs per data source is the instance
+and its configuration, not the mechanism itself:
 
 - **Scope**: one cache instance per running process (per Kubernetes pod
-  / per Docker container). EDGAR and Wikipedia get separate cache
-  instances (or at least separate keyspaces) — different key shapes
-  (CIK vs. article title/QID), different TTLs likely appropriate given
-  the latency and staleness profile of each upstream.
+  / per Docker container), per data source — EDGAR and Wikipedia each
+  get their own instance of the same generic cache (or, at minimum,
+  their own keyspace within it), since different key shapes (CIK vs.
+  article title/QID) and different TTLs are appropriate given each
+  upstream's latency and staleness profile. The *type* is shared; the
+  *instances* aren't.
 - **Key**: CIK for EDGAR (matches §2's "CIK, not company name" lesson —
   same durable-identifier reasoning applies to the cache key, not just
   the feather-backed data), Wikipedia page title or QID for Wikipedia.
@@ -329,7 +337,8 @@ evaluate for best fit in Rust/`tokio` rather than assuming a straight
 port. This is substantial enough to deserve its own planning space: see
 [`docs/plans/edgar-backend.md`](edgar-backend.md) for the full research
 and options (reusing `pyedgar` as an external CLI/pipeline step producing
-`.feather` output, vs. a native Rust client).
+`.feather` output, vs. a native Rust client). Its live-fallback caching
+uses §5.1's general cache mechanism (CIK-keyed), not a bespoke one.
 
 ### 5.4 Wikipedia backend
 
@@ -343,7 +352,9 @@ own merits (e.g., `reqwest` + `tokio`) rather than assumed to mirror the
 Python approach line-for-line. This backend deserves its own planning
 doc too, once EDGAR's is further along — likely a smaller effort than
 EDGAR's, precisely because there's no "external tool vs. native
-reimplementation" decision to make here in the first place.
+reimplementation" decision to make here in the first place. Like EDGAR,
+its live-fallback caching uses §5.1's general cache mechanism (title/QID-
+keyed), not a separate implementation.
 
 ## 6. Language & engine: Rust + DataFusion (decided, §6.5)
 
