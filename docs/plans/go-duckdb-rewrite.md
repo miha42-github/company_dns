@@ -729,41 +729,31 @@ Rust spike (`fastembed` crate v7.1.0), against all 1,005 real
 first-ever run includes a one-time model download that isn't
 representative of steady-state service startup.)
 
-**Recommendation, for the "keep one low-dim and one high-dim" framing**:
+**Decided (§7.8): `all-MiniLM-L6-v2` only, for IC data.** It's the
+fastest and smallest model in the table above, and §7.6's quality
+evaluation found it also wins on retrieval quality for this dataset — no
+tradeoff at all once all the evidence was in. The reasoning that
+initially favored a two-model split (`bge-small-en-v1.5` for low-dim,
+`all-mpnet-base-v2` for high-dim, on speed grounds alone) got revised
+twice — first by §7.6's quality results, then by §7.7's two-model
+export, before §7.8 landed on the single-model answer above. That
+now-superseded back-and-forth is kept, unedited, in
+[Annex F](#annex-f-75-model-selection-reasoning-for-ic-data-historical---superseded-by-78)
+for the reasoning trail — not something to re-litigate.
 
-- **High-dim: `all-mpnet-base-v2`.** No real alternative within native
-  `fastembed-rs` support anyway (the only 768-dim option), and the
-  numbers confirm it's fine for the runtime use case regardless — 7.17ms
-  median per query is negligible next to this service's actual dominant
-  latency (Wikipedia/EDGAR calls run 700-1000ms+, per the V3.3.0
-  baseline in §7's earlier context). The 418MB on-disk footprint (3-5x
-  the 384-dim options) is the real cost, and it's a Docker-image-size
-  line item, not a performance concern.
-- **Low-dim: `BAAI/bge-small-en-v1.5`, not `all-MiniLM-L6-v2`.** MiniLM
-  is measurably faster (~1.9x) and smaller (87MB vs 128MB), but the
-  absolute gap (2.49ms vs 4.69ms) is noise against this service's real
-  request-path costs — while BGE-small's retrieval-quality edge (the
-  reason it was recommended in the first place, back when picking "the
-  one with best support") is the kind of difference that actually shows
-  up in results. Speed was never the real constraint at the 384-dim
-  tier.
-
-**Net effect**: of the four models in the shipped data, two
-(`bge-small-en-v1.5`, `all-mpnet-base-v2`) would get a runtime
-query-embedding path; the other two (`all-MiniLM-L6-v2`,
-`intfloat/e5-base-v2`) stay in the data for comparison/future use
-without needing one right now. Worth revisiting if `e5-base-v2` (or a
-different model entirely) ever becomes a serious contender — it would
-need a manual ONNX export + `ort` (§6.2), not the zero-effort
-`fastembed-rs` path the two recommended models get.
-
-**Update — §7.6 below complicates this.** §7.5 only measured speed. A
-follow-up quality evaluation found `all-MiniLM-L6-v2` actually
-outperforms `bge-small-en-v1.5` on *this specific dataset* — the "pick
-BGE-small for quality" reasoning above was based on general retrieval
-benchmarks (MTEB), which don't necessarily transfer to short,
-controlled-vocabulary classification text. Read §7.6 before treating
-the low-dim pick above as settled.
+**Open question: company data.** This benchmark, and everything through
+§7.8's decision, covers IC/SIC-NACE text only — short, controlled-
+vocabulary classification strings (`"Wheat"`, `"Cash Grains"`). The
+speed numbers above are generic per-model inference costs and likely
+transfer to any text domain, but the *quality* pick might not: company
+descriptions from Mediumroast are free-text natural language, plausibly
+much closer to what general retrieval benchmarks (MTEB) actually
+measure — the domain where `bge-small-en-v1.5`'s reputation (and
+possibly `intfloat/e5-base-v2`'s strong ranking performance, per §7.6)
+is more likely to hold, not `all-MiniLM-L6-v2`'s. **Not yet decided,
+and shouldn't be assumed**: the same speed-benchmark-then-quality-eval
+methodology (§7.5/§7.6) needs to be re-run once real company-data
+vectors exist, rather than carrying the IC-data answer over by default.
 
 ### 7.6 Model quality: does the "best support" pick actually retrieve well?
 
@@ -1023,10 +1013,10 @@ once company vectors exist to test against.
 
 Superseded sections, kept verbatim (not edited after the fact) as a
 record of the actual decision process — how the reasoning moved from
-"here are the live options" to §6.5's (and §5's) answers — not as
-current guidance. Nothing here should be read as a live comparison to
-act on; `§4.x`/`§8`/`§6.1`-`§6.4`/`§7.3`-`§7.4`'s DuckDB content
-elsewhere in this doc point at this content.
+"here are the live options" to §6.5's (and §5's, and §7.8's) answers —
+not as current guidance. Nothing here should be read as a live
+comparison to act on; `§4.x`/`§8`/`§6.1`-`§6.4`/`§7.3`-`§7.4`'s DuckDB
+content/`§7.5` elsewhere in this doc point at this content.
 
 ### Annex A (§4): Backend: SQLite vs. DuckDB (historical — superseded by §6.5)
 
@@ -1586,3 +1576,52 @@ plausible-looking error) exists in the first place. A workaround existed
 for DuckDB here too (drop the RangeIndex metadata field, same shape of
 fix as decompressing was for the wrong diagnosis) — still an extra
 ingestion-side step DataFusion didn't need.
+
+### Annex F (§7.5): Model selection reasoning for IC data (historical — superseded by §7.8)
+
+> **Historical.** §7.5's original recommendation, based on speed data
+> alone, favored a two-model split: `bge-small-en-v1.5` for the low-dim
+> slot (on a general quality reputation, not yet tested against this
+> data) and `all-mpnet-base-v2` for high-dim. That recommendation was
+> revised twice — first by §7.6's quality evaluation (which found
+> `all-MiniLM-L6-v2` actually wins on this dataset), then by §7.7's
+> two-model export — before §7.8 settled on `all-MiniLM-L6-v2` alone.
+> Kept here unedited as the reasoning trail; §7.5's live text states the
+> decision directly instead of walking through this now-superseded
+> back-and-forth.
+
+**Recommendation, for the "keep one low-dim and one high-dim" framing**:
+
+- **High-dim: `all-mpnet-base-v2`.** No real alternative within native
+  `fastembed-rs` support anyway (the only 768-dim option), and the
+  numbers confirm it's fine for the runtime use case regardless — 7.17ms
+  median per query is negligible next to this service's actual dominant
+  latency (Wikipedia/EDGAR calls run 700-1000ms+, per the V3.3.0
+  baseline in §7's earlier context). The 418MB on-disk footprint (3-5x
+  the 384-dim options) is the real cost, and it's a Docker-image-size
+  line item, not a performance concern.
+- **Low-dim: `BAAI/bge-small-en-v1.5`, not `all-MiniLM-L6-v2`.** MiniLM
+  is measurably faster (~1.9x) and smaller (87MB vs 128MB), but the
+  absolute gap (2.49ms vs 4.69ms) is noise against this service's real
+  request-path costs — while BGE-small's retrieval-quality edge (the
+  reason it was recommended in the first place, back when picking "the
+  one with best support") is the kind of difference that actually shows
+  up in results. Speed was never the real constraint at the 384-dim
+  tier.
+
+**Net effect**: of the four models in the shipped data, two
+(`bge-small-en-v1.5`, `all-mpnet-base-v2`) would get a runtime
+query-embedding path; the other two (`all-MiniLM-L6-v2`,
+`intfloat/e5-base-v2`) stay in the data for comparison/future use
+without needing one right now. Worth revisiting if `e5-base-v2` (or a
+different model entirely) ever becomes a serious contender — it would
+need a manual ONNX export + `ort` (Annex D §6.2), not the zero-effort
+`fastembed-rs` path the two recommended models get.
+
+**Update — §7.6 below complicates this.** §7.5 only measured speed. A
+follow-up quality evaluation found `all-MiniLM-L6-v2` actually
+outperforms `bge-small-en-v1.5` on *this specific dataset* — the "pick
+BGE-small for quality" reasoning above was based on general retrieval
+benchmarks (MTEB), which don't necessarily transfer to short,
+controlled-vocabulary classification text. Read §7.6 before treating
+the low-dim pick above as settled.
