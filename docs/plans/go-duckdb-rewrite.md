@@ -23,6 +23,10 @@ TiKV/minikv distributed-KVS research that originally motivated part of
 the Go-vs-Rust question is now purely historical — moved to Annex C.
 **Versioning/repo decided (2026-09-27, §9): this is V4.0.0, built on a
 branch within the current `company_dns` repo** — not a new repository.
+**DataFusion 55.1.0 re-validated (2026-09-28, §7.9)**: still pinned to
+42.2.0 for now, but a real upgrade path exists and has been checked
+against real data, not just assumed safe — see §7.9 before treating a
+future version bump as risky or untested.
 Owner: michael.hay@mediumroast.io
 Scope: a from-scratch rewrite of `company_dns` in Rust with DataFusion as
 the query/data-access engine, backed by Mediumroast `.feather` (Arrow IPC)
@@ -972,6 +976,53 @@ untested, and may not land on a single model — the "one model" framing
 is not itself the finding; the finding is "MiniLM beats mpnet on *this*
 dataset by every measure we have." That could look completely different
 once company vectors exist to test against.
+
+### 7.9 Re-validated against DataFusion 55.1.0 (2026-09-28)
+
+Raised while working `docs/plans/edgar-backend.md` §2.1: DataFusion
+55.1.0 resolves the `edgarkit`/`chrono` dependency conflict that forces
+`experiments/edgar-spike` and `experiments/edgar-index-query` apart on
+DataFusion 42. Before treating that as a real option, this section's
+(and §7.3/§7.4's) results — all validated against 42.2.0 specifically —
+needed re-checking against 55.1.0, not assumed to still hold on a
+13-major-version jump.
+
+**Both DataFusion-dependent spikes re-run against the real files,
+scratch copies bumped to `datafusion = "55"`, nothing else changed in
+the query/schema code:**
+
+- **`df-spike`, against the real `tmp/us_flat.feather`** (§7.3): identical
+  result — same one-line `.feather`-extension config, same 1,005-row
+  read, same 20-row "Agricultural Production Crops" query result, byte
+  for byte matching the DataFusion 42 run. The zero-copy Arrow IPC read
+  this section's whole finding rests on still holds.
+- **`ic-similarity-service`, against the real, single-model
+  `tmp/us_flat_embedded.feather`** (§7.4/§7.8): compiled with no code
+  changes beyond the `arrow-ipc` version pin (`"53"` → `"59"`, to match
+  what DataFusion 55 itself resolves to — the `zstd` feature still needs
+  requesting explicitly, same gap as §7.3's original finding, just at a
+  newer version number). Ran a real query
+  (`GET /api/similar?q=growing+wheat`): **48.607802% top match on
+  "Wheat"/"Cash Grains"** — the exact figure already cited in §7.8's own
+  text ("48.6% on MiniLM") for this same query, reproduced exactly.
+  `array_distance` via the SQL-string workaround (§7.3's Rust-API-vs-
+  SQL-API note) still works unmodified — worth confirming later whether
+  DataFusion 55's Rust builder API fixed the bug that made the
+  workaround necessary in the first place, since that's a separate,
+  smaller question this re-validation didn't specifically test.
+
+**What this settles**: the specific concern raised in `edgar-backend.md`
+§4 — "does moving to DataFusion 55.x break anything this doc already
+validated" — is answered: no, for the two things that actually exercise
+DataFusion (`df-spike`'s file read, `ic-similarity-service`'s vector
+search), on the real data files, with no behavior change. **What this
+doesn't settle**: whether to actually move the committed spikes/rewrite
+to 55.x — that's a decision about the target architecture, not just
+"does it still work," and belongs with whoever's deciding
+`edgar-backend.md`'s Option 1 vs. Option 2 (and by extension, whether
+`edgarkit`'s single-binary story is worth pursuing). This section only
+removes "we don't know if it'd break" as a reason to delay that
+decision.
 
 ## 8. Go-specific open questions (historical)
 

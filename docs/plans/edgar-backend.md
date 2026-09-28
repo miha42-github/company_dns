@@ -169,15 +169,15 @@ forward:
   DataFusion SQL query, same process, same run. **This reopens the
   single-binary option for §3's Option 2** — the `edgar-spike`/
   `edgar-index-query` split (§2.1, above) is an artifact of this
-  project's spikes being pinned to DataFusion 42 (matching
-  `go-duckdb-rewrite.md` §7's already-validated results), not a
-  permanent architectural constraint. **Not yet acted on**: upgrading
-  DataFusion project-wide is a real decision of its own — §7's results
-  were validated against 42.2.0 specifically, and moving to 55.x means
-  re-validating them, not just swapping a version number. Worth deciding
-  deliberately (a dedicated spike re-running §7's checks against 55.x,
-  or folding it into whenever the rewrite's dependencies get locked for
-  real) rather than drifting into it via this one crate conflict.
+  project's spikes being pinned to DataFusion 42, not a permanent
+  architectural constraint. **Re-validated (2026-09-28,
+  `go-duckdb-rewrite.md` §7.9)**: §7's DataFusion-dependent results
+  (`df-spike`'s real-file read, `ic-similarity-service`'s real vector
+  search) re-run cleanly against DataFusion 55.1.0 with no behavior
+  change — same row counts, same query results, same similarity scores.
+  Upgrading is no longer an unverified risk; it's a target-architecture
+  decision (§4) about whether to actually take it, independent of
+  whether it's safe.
 - **The `'10-%'` filter catches more than documented.** Grouping the
   9,241 rows by `form_type` shows `10-D`/`10-D/A` (2,659 rows — more
   than all `10-K`/`10-K/A` combined), `10-12G`/`10-12G/A`/`10-12B`/
@@ -263,15 +263,16 @@ avoid re-implementing that parsing from scratch.
 - **Pro, with a caveat that's specific to DataFusion 42 (§2.1)**:
   single-*language* story stays intact either way — no Python anywhere.
   Single-*binary* holds too if the project moves to DataFusion 55.x
-  (verified: `edgarkit` + DataFusion 55 compile and run correctly
-  together, §2.1) — but *not* on the DataFusion 42 this project's
-  spikes are currently pinned to, where `edgarkit` and DataFusion can't
-  share a process (a genuine `chrono`-version conflict). On 42, this
-  becomes two Rust processes/crates talking via files on disk — still no
-  Python, but not the one-binary story this bullet originally assumed.
-  Whether that's resolved by upgrading DataFusion project-wide, or
-  accepted as a two-process design regardless, is unresolved — see
-  §2.1's note on why that upgrade isn't a decision to make lightly.
+  (verified end to end, including against real data — §2.1) — but *not*
+  on the DataFusion 42 this project's spikes are currently pinned to,
+  where `edgarkit` and DataFusion can't share a process (a genuine
+  `chrono`-version conflict). On 42, this becomes two Rust
+  processes/crates talking via files on disk — still no Python, but not
+  the one-binary story this bullet originally assumed. Whether to
+  actually upgrade, or accept the two-process design on 42 regardless,
+  is a real decision either way — but it's no longer blocked on "would
+  upgrading even be safe," which §2.1/`go-duckdb-rewrite.md` §7.9 has
+  now answered.
 - **Pro**: item 1.2 (live firmographics) is low-risk either way — a
   JSON GET request and some field reshaping, well within "write it
   ourselves" territory regardless of what happens with index-building.
@@ -324,14 +325,21 @@ avoid re-implementing that parsing from scratch.
   process-local TTL+LRU cache — its own instance/keyspace, CIK-keyed,
   but the same underlying mechanism Wikipedia's fallback path (§5.4 of
   that doc) uses too.
-- **New: does this project move to DataFusion 55.x?** (§2.1) Verified
-  it resolves the `edgarkit`/DataFusion dependency conflict and restores
-  the single-binary option for Option 2 — but it's a project-wide
-  version bump, not an EDGAR-scoped one, and `go-duckdb-rewrite.md` §7's
-  results were validated against 42.2.0 specifically. Not this doc's
-  decision to make alone; needs its own re-validation pass (or an
-  explicit decision to accept the two-process split on 42 instead)
-  before it affects Option 1 vs. Option 2 here.
+- ~~Does this project move to DataFusion 55.x? Needs its own
+  re-validation pass...~~ **Re-validation done (2026-09-28,
+  `go-duckdb-rewrite.md` §7.9)**: both DataFusion-dependent spikes
+  (`df-spike`'s real-file read, `ic-similarity-service`'s real vector
+  search) re-run against DataFusion 55.1.0 with the real Mediumroast
+  files, no behavior change — same row counts, same query results, same
+  similarity scores (`"growing wheat"` still scores 48.6% on
+  `all-MiniLM-L6-v2`, matching §7.8's documented figure exactly). The
+  risk this bullet originally flagged (upgrading might silently break
+  §7's already-validated results) is closed. **Still open, and still not
+  this doc's decision alone**: whether to actually move the committed
+  spikes/rewrite to 55.x, given it also restores Option 2's
+  single-binary story (§2.1). That's a target-architecture decision, not
+  a safety one — this re-validation just removes "we don't know if it'd
+  break" as a reason to delay making it.
 
 ## 5. Next steps
 
