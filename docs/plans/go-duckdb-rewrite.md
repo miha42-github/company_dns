@@ -307,17 +307,26 @@ similarity search.
   conceptually, but the Rust implementation should be evaluated on its
   own merits rather than assumed to mirror the Python approach.
 
-## 6. Language choice: Go vs. Rust
+## 6. Language & engine: Rust + DataFusion (decided, §6.5)
 
-Raised by evaluating [tikv/tikv](https://github.com/tikv/tikv) and
-[whispem/minikv](https://github.com/whispem/minikv) for the §5 caching
-question — both Rust, which raised the question of whether Rust would
-be a better overall fit than Go "for compatibility with these emerging
-distributed KVS systems." §6.1's research (below, now in Annex C)
-concluded neither actually fit what §5 needed, and §5 has since settled
-on a plain process-local TTL+LRU cache with no KVS/shared store at all —
-so this was never actually the deciding factor; see §6.4/§6.5 for what
-was.
+> **This section's framing is legacy.** §6.1-§6.4 below were written
+> while Go-vs-Rust and DataFusion-vs-DuckDB were still open questions,
+> in that order: raised by evaluating [tikv/tikv](https://github.com/tikv/tikv)
+> and [whispem/minikv](https://github.com/whispem/minikv) for the §5
+> caching question (both Rust, which raised "would Rust be a better
+> overall fit generally"), then widened into a full language and
+> query-engine comparison. **Both questions are now closed**: §5 settled
+> on a plain process-local TTL+LRU cache with no KVS at all (so the
+> original caching-driven premise for Rust never actually held), and
+> §6.5 settled Rust + DataFusion on its own, stronger merits — proven
+> working code plus the business reframing (§1). §6.1-§6.4's research is
+> kept, unedited, in [Annex C](#annex-c-61-the-two-kv-stores-themselves-historical---kvs-eliminated-entirely)
+> and [Annex D](#annex-d-62-64-go-vs-rust-and-datafusion-vs-duckdb-comparisons-historical---superseded-by-65)
+> as the reasoning trail; §6.5 is the live, current section. Where
+> §6.1-§6.4 established a fact about Rust/DataFusion that's still true
+> today (not just "won the comparison at the time"), it's restated as
+> current architecture in §6.5 rather than left to be dug out of a
+> historical comparison table.
 
 ### 6.1 The two KV stores themselves (historical — KVS eliminated entirely)
 
@@ -330,139 +339,41 @@ was.
 > for this project. Kept below, unedited, as the reasoning trail; not
 > live guidance.
 
-### 6.2 Go vs. Rust, on the dimensions that actually matter for this project
+### 6.2 Go vs. Rust, on the dimensions that actually matter for this project (historical — decided in §6.5)
 
-Skipping generic "which language is faster" framing in favor of what
-this specific rewrite needs — feather/Arrow-heavy data access, embedded
-DuckDB + SQLite(+ `sqlite-vec`), moderate-concurrency HTTP fallback
-calls, a multi-arch Docker/k8s deploy story, and (unstated but real) a
-small/solo maintainer team.
+> **Historical, moved to [Annex D](#annex-d-62-64-go-vs-rust-and-datafusion-vs-duckdb-comparisons-historical---superseded-by-65).**
+> This was the head-to-head Go-vs-Rust comparison table (Arrow ecosystem,
+> DuckDB/SQLite driver maturity, concurrency model, deployment, team fit)
+> that fed into §6.4's lean and §6.5's decision. Rust won; Go is not part
+> of this project's architecture. What's still true and useful from this
+> table — the Arrow/DataFusion ecosystem strength, the concurrency model,
+> the deployment story — is restated as current fact in §6.5 rather than
+> left inside a comparison against an option that's no longer live.
 
-| Dimension | Go | Rust |
-|---|---|---|
-| Arrow ecosystem (this project's data arrives as `.feather`/Arrow IPC) | `apache/arrow-go` is the official Apache implementation, but young and comparatively lightly adopted. Go's Parquet story (`segmentio/parquet-go`, now `parquet-go/parquet-go`) is more mature, but that's a different file format than the one this project actually needs. | `apache/arrow-rs` + `datafusion` are the **official, first-party Apache implementations**, heavily used and actively developed (DataFusion's recent release cycle: ~740 commits from 139 contributors in ~11 weeks). This is Rust's strongest, most directly relevant advantage for *this* project specifically, given how central `.feather`/Arrow IPC and precomputed vectors are to the whole design. |
-| DuckDB driver | `marcboeker/go-duckdb` — community-maintained Go bindings around DuckDB's C/C++ core. | `duckdb-rs` — community-maintained Rust bindings, similar shape. Roughly comparable maturity to the Go side; neither is DuckDB's own first-party client library. Worth a real evaluation pass on both, not assumed. |
-| SQLite + `sqlite-vec` | `modernc.org/sqlite` (pure Go, no cgo) is a genuine, well-regarded advantage for plain SQLite — but it's a from-scratch reimplementation, not the real SQLite C library, so it's unclear it can load an arbitrary C extension like `sqlite-vec` at all. Loading `sqlite-vec` for real likely means falling back to a cgo-based driver (`mattn/go-sqlite3`), which gives up the pure-Go cross-compilation advantage. **Needs a spike**, same caveat as §4.4's DuckDB question. | `rusqlite` wraps the real libsqlite3 via FFI (optionally bundling the C source) and has a documented `load_extension` path — more directly compatible with loading `sqlite-vec` as-is, but it's still an FFI boundary either way, not a pure-Rust reimplementation. **Also needs a spike** to confirm in practice, not assumed to "just work." |
-| Concurrency model | Goroutines + `net/http`: simple, well-proven for I/O-bound, moderate-concurrency services — which matches this project's actual profile (a REST API doing outbound HTTP calls and local DB lookups, not millions of concurrent connections). | `async`/Tokio is more powerful and can go further (production Tokio deployments handle far higher connection counts than this service will ever see), but that power comes with real complexity (`async fn` coloring, `Send`/`Sync` bounds, pinning) that this project's actual load doesn't obviously need. |
-| Deployment / cross-compilation | Single static binary, trivially cross-compiled, well-matched to the existing `linux/amd64,linux/arm64` multi-arch Docker build (`.github/workflows/main.yml`) — an established Go strength. | Also produces static-ish binaries and cross-compiles reasonably well, but any cgo/FFI dependency (DuckDB's C++ core, `sqlite-vec`, potentially `rusqlite`) adds real cross-compilation friction on **both** languages here — this isn't a clean Go-wins point once those dependencies are in the picture either way. |
-| Team fit | *Unstated — worth asking directly.* Do you (or anyone else likely to touch this code) have existing Rust experience, or would this be a first production Rust project alongside a first-ever rewrite? That's a bigger practical factor than most of the above rows for a small/solo-maintained OSS project. | *Same question, mirrored.* |
+### 6.3 DataFusion vs. DuckDB, expanded (historical — decided in §6.5)
 
-A few 2026 "Go vs. Rust" comparison posts turned up in research (blog
-posts, not benchmarks run against this workload) claim things like
-"Rust is 15-30% faster for CPU-bound work" and "50-80MB vs 100-320MB RAM
-at runtime" — included for completeness, but **treated as directional
-SEO-blog claims, not verified data**, the same posture this doc took
-toward self-described "production-ready" claims elsewhere. `company_dns`
-is not a CPU-bound workload (it's dominated by outbound network calls to
-EDGAR/Wikipedia and small local DB lookups), so generic CPU-bound
-benchmarks are unlikely to be the deciding factor regardless.
+> **Historical, moved to [Annex D](#annex-d-62-64-go-vs-rust-and-datafusion-vs-duckdb-comparisons-historical---superseded-by-65).**
+> This was the deep-dive comparing DataFusion and DuckDB specifically for
+> reading Mediumroast's `.feather` data and doing vector search over it —
+> written while that was still an open question, before §7's spike gave
+> it an empirical answer (DataFusion reads the real files; DuckDB's Arrow
+> extension didn't) and before §6.5 settled the engine choice. The
+> concrete technical facts that are still live architecture (Arrow IPC
+> zero-copy reads, DataFusion's built-in SIMD `cosine_distance`/
+> `array_distance`) are restated as current fact in §6.5. §7's spike
+> narrative cites specific claims from this section (e.g. `§6.3`) as the
+> hypotheses it went on to test — those citations still resolve to this
+> content, now in the annex.
 
-### 6.3 DataFusion vs. DuckDB, expanded
+### 6.4 Where this leaves us (historical — decided in §6.5)
 
-Worth digging into deeper, per request — two reasons: it's genuinely the
-more interesting question than Go-vs-Rust in the abstract, and it
-changes shape now that **Mediumroast will distribute data in `.feather`
-format specifically, for Arrow compatibility** (§1 — this is the only
-format Mediumroast ships; no parquet package). Feather V2 *is* the Arrow
-IPC file format — this is squarely an Arrow-ecosystem question, not a
-generic "which database is faster" one.
-
-**Architecturally, these two aren't really peers.** DataFusion is a
-query *framework/library* — Arrow RecordBatches are its native, only
-in-memory representation, and it's built with 16+ extension points
-(`TableProvider` for custom data sources, `CatalogProvider`, physical
-planners, and so on) explicitly for embedding inside a larger
-application. DuckDB is a self-contained *embedded database* — its own
-storage format, transactions, and catalog, packaged for "point it at
-data and query it" use (a notebook, an ad-hoc analysis, a CLI). Spice
-AI's comparison puts it plainly: DuckDB is the direct starting point
-for ad-hoc/notebook analysis; **for a service with custom storage and
-planning requirements, DataFusion offers the explicit integration
-points** — and `company_dns` is unambiguously the second case, not the
-first. A real-world data point in the same direction:
-[Bauplan](https://bauplanlabs.com/post/duck-hunt-moving-bauplan-from-duckdb-to-datafusion)
-(a data-platform company, not a hobby project) publicly moved *from*
-DuckDB *to* DataFusion specifically because they were building a
-product on top and needed the extensibility — the same shape of
-decision this rewrite is facing.
-
-**On `.feather`/Arrow IPC specifically, the gap is real and currently
-in DuckDB's disfavor:**
-
-- For DataFusion, reading a `.feather` file isn't an import/conversion
-  step at all — Arrow IPC reads are inherently zero-copy when the
-  source supports it (a memory-mapped file, a buffer reader), meaning a
-  Mediumroast-shipped `.feather` file can be mmap'd straight into Arrow
-  `RecordBatch`es with no deserialization. This is about as close to
-  "native format" as it gets, because it *is* DataFusion's native
-  format.
-- For DuckDB, Arrow IPC/Feather support exists, but as a **community
-  extension** (`arrow`, aliased to `nanoarrow`) — not core, not built
-  in by default, and **not zero-copy**: it goes through
-  nanoarrow-based encode/decode. DuckDB's own extension roadmap
-  currently lists real gaps: no ZSTD/LZ4 compression support on writes,
-  no LZ4 support on reads, no file-footer support yet. This is a
-  younger, still-actively-developing piece of DuckDB, in clear contrast
-  to DuckDB's native (and excellent) direct Parquet support — the
-  Feather/Arrow-IPC story specifically is the weaker side of DuckDB
-  right now, not the strong side.
-- One unverified but relevant performance claim, worth flagging rather
-  than either dismissing or leaning on: DataFusion has recently been
-  reported as **the fastest single-node engine for querying Parquet,
-  ahead of both DuckDB and ClickHouse**. Treated the same way as the
-  Go-vs-Rust blog claims above — plausible, comes from a specific
-  benchmark not independently re-verified here, shouldn't be
-  load-bearing on its own, but consistent with the architectural story
-  (Arrow-native, zero-copy-oriented design) rather than contradicting it.
-
-**A genuine bonus, tying back to §4's vector-search question**:
-DataFusion already ships a SIMD-kernel `cosine_distance` scalar function
-operating directly over Arrow array columns — evaluated in DataFusion
-itself even when the underlying data is scanned from elsewhere (e.g., a
-federated DuckDB table). Combined with §4.1's finding that this
-project's vectors are precomputed upstream by Mediumroast (so the
-runtime cost really is just similarity computation over Arrow arrays,
-nothing more), **a DataFusion-based Rust service could plausibly do the
-SIC/NACE and company similarity search natively** — same engine that's
-already reading the feather data, no `sqlite-vec` or DuckDB VSS
-needed at all, and no split-architecture (§4.6) required either. This is
-a new, real option worth adding to §4.6's list: *DataFusion-native
-vector search via its built-in Arrow-array distance functions,
-bypassing the SQLite-vs-DuckDB question entirely for the vector-search
-piece.*
-
-**The honest tradeoff, not glossed over**: DataFusion being a framework
-rather than a database cuts both ways. `company_dns` would own more —
-its own persistence/catalog wiring, its own decisions about how data
-gets loaded and refreshed — where DuckDB would hand more of that to you
-"batteries included." That's more upfront engineering work, in exchange
-for a architecture that fits this project's actual shape (a service
-embedding a query engine, reading Mediumroast's Arrow-native data
-products) more precisely than DuckDB's ad-hoc-analytics-first design
-does.
-
-### 6.4 Where this leaves us
-
-The specific reason Rust came up — "compatibility with TiKV/minikv" —
-doesn't hold up well under examination (§6.1): TiKV is oversized for the
-actual need, and minikv has a Go-native sibling project from the same
-author, so neither actually requires choosing Rust. **If Rust gets
-chosen, the real argument for it is the Arrow/feather/DataFusion
-ecosystem** (§6.2's first row, expanded in §6.3) — which, now that
-`.feather` is confirmed as a second Mediumroast delivery format and
-DataFusion's vector-search angle is on the table too, is a noticeably
-stronger argument than it looked at first pass. **§7.3/§7.4 moved this
-from theory to a verified result**: DuckDB's Arrow extension could not
-open the real `tmp/us_flat.feather` file at all — root-caused in §7.4 to
-a `pandas` `RangeIndex` metadata quirk, not compression as first
-suspected — while DataFusion read the same file, and a second, much
-larger vectors-included file, unmodified, with no such issue either
-time. That's not a marginal edge in DataFusion's favor on this specific
-point — it's the difference between "works" and "doesn't," twice now,
-on files this project will actually receive. This bears
-directly on this project's core workload in a way the KVS question
-doesn't. Worth deciding on that basis — and on team fit — rather than the
-caching-library premise that raised the question.
+> **Historical, moved to [Annex D](#annex-d-62-64-go-vs-rust-and-datafusion-vs-duckdb-comparisons-historical---superseded-by-65).**
+> This was the "leaning, not yet settled" summary written after §6.1-§6.3
+> but before the working prototypes existed — genuinely provisional
+> language ("noticeably stronger argument than it looked at first pass")
+> that §6.5 has since superseded with an actual decision backed by
+> running code. Kept for the record of how the lean firmed up into a
+> commitment, not as something to re-litigate.
 
 ### 6.5 Decided: Rust + DataFusion
 
@@ -515,6 +426,38 @@ isn't wrong, it's just answering a question that no longer needs
 answering: DataFusion was never one of the two options being compared
 there, and it turned out to be the one that didn't need the tradeoff at
 all.
+
+**3. What Rust + DataFusion actually gives this project**, stated as
+current architecture rather than dug out of §6.2/§6.3's now-archived
+comparisons (Annex D):
+
+- **Zero-copy `.feather` reads.** Arrow IPC is DataFusion's native
+  in-memory format, so a Mediumroast-shipped `.feather` file mmaps
+  straight into Arrow `RecordBatch`es with no conversion step — verified
+  in practice, not just claimed, by §7.3/§7.4 reading real Mediumroast
+  files end to end.
+- **Vector search is a built-in, not a bolt-on.** DataFusion ships a
+  SIMD-kernel `cosine_distance`/`array_distance` scalar function
+  operating directly over Arrow array columns. Combined with vectors
+  arriving precomputed from Mediumroast (§4.1/Annex A), similarity
+  search over SIC/NACE and company data runs in the same engine that
+  reads the `.feather` files — no second embedded store, no `sqlite-vec`,
+  no DuckDB VSS, already proven end-to-end in
+  `experiments/ic-similarity-service`.
+- **`tokio`/async concurrency**, already in use in
+  `experiments/ic-similarity-service` (Axum + `tower-http`). More power
+  than this project's actual load (a REST API doing outbound HTTP calls
+  and local lookups, not high-volume traffic) strictly needs, but no
+  real cost either — DataFusion itself is async-native, so this isn't an
+  extra complexity layered on top, it's the natural fit for the engine
+  already chosen.
+- **Single static binary, cross-compiled** for
+  `linux/amd64,linux/arm64` — matches the existing multi-arch Docker
+  build (`.github/workflows/main.yml`) with no change to that deploy
+  story. `duckdb-rs`/`rusqlite`-style FFI/cgo cross-compilation friction
+  (a real concern in §6.2/Annex D's comparison, when SQLite/DuckDB
+  drivers were still in the picture) doesn't apply — DataFusion is pure
+  Rust, no C/C++ core to cross-compile alongside it.
 
 ## 7. Spike plan: DataFusion against a real Mediumroast `.feather` file
 
@@ -1129,8 +1072,8 @@ Superseded sections, kept verbatim (not edited after the fact) as a
 record of the actual decision process — how the reasoning moved from
 "here are the live options" to §6.5's (and §5's) answers — not as
 current guidance. Nothing here should be read as a live comparison to
-act on; `§4.x`/`§8`/`§6.1` references elsewhere in this doc point at
-this content.
+act on; `§4.x`/`§8`/`§6.1`-`§6.4` references elsewhere in this doc point
+at this content.
 
 ### Annex A (§4): Backend: SQLite vs. DuckDB (historical — superseded by §6.5)
 
@@ -1436,3 +1379,149 @@ caching decision (§5's four options) and the language decision are
 close to independent, and treating them as linked risks a much bigger
 decision (the whole rewrite's language) being anchored on a much smaller
 one (how to cache Wikipedia lookups).
+
+### Annex D (§6.2-6.4): Go vs. Rust and DataFusion vs. DuckDB comparisons (historical — superseded by §6.5)
+
+> **Historical.** This is §6.2-§6.4's original text, written while the
+> language (Go vs. Rust) and query engine (DataFusion vs. DuckDB)
+> choices were both still open — before the working prototypes existed
+> and before §6.5 settled both. Kept unedited for the reasoning trail;
+> the technical facts here that are still true today (Arrow IPC
+> zero-copy reads, DataFusion's built-in vector-distance functions,
+> the `tokio`/async model, the single-binary deployment story) are
+> restated as current architecture in §6.5's third point rather than
+> left buried in a comparison against options no longer on the table.
+
+#### 6.2 Go vs. Rust, on the dimensions that actually matter for this project
+
+Skipping generic "which language is faster" framing in favor of what
+this specific rewrite needs — feather/Arrow-heavy data access, embedded
+DuckDB + SQLite(+ `sqlite-vec`), moderate-concurrency HTTP fallback
+calls, a multi-arch Docker/k8s deploy story, and (unstated but real) a
+small/solo maintainer team.
+
+| Dimension | Go | Rust |
+|---|---|---|
+| Arrow ecosystem (this project's data arrives as `.feather`/Arrow IPC) | `apache/arrow-go` is the official Apache implementation, but young and comparatively lightly adopted. Go's Parquet story (`segmentio/parquet-go`, now `parquet-go/parquet-go`) is more mature, but that's a different file format than the one this project actually needs. | `apache/arrow-rs` + `datafusion` are the **official, first-party Apache implementations**, heavily used and actively developed (DataFusion's recent release cycle: ~740 commits from 139 contributors in ~11 weeks). This is Rust's strongest, most directly relevant advantage for *this* project specifically, given how central `.feather`/Arrow IPC and precomputed vectors are to the whole design. |
+| DuckDB driver | `marcboeker/go-duckdb` — community-maintained Go bindings around DuckDB's C/C++ core. | `duckdb-rs` — community-maintained Rust bindings, similar shape. Roughly comparable maturity to the Go side; neither is DuckDB's own first-party client library. Worth a real evaluation pass on both, not assumed. |
+| SQLite + `sqlite-vec` | `modernc.org/sqlite` (pure Go, no cgo) is a genuine, well-regarded advantage for plain SQLite — but it's a from-scratch reimplementation, not the real SQLite C library, so it's unclear it can load an arbitrary C extension like `sqlite-vec` at all. Loading `sqlite-vec` for real likely means falling back to a cgo-based driver (`mattn/go-sqlite3`), which gives up the pure-Go cross-compilation advantage. **Needs a spike**, same caveat as §4.4's DuckDB question. | `rusqlite` wraps the real libsqlite3 via FFI (optionally bundling the C source) and has a documented `load_extension` path — more directly compatible with loading `sqlite-vec` as-is, but it's still an FFI boundary either way, not a pure-Rust reimplementation. **Also needs a spike** to confirm in practice, not assumed to "just work." |
+| Concurrency model | Goroutines + `net/http`: simple, well-proven for I/O-bound, moderate-concurrency services — which matches this project's actual profile (a REST API doing outbound HTTP calls and local DB lookups, not millions of concurrent connections). | `async`/Tokio is more powerful and can go further (production Tokio deployments handle far higher connection counts than this service will ever see), but that power comes with real complexity (`async fn` coloring, `Send`/`Sync` bounds, pinning) that this project's actual load doesn't obviously need. |
+| Deployment / cross-compilation | Single static binary, trivially cross-compiled, well-matched to the existing `linux/amd64,linux/arm64` multi-arch Docker build (`.github/workflows/main.yml`) — an established Go strength. | Also produces static-ish binaries and cross-compiles reasonably well, but any cgo/FFI dependency (DuckDB's C++ core, `sqlite-vec`, potentially `rusqlite`) adds real cross-compilation friction on **both** languages here — this isn't a clean Go-wins point once those dependencies are in the picture either way. |
+| Team fit | *Unstated — worth asking directly.* Do you (or anyone else likely to touch this code) have existing Rust experience, or would this be a first production Rust project alongside a first-ever rewrite? That's a bigger practical factor than most of the above rows for a small/solo-maintained OSS project. | *Same question, mirrored.* |
+
+A few 2026 "Go vs. Rust" comparison posts turned up in research (blog
+posts, not benchmarks run against this workload) claim things like
+"Rust is 15-30% faster for CPU-bound work" and "50-80MB vs 100-320MB RAM
+at runtime" — included for completeness, but **treated as directional
+SEO-blog claims, not verified data**, the same posture this doc took
+toward self-described "production-ready" claims elsewhere. `company_dns`
+is not a CPU-bound workload (it's dominated by outbound network calls to
+EDGAR/Wikipedia and small local DB lookups), so generic CPU-bound
+benchmarks are unlikely to be the deciding factor regardless.
+
+#### 6.3 DataFusion vs. DuckDB, expanded
+
+Worth digging into deeper, per request — two reasons: it's genuinely the
+more interesting question than Go-vs-Rust in the abstract, and it
+changes shape now that **Mediumroast will distribute data in `.feather`
+format specifically, for Arrow compatibility** (§1 — this is the only
+format Mediumroast ships; no parquet package). Feather V2 *is* the Arrow
+IPC file format — this is squarely an Arrow-ecosystem question, not a
+generic "which database is faster" one.
+
+**Architecturally, these two aren't really peers.** DataFusion is a
+query *framework/library* — Arrow RecordBatches are its native, only
+in-memory representation, and it's built with 16+ extension points
+(`TableProvider` for custom data sources, `CatalogProvider`, physical
+planners, and so on) explicitly for embedding inside a larger
+application. DuckDB is a self-contained *embedded database* — its own
+storage format, transactions, and catalog, packaged for "point it at
+data and query it" use (a notebook, an ad-hoc analysis, a CLI). Spice
+AI's comparison puts it plainly: DuckDB is the direct starting point
+for ad-hoc/notebook analysis; **for a service with custom storage and
+planning requirements, DataFusion offers the explicit integration
+points** — and `company_dns` is unambiguously the second case, not the
+first. A real-world data point in the same direction:
+[Bauplan](https://bauplanlabs.com/post/duck-hunt-moving-bauplan-from-duckdb-to-datafusion)
+(a data-platform company, not a hobby project) publicly moved *from*
+DuckDB *to* DataFusion specifically because they were building a
+product on top and needed the extensibility — the same shape of
+decision this rewrite is facing.
+
+**On `.feather`/Arrow IPC specifically, the gap is real and currently
+in DuckDB's disfavor:**
+
+- For DataFusion, reading a `.feather` file isn't an import/conversion
+  step at all — Arrow IPC reads are inherently zero-copy when the
+  source supports it (a memory-mapped file, a buffer reader), meaning a
+  Mediumroast-shipped `.feather` file can be mmap'd straight into Arrow
+  `RecordBatch`es with no deserialization. This is about as close to
+  "native format" as it gets, because it *is* DataFusion's native
+  format.
+- For DuckDB, Arrow IPC/Feather support exists, but as a **community
+  extension** (`arrow`, aliased to `nanoarrow`) — not core, not built
+  in by default, and **not zero-copy**: it goes through
+  nanoarrow-based encode/decode. DuckDB's own extension roadmap
+  currently lists real gaps: no ZSTD/LZ4 compression support on writes,
+  no LZ4 support on reads, no file-footer support yet. This is a
+  younger, still-actively-developing piece of DuckDB, in clear contrast
+  to DuckDB's native (and excellent) direct Parquet support — the
+  Feather/Arrow-IPC story specifically is the weaker side of DuckDB
+  right now, not the strong side.
+- One unverified but relevant performance claim, worth flagging rather
+  than either dismissing or leaning on: DataFusion has recently been
+  reported as **the fastest single-node engine for querying Parquet,
+  ahead of both DuckDB and ClickHouse**. Treated the same way as the
+  Go-vs-Rust blog claims above — plausible, comes from a specific
+  benchmark not independently re-verified here, shouldn't be
+  load-bearing on its own, but consistent with the architectural story
+  (Arrow-native, zero-copy-oriented design) rather than contradicting it.
+
+**A genuine bonus, tying back to §4's vector-search question**:
+DataFusion already ships a SIMD-kernel `cosine_distance` scalar function
+operating directly over Arrow array columns — evaluated in DataFusion
+itself even when the underlying data is scanned from elsewhere (e.g., a
+federated DuckDB table). Combined with §4.1's finding that this
+project's vectors are precomputed upstream by Mediumroast (so the
+runtime cost really is just similarity computation over Arrow arrays,
+nothing more), **a DataFusion-based Rust service could plausibly do the
+SIC/NACE and company similarity search natively** — same engine that's
+already reading the feather data, no `sqlite-vec` or DuckDB VSS
+needed at all, and no split-architecture (§4.6) required either. This is
+a new, real option worth adding to §4.6's list: *DataFusion-native
+vector search via its built-in Arrow-array distance functions,
+bypassing the SQLite-vs-DuckDB question entirely for the vector-search
+piece.*
+
+**The honest tradeoff, not glossed over**: DataFusion being a framework
+rather than a database cuts both ways. `company_dns` would own more —
+its own persistence/catalog wiring, its own decisions about how data
+gets loaded and refreshed — where DuckDB would hand more of that to you
+"batteries included." That's more upfront engineering work, in exchange
+for a architecture that fits this project's actual shape (a service
+embedding a query engine, reading Mediumroast's Arrow-native data
+products) more precisely than DuckDB's ad-hoc-analytics-first design
+does.
+
+#### 6.4 Where this leaves us
+
+The specific reason Rust came up — "compatibility with TiKV/minikv" —
+doesn't hold up well under examination (§6.1): TiKV is oversized for the
+actual need, and minikv has a Go-native sibling project from the same
+author, so neither actually requires choosing Rust. **If Rust gets
+chosen, the real argument for it is the Arrow/feather/DataFusion
+ecosystem** (§6.2's first row, expanded in §6.3) — which, now that
+`.feather` is confirmed as a second Mediumroast delivery format and
+DataFusion's vector-search angle is on the table too, is a noticeably
+stronger argument than it looked at first pass. **§7.3/§7.4 moved this
+from theory to a verified result**: DuckDB's Arrow extension could not
+open the real `tmp/us_flat.feather` file at all — root-caused in §7.4 to
+a `pandas` `RangeIndex` metadata quirk, not compression as first
+suspected — while DataFusion read the same file, and a second, much
+larger vectors-included file, unmodified, with no such issue either
+time. That's not a marginal edge in DataFusion's favor on this specific
+point — it's the difference between "works" and "doesn't," twice now,
+on files this project will actually receive. This bears
+directly on this project's core workload in a way the KVS question
+doesn't. Worth deciding on that basis — and on team fit — rather than the
+caching-library premise that raised the question.
