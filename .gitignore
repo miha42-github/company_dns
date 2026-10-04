@@ -79,3 +79,5 @@ experiments/embed-bench/embedding_texts.txt
 experiments/embed-bench/.fastembed_cache/
 experiments/ic-similarity-service/.fastembed_cache/
 v4/crates/server/.fastembed_cache/
+# fastembed model download cache
+.fastembed_cache/

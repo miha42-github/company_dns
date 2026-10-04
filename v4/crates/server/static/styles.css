@@ -1,0 +1,3278 @@
+/* Core layout and structural elements */
+:root {
+  /* Color System */
+  --color-bg-primary: #0F0D0E;
+  --color-bg-secondary: #1a1718;
+  --color-bg-tertiary: #3c3b3b;
+  
+  --color-text-primary: #ca703f;
+  --color-text-secondary: rgb(104, 95, 88);
+  --color-text-accent: #924e29;
+  
+  --color-link-primary: #1696c8;
+  --color-link-visited: #41a6ce;
+  --color-link-hover: #82a7b6;
+  
+  /* Spacing */
+  --spacing-xs: 0.3rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  
+  /* Typography */
+  --font-family-base: 'Avenir Next', 'Open Sans Light', 'Lato Medium';
+  --font-size-base: 11.5pt;
+  --font-size-small: 10.5pt;
+  --font-size-large: 16px;
+  
+  /* Borders */
+  --border-width: 0.05rem;
+  --border-width-medium: 0.12rem;
+  --border-color: rgb(104, 95, 88);
+  --border-radius: 0.5rem;
+  --border-radius-small: 0.3rem;
+  
+  /* Transitions */
+  --transition-fast: 0.2s;
+  --transition-medium: 0.3s;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-family-base);
+  scroll-behavior: smooth;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+}
+
+/* Page structure */
+.page-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.page-header {
+  flex-shrink: 0;
+  height: 50px; /* Explicit header height */
+}
+
+.page-content {
+  flex: 1;
+  overflow: hidden; 
+  position: relative;
+}
+
+.page-footer {
+  flex-shrink: 0;
+  height: 40px;
+  border-top: 1px solid var(--color-bg-tertiary);
+  padding: 0;
+  background-color: var(--color-bg-primary);
+  display: flex;
+  align-items: center;
+  z-index: 50; /* Keep it above content */
+  position: relative; /* Ensure it stays in place */
+}
+
+.page-footer .copyright {
+  margin: 0;
+  padding: 0 1rem;
+}
+
+/* Licensing moved here from About's former "Additional Resources"
+   section (docs/plans/company-dns-ux.md sec10.1 redesign) - a small
+   permanent footer link rather than a whole page section for one
+   link. */
+.footer-sep {
+  color: var(--color-text-secondary);
+}
+
+.footer-license-link {
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  font-size: 0.85em;
+}
+
+.footer-license-link:hover {
+  color: var(--color-link-primary);
+  text-decoration: underline;
+}
+
+/* Typography */
+h1, h2 {
+  color: var(--color-text-accent);
+  font-weight: bold;
+}
+
+a {
+  color: var(--color-link-primary);
+  text-decoration: none;
+}
+
+a:visited {
+  color: var(--color-link-visited);
+  text-decoration: none;
+}
+
+a:hover, a.focus {
+  color: var(--color-link-hover);
+  text-decoration: none;
+}
+
+p {
+  margin-bottom: 1rem;
+}
+
+/* Tables */
+table {
+  border: none;
+  background-color: var(--color-bg-primary);
+  font-size: 10pt;
+  width: 100%;
+}
+
+table td {
+  border-bottom: var(--border-width-medium) solid var(--border-color);
+  margin: 0.3rem;
+  padding: 0.2rem;
+}
+
+table th {
+  position: sticky;
+  top: -8;
+  border-bottom: var(--border-width-medium) solid var(--border-color);
+  margin-left: 0.3rem;
+  margin-right: 0.3rem;
+  margin-top: none;
+  padding-top: none;
+  background-color: var(--color-bg-primary);
+}
+
+table tr:last-child > td {
+  border-bottom: none;
+}
+
+/* Common utility classes */
+.json-format, .cmd-format, .copyright {
+  font-size: 10.5pt;
+  color: var(--border-color);
+  padding: 1rem;
+}
+
+/* Tab navigation system */
+.menu {
+  /* was `overflow: hidden` (float containment for .tabmenu buttons) -
+     that also clipped the .more-menu-dropdown's absolutely-positioned
+     panel (step-1 redesign, company-dns-ux.md sec10.1), since it's a
+     descendant of .menu. Replaced with a proper clearfix so the float
+     containment still works without clipping overflowing children. */
+  background-color: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-bg-tertiary);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.menu::after {
+  content: "";
+  display: table;
+  clear: both;
+}
+
+.menu button {
+  background-color: inherit;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 0.8rem 0.9rem;
+  font-size: 16px;
+  border: none;
+  text-decoration: none;
+  color: var(--color-link-primary);
+}
+
+.menu button:hover {
+  text-decoration: underline;
+}
+
+.menu button.active {
+  background-color: var(--color-bg-primary);
+  padding: 0.8rem 0.9rem;
+  text-decoration: underline;
+}
+
+.tabmenu {
+  background-color: var(--color-bg-primary);
+  color: var(--border-color);
+}
+
+.tabmenu.active {
+  color: var(--color-link-primary);
+  text-decoration: underline;
+}
+
+/* Persistent brand/home link (centralized-search redesign,
+   company-dns-ux.md sec10.1) - replaces the old "Home" tab button.
+   Bolder than a plain .tabmenu item since it's the one permanent
+   piece of chrome, not a tab among equals. */
+.brand-link {
+  background: inherit;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 0.8rem 0.9rem;
+  font-size: 16px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary);
+}
+
+.brand-link:hover {
+  color: var(--color-link-primary);
+}
+
+/* Current-page title, next to the brand link (replaces each page's
+   own big in-page header - docs/plans/company-dns-ux.md sec10.2). */
+.page-title {
+  float: left;
+  padding: 0.8rem 0.9rem;
+  font-size: 16px;
+  color: var(--color-text-secondary);
+}
+
+.page-title:empty {
+  padding: 0;
+}
+
+.page-title::before {
+  content: "/";
+  margin-right: 0.6rem;
+  color: var(--border-color);
+}
+
+.page-title:empty::before {
+  content: "";
+  margin: 0;
+}
+
+/* Inner tab system (for API documentation) */
+.tab {
+  overflow: hidden;
+  background-color: var(--color-bg-primary);
+  border: none;
+}
+
+.tab button {
+  background-color: inherit;
+  float: left;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  padding: 0.8rem 0.9rem;
+  font-size: 16px;
+  background-color: var(--color-bg-primary);
+  border-left: 1px var(--color-bg-primary);
+  border-right: 1px solid var(--color-bg-primary);
+  border-top: 1px solid var(--color-bg-primary);
+  border-top-left-radius: var(--border-radius);
+  border-top-right-radius: var(--border-radius);
+  text-decoration: none;
+  color: var(--border-color);
+}
+
+.tab button:hover {
+  text-decoration: underline;
+}
+
+.tab button.active {
+  background-color: var(--color-bg-primary);
+  border-left: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+  border-top-left-radius: var(--border-radius);
+  border-top-right-radius: var(--border-radius);
+  padding: 0.8rem 0.9rem;
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+.tablinks {
+  background-color: var(--color-bg-primary);
+  color: var(--border-color);
+}
+
+.tablinks.active {
+  color: var(--color-text-primary);
+}
+
+/* Tab content container */
+.tabcontent {
+  box-sizing: border-box;
+  display: none;
+  padding: 0.5rem;
+  border: var(--border-width-medium) solid var(--border-color);
+  border-bottom-left-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
+  border-spacing: 0.3rem;
+  height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 1.5rem;
+}
+
+.tabcontent table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tabcontent table th,
+.tabcontent table td {
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+/* Generic page content container */
+.pagecontent {
+  box-sizing: border-box;
+  display: none;
+  height: 93%;
+  overflow: hidden;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* Generic form elements used across tabs */
+select {
+  margin-right: 1rem;
+  border: var(--border-width) solid var(--border-color);
+  color: var(--color-link-primary);
+  background-color: var(--color-bg-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 0.5rem;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="%231696c8"><path d="M7 7l3-3 3 3z"/><path d="M7 13l3 3 3-3z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem;
+  min-width: 12rem;
+  min-height: 2rem;
+}
+
+.dns-textfield {
+  padding: 0.5rem;
+  border: var(--border-width) solid var(--border-color);
+  color: var(--color-link-primary);
+  background-color: var(--color-bg-primary);
+  min-width: 20rem;
+  min-height: 2rem;
+  border-radius: var(--border-radius);
+}
+
+.dns-button {
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
+  padding: 0.5rem;
+  border: var(--border-width) solid var(--border-color);
+  color: var(--color-link-primary);
+  background-color: var(--color-bg-primary);
+  min-width: 4rem;
+  min-height: 2rem;
+  border-radius: var(--border-radius);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dns-button:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+}
+
+.dns-textfield:focus, select {
+  outline: none;
+  border-color: var(--color-text-primary);
+}
+
+/* Basic form label styling */
+label {
+  margin-right: 0.3rem;
+}
+
+/* Feature icons that might be shared */
+.feature-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 10px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  color: #1696c8; /* Feather icon stroke color */
+  vertical-align: middle;
+}
+
+.search-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E");
+}
+
+.company-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z'/%3E%3C/svg%3E");
+}
+
+.api-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z'/%3E%3C/svg%3E");
+}
+
+.globe-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/%3E%3C/svg%3E");
+}
+
+/* Enhanced Pagination Controls */
+.explorer-pagination-controls {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-tertiary);
+  border-radius: var(--border-radius);
+  padding: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.pagination-page-button,
+.pagination-nav-button {
+  background-color: var(--color-bg-primary);
+  color: var(--color-link-primary);
+  border: 1px solid var(--color-bg-tertiary);
+  border-radius: var(--border-radius-small);
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 0.9rem;
+  min-width: 2rem;
+  text-align: center;
+}
+
+.pagination-page-button:hover:not(:disabled),
+.pagination-nav-button:hover:not(:disabled) {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+.pagination-page-button.active {
+  background-color: var(--color-text-accent);
+  color: var(--color-bg-primary);
+  border-color: var(--color-text-accent);
+  font-weight: bold;
+}
+
+.pagination-page-button:disabled,
+.pagination-nav-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-page-size-select,
+.pagination-jump-input {
+  background-color: var(--color-bg-primary);
+  color: var(--color-link-primary);
+  border: 1px solid var(--color-bg-tertiary);
+  border-radius: var(--border-radius-small);
+  padding: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pagination-page-size-select:hover,
+.pagination-jump-input:hover {
+  border-color: var(--color-text-primary);
+}
+
+.pagination-page-size-select:focus,
+.pagination-jump-input:focus {
+  outline: none;
+  border-color: var(--color-text-primary);
+  box-shadow: 0 0 0 2px var(--color-text-accent);
+}
+
+/* Media queries for pagination on smaller screens */
+@media (max-width: 768px) {
+  .explorer-pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+  
+  .pagination-nav-button {
+    flex: 1;
+  }
+  
+  .pagination-page-size-select,
+  .pagination-jump-input {
+    width: 100%;
+  }
+  
+  .dns-textfield {
+    min-width: 100%;
+  }
+  
+  .dns-button {
+    margin-left: 0;
+  }
+}
+
+/* ============================================================================
+   PHASE 3: CSS CONSOLIDATION - January 10, 2026
+   ============================================================================
+   
+   This file now contains all styles for the application:
+   - Base styles with CSS custom properties system (colors, spacing, typography)
+   - Enhanced pagination controls with keyboard navigation support
+   - Industry code explorer styles (previously in styles-explorer.css)
+   - Help documentation styles (previously in styles-help.css)
+   
+   Deprecated separate files:
+   - styles-explorer.css (consolidated into this file)
+   - styles-help.css (consolidated into this file)
+   - styles-query.css (removed in Phase 0 - Query Console deprecated)
+   
+   Benefits of consolidation:
+   - Single HTTP request for all CSS (vs 3 previously)
+   - Reduced file overhead
+   - Easier to maintain CSS custom properties across all components
+   - Better performance (one file parse/render)
+   - Reduced container size
+   
+   Total file size: 1533 lines (~55KB uncompressed, ~8KB gzipped)
+   ============================================================================ */
+
+/* Industry Code Explorer styling */
+.explorer-search-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0 1rem;
+  height: 100%;
+  margin-top: 0; /* Ensure no top margin */
+}
+
+.explorer-search-container h1 {
+  margin-top: 1rem; /* Match other tabs' heading margin */
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.explorer-intro {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 1rem;
+}
+
+.explorer-intro-compact {
+  margin-bottom: 1rem;
+  padding: 0 1rem;
+}
+
+.explorer-features {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  flex-wrap: wrap;
+}
+
+.explorer-feature {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  border-left: 3px solid #1696c8;
+  min-width: 200px;
+}
+
+.explorer-feature span {
+  margin-left: 10px;
+}
+
+.explorer-search-card {
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin: 2rem auto;
+  border: 1px solid #3c3b3b;
+  max-width: 700px;
+  width: 100%;
+}
+
+.explorer-search-card h2 {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #3c3b3b;
+  text-align: center;
+}
+
+.explorer-input-group {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.explorer-input-group .explorer-input {
+  flex-grow: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.explorer-input-group .explorer-button {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.explorer-search-hint {
+  font-size: 0.9em;
+  color: rgb(104, 95, 88);
+  margin-top: 0.8rem;
+  text-align: center;
+}
+
+.explorer-action-icon {
+  display: inline-block;
+  width: 50px; /* Increase from 1rem to 20px */
+  height: 20px; /* Increase from 1rem to 20px */
+  margin-right: 4px;
+  vertical-align: middle;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E");
+  background-size: contain; /* Keep this */
+  background-repeat: no-repeat;
+  position: relative;
+  top: 1.5px;
+}
+
+.spinner-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border: 2px solid #1696c8;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Results layout redesign */
+.explorer-results-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;         /* CHANGED: Grow to fill parent, not beyond */
+  min-height: 0;          /* CHANGED: Critical for flex scrolling */
+  margin-bottom: 10px;    /* Add a small margin */
+  padding: 0 1rem 10px 1rem; /* Add bottom padding */
+  box-sizing: border-box;
+  gap: 1rem;
+  overflow: hidden;       /* Contain children, don't escape */
+}
+
+.explorer-results-layout h1 {
+  margin-top: 0; /* Let flex gap handle spacing */
+  margin-bottom: 0;
+}
+
+.explorer-search-wrapper {
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #3c3b3b;
+}
+
+.explorer-top-container {
+  height: auto;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+
+
+.explorer-content-wrapper {
+  flex: 1 1 auto;
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  border: 1px solid #3c3b3b;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Critical for flex scrolling */
+  /* No max-height here: flex:1 1 auto + the min-height:0 chain above
+     already size this to exactly fill its parent. A hardcoded
+     `max-height: calc(100vh - 330px)` used to assume a fixed amount
+     of chrome above it; whenever the real chrome was smaller than
+     330px (e.g. a short viewport), this clipped the box short and
+     left a black gap (the page background) between it and the
+     footer - the same bug as .explorer-pagecontent above. */
+  overflow-y: auto; /* Allow scrolling within container */
+}
+
+/* Header section above results cards */
+.explorer-header-section {
+  padding: 0.7rem 1.2rem 0.7rem 1.2rem;
+  margin-top: 0;
+  position: relative;
+  z-index: 10;
+  background: #1a1718;
+  border-radius: 0.5rem 0.5rem 0 0;
+  box-shadow: 0 2px 6px 0 rgba(0,0,0,0.10);
+  min-height: unset;
+  overflow: visible;
+  flex: 0 0 auto;           /* NEW: Fixed height, don't grow/shrink */
+  min-height: 50px;         /* NEW: Explicit minimum space */
+}
+
+/* Results with filters container */
+.explorer-results-filters {
+  display: flex;
+  flex: 1 1 auto;         /* Fills .explorer-content-wrapper's height */
+  min-height: 0;
+  overflow: hidden;      /* Avoid clipping top-of-content */
+}
+
+/* Filters sidebar redesign */
+.explorer-sidebar {
+  width: 220px;
+  padding: 1rem;
+  border-right: 1px solid #3c3b3b;
+  /* No explicit height: this is a row flex item of
+     .explorer-results-filters, so default align-items:stretch
+     already matches it to the row's height - a hardcoded
+     `calc(100vh - 290px)` was the same stale-chrome-budget bug as
+     the other vh-based caps nearby. */
+  overflow-y: auto;
+  flex-shrink: 0;
+  background-color: transparent;
+}
+
+.explorer-sidebar-title {
+  text-align: left;
+  margin-bottom: 1.2rem;
+  margin-top: 0.7rem;
+  color: #1696c8;
+  font-size: 1.15em;
+  font-weight: bold;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.7rem;
+  padding-top: 0.2rem;
+}
+
+.explorer-filter-guide {
+  margin-top: 2rem;
+  font-size: 0.9em;
+}
+
+.explorer-filter-guide h4 {
+  color: #1696c8;
+  margin-bottom: 0.8rem;
+}
+
+.explorer-classification-guide {
+  list-style-type: none;
+  padding: 0;
+}
+
+.explorer-classification-guide li {
+  margin-bottom: 0.8rem;
+  border-left: 2px solid #3c3b3b;
+  padding-left: 0.8rem;
+}
+
+.explorer-classification-guide strong {
+  color: #ca703f;
+}
+
+/* Make the results area take full height and distribute content correctly */
+.explorer-results-area {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Critical for nested flex scroll */
+  max-height: 100%; /* Constrain to parent */
+  overflow-y: auto; /* Allow scrolling of results */
+  overflow-x: hidden;
+  position: relative;
+}
+
+/* Ensure the container wrapper expands but allows scrolling */
+.explorer-container-wrapper {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100vh - 290px);
+  overflow: hidden; /* Children stay within bounds */
+}
+
+/* Fix the results container to properly scroll */
+.explorer-results-container {
+  padding: 1rem;
+  overflow-x: hidden; /* Don't scroll, parent handles it */
+  overflow-y: auto ;
+  flex: 1 1 auto;
+  margin: 0;
+  border: none;
+  position: relative;
+  min-height: 0;
+  height: calc(100vh - 360px);
+}
+
+
+/* Result card redesign */
+.explorer-result-card {
+  background-color: #0F0D0E;
+  border: 1px solid #3c3b3b;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+}
+
+/* Compact EDGAR Card Styles */
+.edgar-company-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid #3c3b3b;
+  gap: 1rem;
+}
+
+.edgar-company-info {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  font-size: 0.95em;
+  color: #f0f0f0;
+}
+
+.edgar-company-info strong {
+  color: #ca703f;
+  margin-right: 0.5rem;
+}
+
+.edgar-meta {
+  color: #ca703f;
+  font-size: 0.95em;
+}
+
+.edgar-meta span {
+  color: #f0f0f0;
+}
+
+.edgar-recent-forms-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 0.8rem 0;
+  flex-wrap: wrap;
+  padding: 0.5rem 0;
+}
+
+.edgar-forms-label {
+  font-weight: bold;
+  color: #ca703f;
+  min-width: 100px;
+  white-space: nowrap;
+}
+
+.edgar-pill-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.edgar-pill {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  background-color: transparent;
+  border: 1px solid #1696c8;
+  color: #1696c8;
+  text-decoration: none;
+  border-radius: 20px;
+  font-size: 0.9em;
+  white-space: nowrap;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.edgar-pill:hover {
+  background-color: #1696c8;
+  color: #0F0D0E;
+}
+
+.edgar-quick-links {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #3c3b3b;
+}
+
+.edgar-quick-link {
+  padding: 0.4rem 0.8rem;
+  background-color: transparent;
+  border: 1px solid #924e29;
+  color: #924e29 !important;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.9em;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.edgar-quick-link:link {
+  color: #924e29 !important;
+}
+
+.edgar-quick-link:visited {
+  color: #924e29 !important;
+}
+
+.edgar-quick-link:hover {
+  background-color: #924e29;
+  color: #fff !important;
+  text-decoration: none;
+}
+
+.explorer-result-title-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.explorer-result-title {
+  font-weight: 500;
+  color: #f0f0f0;
+}
+
+.explorer-source-badge {
+  background-color: #1696c8;
+  color: #0F0D0E;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.explorer-result-source {
+  padding: 0.3rem;
+  font-weight: bold;
+  color: #ca703f;
+  white-space: nowrap;
+}
+
+.explorer-result-details {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.5rem 1.5rem;
+}
+
+.explorer-detail-item {
+  display: flex;
+  gap: 0.5rem;
+  color: #f0f0f0;
+  font-size: 0.9em;
+}
+
+.explorer-detail-label {
+  color: #1696c8;
+  font-weight: 500;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+/* Add this to handle text truncation in result details */
+.explorer-detail-value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 150px; /* Limit width to force truncation */
+  display: inline-block;
+  cursor: help; /* Show help cursor on hover */
+}
+
+/* Optional: Improve appearance when hovering */
+.explorer-detail-value:hover {
+  color: #1696c8;
+  text-decoration: underline dotted;
+}
+
+/* Pagination container */
+.explorer-pagination {
+  flex-shrink: 0;
+  height: 50px; /* Set fixed height instead of vh */
+  border-top: 1px solid #3c3b3b;
+  background-color: #1a1718;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  position: relative; /* Add this */
+  z-index: 2; /* Ensure controls appear above content */
+  width: 100%; /* Ensure full width */
+}
+
+/* Pagination controls */
+.explorer-pagination-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 8px 0;
+}
+
+/* Style pagination buttons to match app design */
+.explorer-pagination-controls button {
+  background-color: #0F0D0E;
+  border: 0.05rem solid rgb(104, 95, 88);
+  color: #1696c8;
+  padding: 0.3rem 0.6rem;
+  margin: 0 0.3rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 11pt;
+  min-width: 2rem;
+  text-align: center;
+}
+
+/* Active page button styling */
+.explorer-pagination-controls button.active {
+  background-color: #1696c8;
+  color: #0F0D0E;
+  border-color: #1696c8;
+  font-weight: bold;
+}
+
+/* Hover effect on buttons */
+.explorer-pagination-controls button:hover:not(.active):not(:disabled) {
+  border-color: #ca703f;
+}
+
+/* Disabled button styling */
+.explorer-pagination-controls button:disabled {
+  color: rgb(104, 95, 88);
+  cursor: not-allowed;
+}
+
+/* Style for ellipsis between page numbers */
+.explorer-pagination-controls span {
+  color: #ca703f;
+  margin: 0 0.3rem;
+}
+
+/* Filter-related classes */
+.explorer-filter-options {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.explorer-filter-label {
+  margin-bottom: 0.8rem;
+  font-weight: bold;
+  color: #ca703f;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+}
+
+.explorer-filter-checkboxes {
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  width: 100%;
+}
+
+.explorer-filter-checkbox {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  margin-bottom: 0.8rem;
+  position: relative;
+  height: 24px;
+}
+
+.explorer-filter-checkbox label {
+  display: flex;
+  align-items: center;
+  padding: 0;
+  width: calc(100% - 30px);
+}
+
+.explorer-filter-checkbox input[type="checkbox"] {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.explorer-filter-count {
+  position: absolute;
+  right: 0;
+  top: 33%;
+  transform: translateY(-50%);
+  color: #ca703f;
+  font-size: 0.9em;
+  min-width: 25px;
+  text-align: right;
+}
+
+/* Responsiveness for smaller screens */
+@media (max-width: 768px) {
+  .explorer-results-filters {
+    flex-direction: column;
+  }
+  
+  .explorer-sidebar {
+    width: 100%;
+    max-height: 200px;
+    border-right: none;
+    border-bottom: 1px solid #3c3b3b;
+  }
+  
+  .explorer-features {
+    flex-direction: column;
+  }
+}
+
+/* Explorer inputs and buttons - unified across every tab's search bar
+   to match the Home page's search bar look and feel (per direct
+   feedback): fully rounded pill, orange button, same colors/padding
+   as .home-search-input/.home-search-btn. Was a small-radius
+   dark-bordered field + a blue-outlined button, different from Home
+   and inconsistent across EDGAR/Keyword/Semantic/Combined. */
+.explorer-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.85rem 1.4rem;
+  background-color: var(--color-bg-primary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 999px;
+  color: var(--color-text-primary);
+  font-size: 1rem;
+  min-height: 2.5rem;
+}
+
+.explorer-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.explorer-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 var(--spacing-lg);
+  font-size: 1rem;
+  font-weight: 600;
+  background-color: var(--color-text-accent);
+  border: none;
+  color: var(--color-bg-primary);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  margin: 0;
+  min-height: 2.5rem; /* Match the input height */
+}
+
+.explorer-button:hover {
+  opacity: 0.85;
+}
+
+.explorer-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Home's search button is plain text, no icon - matched here by
+   hiding the magnifying-glass icon this button used to render
+   (it was also hardcoded blue, which clashed against the new orange
+   background). */
+.explorer-action-icon {
+  display: none;
+}
+
+/* Style the tab content */
+.explorer-pagecontent {
+  box-sizing: border-box;
+  display: flex;            /* NEW: Flex container */
+  flex-direction: column;    /* NEW: Vertical layout */
+  height: 100%;             /* Take parent (.page-content) height exactly -
+                                .page-content is already flex:1 between the
+                                50px header and 40px footer, so no vh-based
+                                cap is needed here. A stale `max-height:
+                                calc(100vh - 100px)` used to clip this 10px
+                                short of that (header+footer = 90px, not
+                                100px), leaving a permanent black gap above
+                                the footer on every tab. */
+  min-height: 0;            /* Critical for flex */
+  padding: 0;
+  overflow: hidden;         /* Contain overflow */
+}
+
+/* Add these styles for the JSON modal viewer */
+
+/* "View JSON" button for result cards */
+.explorer-view-json-btn {
+  background: none;
+  border: 1px solid #1696c8;
+  color: #1696c8;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.3rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.explorer-view-json-btn:hover {
+  background-color: rgba(22, 150, 200, 0.1);
+}
+
+/* Status bar */
+.results-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0 0.6rem 1rem;
+}
+
+.status-top {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #ca703f;
+}
+
+.status-title {
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.status-count {
+  color: #1696c8;
+  font-weight: 600;
+}
+
+.status-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgb(152, 144, 139);
+  font-size: 0.95rem;
+}
+
+.status-dot {
+  color: #3c3b3b;
+  font-weight: 700;
+}
+
+/* Pagination controls */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  margin: 0;                /* CHANGED: Remove margin */
+  padding: 0.75rem 1rem;
+  border-top: 1px solid #3c3b3b;
+  flex-wrap: wrap;
+  flex: 0 0 auto;           /* NEW: Fixed height, don't grow/shrink */
+  min-height: 50px;         /* NEW: Ensure visible height */
+  background-color: #1a1718;
+}
+
+.pagination-btn {
+  padding: 0.5rem 1rem;
+  border: 1px solid rgb(104, 95, 88);
+  background-color: #0F0D0E;
+  color: #1696c8;
+  cursor: pointer;
+  border-radius: 0.3rem;
+  transition: all 0.2s;
+  min-width: 2.5rem;
+  min-height: 40px;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #1a1718;
+  border-color: #1696c8;
+}
+
+.pagination-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.pagination-btn.active {
+  border-color: #ca703f;
+  color: #ca703f;
+  font-weight: 600;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 1rem;
+  color: #ca703f;
+}
+
+.page-size-label {
+  color: #c7c1bb;
+  font-size: 0.95rem;
+}
+
+.page-size-selector {
+  margin-left: 0.2rem;
+  padding: 0.3rem 0.5rem;
+  background: #0F0D0E;
+  color: #e3dfdc;
+  border: 1px solid #3c3b3b;
+  border-radius: 0.35rem;
+}
+
+.pagination-jump {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.page-jump-input {
+  width: 4rem;
+  padding: 0.3rem;
+  text-align: center;
+  background: #0F0D0E;
+  color: #e3dfdc;
+  border: 1px solid #3c3b3b;
+  border-radius: 0.3rem;
+}
+
+/* Result cards - enriched layout */
+.explorer-result-card {
+  border: 1px solid #2d2b2c;
+  border-radius: 0.6rem;
+  padding: 0.9rem 1rem;
+  background: #0f0d0e;
+  margin-bottom: 0.9rem;
+}
+
+
+.explorer-result-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  min-width: 0;
+  min-height: 48px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible;
+}
+
+.explorer-result-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.explorer-result-code {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #ca703f;
+}
+
+.explorer-source-pill {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #3c3b3b;
+  font-size: 0.85rem;
+  color: #c7c1bb;
+}
+
+.pill-us_sic { border-color: #1696c8; color: #1696c8; }
+.pill-uk_sic { border-color: #ca703f; color: #ca703f; }
+.pill-eu_nace { border-color: #6fbf6f; color: #6fbf6f; }
+.pill-isic { border-color: #b28dd9; color: #b28dd9; }
+.pill-japan_sic { border-color: #f0c674; color: #f0c674; }
+
+.explorer-result-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.explorer-result-description {
+  color: #e0dbd6;
+  line-height: 1.45;
+  margin-bottom: 0.5rem;
+  max-height: none;
+  overflow: hidden;
+  transition: max-height 0.2s ease;
+}
+
+.explorer-result-description.is-collapsed {
+  max-height: 3.4rem;
+}
+
+.explorer-show-more {
+  background: none;
+  border: none;
+  color: #1696c8;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 0.5rem;
+}
+
+.explorer-result-meta {
+  border-top: 1px solid #2d2b2c;
+  padding-top: 0.65rem;
+  margin-top: 0.4rem;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem 1rem;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.meta-label {
+  color: #8f8a86;
+  font-size: 0.85rem;
+}
+
+.meta-value {
+  color: #c7c1bb;
+  font-weight: 700;
+}
+
+.meta-sub {
+  color: #7c7570;
+  font-size: 0.85rem;
+}
+
+.dns-button.ghost {
+  background: transparent;
+  border: 1px solid #3c3b3b;
+  color: #c7c1bb;
+}
+
+.dns-button.ghost:hover {
+  border-color: #1696c8;
+  color: #1696c8;
+}
+
+/* Modal overlay */
+/* Alpine x-cloak directive to hide uninitialized elements */
+[x-cloak] {
+  display: none !important;
+}
+
+.explorer-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Modal overlay base state - starts hidden by x-show, shows on toggle */
+.explorer-modal {
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  border: 1px solid #3c3b3b;
+  width: 80%;
+  max-width: 800px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.explorer-modal-header {
+  padding: 1rem;
+  border-bottom: 1px solid #3c3b3b;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.explorer-modal-title {
+  font-size: 1.2rem;
+  color: #ca703f;
+  font-weight: bold;
+}
+
+.explorer-modal-close {
+  background: none;
+  border: none;
+  color: #1696c8;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.explorer-modal-content {
+  padding: 1rem;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.explorer-json-display {
+  background-color: #0F0D0E;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  font-family: monospace;
+  white-space: pre;
+  overflow-x: auto;
+  color: #f0f0f0;
+}
+
+.explorer-modal-footer {
+  padding: 1rem;
+  border-top: 1px solid #3c3b3b;
+  display: flex;
+  justify-content: center;
+}
+
+.explorer-copy-json-btn {
+  background-color: #1696c8;
+  color: #0F0D0E;
+  border: none;
+  padding: 0.5rem 1.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-width: 140px;
+}
+
+.explorer-copy-json-btn:hover {
+  background-color: #41a6ce;
+}/* Help tab specific styles */
+
+/* Main help container */
+/* About page - redesigned to follow the Home landing page's visual
+   language (docs/plans/company-dns-ux.md sec10.1): same dark
+   elevation scale (page = --color-bg-secondary, cards =
+   --color-bg-tertiary, one level up), same bold headline treatment.
+   #About is the only surviving .help-pagecontent, so these rules are
+   scoped to it directly rather than the shared class. */
+#About {
+  background: var(--color-bg-secondary);
+}
+
+.help-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 3rem var(--spacing-lg) var(--spacing-xl);
+  overflow-y: auto;
+}
+
+.help-container h1 {
+  font-family: var(--font-family-base);
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  margin-bottom: 1.5rem;
+}
+
+/* Help introduction section */
+.help-intro {
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 1rem;
+}
+
+.help-features {
+  list-style-type: none;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+/* Redesigned per direct feedback ("displeased with the top summary
+   cards") - the old version laid icon + bold title + description out
+   as one wrapping inline flex row (align-items: center on wrapped
+   text), so a title that wrapped to two lines threw the icon and the
+   description text out of alignment with each other. Stacked as three
+   separate blocks (icon badge, title, description) instead - each
+   card's internal layout no longer depends on how much any one piece
+   of text happens to wrap. */
+.help-features li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 1.1rem;
+  background-color: var(--color-bg-tertiary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+}
+
+.help-feature-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.help-features li strong {
+  /* Matches .help-card h4's blue, for consistency with the
+     Deployment Options cards directly below this grid. */
+  color: var(--color-link-primary);
+  font-size: 1rem;
+}
+
+.help-features li span {
+  display: block;
+  /* --color-text-secondary was too low-contrast against the tertiary
+     card background - matches .help-card p's brighter body color
+     instead, same as "Running as your own instance..." below. */
+  color: var(--color-text-primary);
+  font-size: var(--font-size-small);
+  line-height: 1.45;
+}
+
+.help-feature-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background-color: var(--color-bg-secondary);
+}
+
+.help-feature-icon-badge i {
+  width: 18px;
+  height: 18px;
+  color: #1696c8; /* Feather icon stroke color */
+}
+
+/* Deployment section */
+.help-deployment-info {
+  /* Was `1.5rem 0` - the bottom margin stacked with .help-intro's own
+     padding-bottom + border + margin-bottom right after it (this is
+     .help-intro's last child), producing a much bigger gap above the
+     tabs card than any single rule implied. Top margin only; .help-
+     intro's own spacing already separates this section from what
+     follows. */
+  margin: 1.5rem 0 0;
+}
+
+.help-deployment-cards {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1rem 0;
+}
+
+.help-card {
+  flex: 1;
+  background-color: var(--color-bg-tertiary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.help-card h4 {
+  margin-top: 0;
+  color: #1696c8;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+}
+
+.help-card code {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.5rem;
+  background-color: #0F0D0E;
+  border-radius: 0.3rem;
+  font-family: monospace;
+  color: #ca703f;
+}
+
+/* Help tabs system - restyled as an elevated card (Home-style:
+   --color-bg-tertiary on the --color-bg-secondary page) with an
+   underline-style tab selector matching .home-search-tab, instead of
+   the former filled/boxed tab-button look. */
+.help-tabs-wrapper {
+  background-color: var(--color-bg-tertiary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 0.6rem 1.8rem rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+.help-tabs {
+  display: flex;
+  background-color: transparent;
+  border-bottom: var(--border-width) solid var(--border-color);
+  overflow-x: auto;
+  padding: 0 var(--spacing-md);
+}
+
+.help-tab-button {
+  padding: 0.8rem 0;
+  margin-right: var(--spacing-md);
+  background-color: transparent;
+  border: none;
+  border-bottom: 0.15rem solid transparent;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.help-tab-button:hover {
+  color: var(--color-text-primary);
+}
+
+.help-tab-button.active {
+  background-color: transparent;
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-text-primary);
+}
+
+.help-tab-content {
+  display: none;
+  padding: 1.5rem;
+  background-color: transparent;
+}
+
+.help-tab-content.active {
+  display: block;
+}
+
+/* Source cards */
+.help-source-cards {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.help-source-card {
+  flex: 1;
+  background-color: var(--color-bg-secondary);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.help-source-card h4 {
+  margin-top: 0;
+  color: #1696c8;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+}
+
+.help-source-card ul {
+  padding-left: 1.5rem;
+}
+
+/* API Versions tabbed view (V4.0 current / V3.0 compatibility aliases)
+   - was a static side-by-side comparison (.help-version-comparison),
+   moved to a tab selector on request. Nested one level inside the
+   already-elevated .help-tabs-wrapper card, so this sits at
+   --color-bg-secondary (one below --color-bg-tertiary) to keep the
+   layering legible, same pattern as .help-source-card/.help-example-
+   queries elsewhere on this page. */
+.version-tabs-wrapper {
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--border-radius);
+  margin: 1.5rem 0;
+  overflow: hidden;
+}
+
+.version-tabs {
+  display: flex;
+  gap: var(--spacing-md);
+  padding: 0 var(--spacing-md);
+  border-bottom: var(--border-width) solid var(--border-color);
+}
+
+.version-tab {
+  padding: 0.7rem 0;
+  background: transparent;
+  border: none;
+  border-bottom: 0.15rem solid transparent;
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-family: inherit;
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+.version-tab:hover {
+  color: var(--color-text-primary);
+}
+
+.version-tab.active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-text-primary);
+}
+
+.version-tab-panel {
+  padding: 1rem;
+  box-sizing: border-box;
+  /* Fixed height, not min-height - matching wording/wrapping between
+     the two tabs exactly enough to get equal natural heights isn't
+     reliable (V3.0's list wraps to more lines than V4.0's at this
+     card width). A hard height plus scroll keeps the card the same
+     size on every tab switch regardless of which panel's content is
+     longer; the taller one scrolls internally instead of resizing the
+     card. */
+  height: 14rem;
+  overflow-y: auto;
+}
+
+/* Shared across both version tabs (not per-tab content) - moved out
+   of the V3.0 panel specifically so it can't unbalance the two panels'
+   heights again. */
+.version-tabs-footnote {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  margin-top: var(--spacing-sm);
+}
+
+.version-tab-panel code {
+  background-color: var(--color-bg-primary);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.3rem;
+  font-family: monospace;
+  color: #ca703f;
+}
+
+/* API documentation */
+.help-endpoint-note {
+  background-color: #1a1718;
+  border-left: 3px solid #ca703f;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0.3rem;
+}
+
+.help-api-version-tabs {
+  margin: 1.5rem 0;
+}
+
+/* Feature walkthrough */
+.help-feature-walkthrough {
+  margin-top: 1.5rem;
+}
+
+.help-step {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #3c3b3b;
+}
+
+.help-step:last-child {
+  border-bottom: none;
+}
+
+.help-step h4 {
+  color: #1696c8;
+  margin-bottom: 0.5rem;
+}
+
+.help-image {
+  max-width: 100%;
+  width: 500px;
+  height: auto;
+  display: block;
+  margin: 1rem auto;
+  border-radius: 0.5rem;
+  border: 1px solid #3c3b3b;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+.help-tip-box {
+  background-color: var(--color-bg-secondary);
+  border-left: 3px solid #1696c8;
+  padding: 1rem;
+  margin: 1rem 0;
+  border-radius: 0.3rem;
+}
+
+.help-example-queries {
+  background-color: var(--color-bg-secondary);
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.help-example-queries h5 {
+  margin-top: 0;
+  color: #1696c8;
+}
+
+/* Code examples */
+.help-code-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.help-code-example {
+  margin-bottom: 1.5rem;
+}
+
+.help-code-example h3 {
+  color: #1696c8;
+  border-bottom: 1px solid #3c3b3b;
+  padding-bottom: 0.5rem;
+}
+
+.help-example {
+  margin-bottom: 1.5rem;
+}
+
+.help-example h4 {
+  color: #ca703f;
+  margin-bottom: 0.5rem;
+}
+
+.help-code-container {
+  position: relative;
+  background-color: var(--color-bg-secondary);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.help-code-container pre {
+  margin: 0;
+  padding-right: 40px;
+  overflow-x: auto;
+}
+
+.help-code-container code {
+  font-family: monospace;
+  color: #f0f0f0;
+  white-space: pre-wrap;
+}
+
+.help-copy-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background-color: #2a2727;
+  border: none;
+  border-radius: 0.3rem;
+  color: #ca703f;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+}
+
+.help-copy-button:hover {
+  background-color: #3c3b3b;
+}
+
+.help-copy-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 5px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ca703f'%3E%3Cpath d='M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z'/%3E%3C/svg%3E");
+  background-size: contain;
+  background-repeat: no-repeat;
+}
+
+/* Help footer */
+.help-footer {
+  margin-top: 3rem;
+  border-top: 1px solid #3c3b3b;
+  padding-top: 1.5rem;
+}
+
+.help-resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.help-resource-link {
+  display: flex;
+  align-items: center;
+  padding: 0.8rem 1.2rem;
+  background-color: #1a1718;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.help-resource-link:hover {
+  background-color: #2a2727;
+  text-decoration: none;
+}
+
+.help-resource-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 10px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  color: #ca703f; /* Feather icon stroke color for footer resources */
+  vertical-align: middle;
+}
+
+.help-disclaimer {
+  font-size: 0.9em;
+  color: rgb(104, 95, 88);
+  text-align: center;
+  margin-top: 2rem;
+}
+
+/* Icons */
+.help-search-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z'/%3E%3C/svg%3E");
+}
+
+.help-company-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M12 7V3H2v18h20V7H12zM6 19H4v-2h2v2zm0-4H4v-2h2v2zm0-4H4V9h2v2zm0-4H4V5h2v2zm4 12H8v-2h2v2zm0-4H8v-2h2v2zm0-4H8V9h2v2zm0-4H8V5h2v2zm10 12h-8v-2h2v-2h-2v-2h2v-2h-2V9h8v10zm-2-8h-2v2h2v-2zm0 4h-2v2h2v-2z'/%3E%3C/svg%3E");
+}
+
+.help-api-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 14H4v-4h11v4zm0-5H4V9h11v4zm5 5h-4V9h4v9z'/%3E%3C/svg%3E");
+}
+
+.help-globe-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231696c8'%3E%3Cpath d='M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z'/%3E%3C/svg%3E");
+}
+
+.help-issue-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ca703f'%3E%3Cpath d='M11 15h2v2h-2zm0-8h2v6h-2zm.99-5C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z'/%3E%3C/svg%3E");
+}
+
+.help-github-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ca703f'%3E%3Cpath d='M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z'/%3E%3C/svg%3E");
+}
+
+.help-license-icon {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ca703f'%3E%3Cpath d='M12 11.55C9.64 9.35 6.48 8 3 8v11c3.48 0 6.64 1.35 9 3.55 2.36-2.19 5.52-3.55 9-3.55V8c-3.48 0-6.64 1.35-9 3.55zM12 8c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3z'/%3E%3C/svg%3E");
+}
+
+/* Special styling for Help page content */
+.help-pagecontent {
+  box-sizing: border-box;
+  display: none;
+  height: 99%;
+  overflow: hidden;
+  overflow-y: auto;
+  padding: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .help-deployment-cards, 
+  .help-source-cards, 
+  .help-version-comparison {
+    flex-direction: column;
+  }
+  
+  .help-features {
+    grid-template-columns: 1fr;
+  }
+  
+  .help-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .help-tab-button {
+    flex: 1 0 auto;
+    text-align: center;
+  }
+}
+
+/* EDGAR Explorer specific card and pill styles */
+.edgar-meta-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.6rem 1rem;
+  margin-bottom: 0.6rem;
+}
+
+.edgar-meta-row:last-of-type {
+  margin-bottom: 0;
+}
+
+.explorer-result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.edgar-pill-group-header {
+  display: flex;
+  flex-direction: row;
+  gap: 0.1rem;
+  align-items: center;
+  flex: 1;
+}
+
+.edgar-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  min-height: auto;
+  width: auto;
+  min-width: 130px;
+  text-align: center;
+  font-size: 0.8em;
+}
+
+.external-link-icon::before {
+  content: "↗";
+  font-size: 0.75em;
+  margin-right: 0.2rem;
+}
+
+.explorer-result-heading-right {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.explorer-view-json-btn {
+  background: none;
+  border: 1px solid #1696c8;
+  color: #1696c8;
+  cursor: pointer;
+  font-size: 0.85em;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.3rem;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.explorer-view-json-btn:hover {
+  background-color: rgba(22, 150, 200, 0.1);
+}
+
+.edgar-pill.recent {
+  border-color: #41a6ce;
+  color: #41a6ce;
+}
+
+.edgar-pill.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Recent forms list styling for EDGAR summary view */
+.recent-forms-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background-color: rgba(22, 150, 200, 0.05);
+  border-left: 3px solid #1696c8;
+  border-radius: 0.3rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.form-item {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0;
+  font-size: 0.9rem;
+}
+
+.form-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #1696c8;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.form-link:hover {
+  color: #41a6ce;
+  text-decoration: underline;
+}
+
+.form-type {
+  font-weight: 600;
+  min-width: 60px;
+  color: #1696c8;
+}
+
+.form-date {
+  font-size: 0.85rem;
+  color: #999;
+}
+
+/* -------------------------------------------------------------- */
+/* SIC Similarity Search tab - ported forward from
+   experiments/ic-similarity-service/static/index.html's inline
+   <style> block (docs/plans/company-dns-ux.md sec4/sec10.2). Scoped
+   under .sic-sim-panel so its table/button/input rules don't leak
+   into the rest of this stylesheet's global element selectors. */
+
+.sic-sim-panel {
+  padding: var(--spacing-lg);
+  overflow-y: auto;
+  height: calc(100vh - 100px);
+}
+
+.sic-sim-wrap {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.sic-sim-subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  margin-bottom: var(--spacing-lg);
+}
+
+.sic-sim-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--spacing-sm);
+}
+
+.sic-sim-tab {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: var(--border-width) solid var(--border-color);
+  border-bottom: none;
+  border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
+  padding: var(--spacing-xs) var(--spacing-md);
+  font-family: inherit;
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+.sic-sim-tab.active {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.sic-sim-input-panel {
+  background: var(--color-bg-tertiary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 0 var(--border-radius-small) var(--border-radius-small) var(--border-radius-small);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.sic-sim-input-panel[hidden] {
+  display: none;
+}
+
+.sic-sim-panel input[type="text"],
+.sic-sim-panel textarea,
+.sic-sim-panel input[type="number"] {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-small);
+  padding: var(--spacing-sm);
+  font-family: inherit;
+  font-size: inherit;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.sic-sim-panel textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.sic-sim-controls-row {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  margin-top: var(--spacing-sm);
+}
+
+.sic-sim-controls-row input[type="number"] {
+  width: 4rem;
+}
+
+.sic-sim-controls-row label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+}
+
+.sic-sim-search-btn {
+  background: var(--color-text-accent);
+  color: var(--color-bg-primary);
+  border: none;
+  border-radius: var(--border-radius-small);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.sic-sim-search-btn:hover {
+  opacity: 0.85;
+}
+
+.sic-sim-search-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sic-sim-panel table.sic-sim-results {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sic-sim-panel th,
+.sic-sim-panel td {
+  text-align: left;
+  padding: var(--spacing-sm);
+  border-bottom: var(--border-width) solid var(--border-color);
+  font-size: var(--font-size-small);
+  vertical-align: middle;
+}
+
+.sic-sim-panel th {
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+}
+
+.sic-sim-rank {
+  color: var(--color-text-secondary);
+  width: 2rem;
+}
+
+.sic-sim-cell {
+  width: 12rem;
+}
+
+.sic-sim-band-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.sic-sim-bar-track {
+  background: var(--color-bg-secondary);
+  border-radius: var(--border-radius-small);
+  height: 0.4rem;
+  margin-top: 0.25rem;
+  overflow: hidden;
+}
+
+.sic-sim-bar-fill {
+  height: 100%;
+  border-radius: var(--border-radius-small);
+}
+
+.sic-sim-raw {
+  display: block;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.65rem;
+  margin-top: 0.15rem;
+}
+
+.sic-sim-band-unlikely .sic-sim-bar-fill { background: #6b6560; }
+.sic-sim-band-possible .sic-sim-bar-fill { background: #924e29; }
+.sic-sim-band-likely .sic-sim-bar-fill { background: #d98a3d; }
+.sic-sim-band-verysimilar .sic-sim-bar-fill { background: #e8b04a; }
+
+.sic-sim-band-unlikely .sic-sim-band-label { color: #8f8a85; }
+.sic-sim-band-possible .sic-sim-band-label { color: #ca703f; }
+.sic-sim-band-likely .sic-sim-band-label { color: #d98a3d; }
+.sic-sim-band-verysimilar .sic-sim-band-label { color: #e8b04a; }
+
+/* Semantic mode's result-card pill (ic-explorer.js
+   icSimilarityPillHtml), centered in its own flex slot
+   (.explorer-result-header-middle) between the code/US SIC pill and
+   the View JSON button - direct feedback: move it to the middle of
+   the card, and match the US SIC chip's single-line height/padding
+   instead of the original two-line stacked badge (score now sits in
+   parens on the same line, e.g. "Possible Match (0.51)"). Same
+   calibrated band colors as the table view above. Per earlier direct
+   feedback: no percentage, the number is a plain "similarity score". */
+.explorer-result-header-middle {
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.explorer-similarity-pill {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #3c3b3b;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.explorer-similarity-pill.sic-sim-band-unlikely { border-color: #6b6560; color: #8f8a85; }
+.explorer-similarity-pill.sic-sim-band-possible { border-color: #924e29; color: #ca703f; }
+.explorer-similarity-pill.sic-sim-band-likely { border-color: #d98a3d; color: #d98a3d; }
+.explorer-similarity-pill.sic-sim-band-verysimilar { border-color: #e8b04a; color: #e8b04a; }
+
+.ic-semantic-results-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.sic-sim-path {
+  color: var(--color-text-primary);
+}
+
+.sic-sim-path .sic-sim-sep {
+  color: var(--color-text-secondary);
+  margin: 0 0.3em;
+}
+
+.sic-sim-status {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-small);
+  margin: var(--spacing-md) 0;
+  min-height: 1.2em;
+}
+
+.sic-sim-status-error {
+  color: #c0392b;
+}
+
+.sic-sim-calibration-note {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  margin-top: var(--spacing-xs);
+}
+
+.sic-sim-truncation-warning {
+  background: rgba(217, 138, 61, 0.12);
+  border: var(--border-width) solid #d98a3d;
+  border-radius: var(--border-radius-small);
+  color: #e8b04a;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-small);
+  margin-bottom: var(--spacing-md);
+}
+
+.sic-sim-token-count-note {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  margin-bottom: var(--spacing-md);
+  font-variant-numeric: tabular-nums;
+}
+
+/* -------------------------------------------------------------- */
+/* Home landing page - step-1 redesign, dark version (docs/plans/
+   company-dns-ux.md sec9/sec10.1). First pass was a literal light
+   re-skin off mediumroast.io's actual colors; direct feedback was
+   that the two properties (layout/typographic patterns vs. the exact
+   light palette) should be separated - keep the mediumroast-inspired
+   SHAPE (eyebrow label, bold headline, tabbed search card, pill
+   toggle/CTA) but in a dark palette, with a clear visual break between
+   the two apps rather than looking like a mediumroast.io clone.
+   Reuses this app's own existing dark-theme tokens throughout (not a
+   new palette) for consistency with every other tab, and leans on
+   this app's existing 3-tier bg scale (bg-primary -> bg-secondary ->
+   bg-tertiary) specifically so nav / page / card read as three
+   visually distinct layers instead of one flat dark mass - that
+   layering IS the "clear visual separation" this revision is for,
+   just expressed as elevation instead of light-vs-dark. Other tabs
+   stay as they were; this is still step 1 of an iterative redesign
+   (company-dns-ux.md sec7), not a full re-theme. */
+
+.home-landing {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  /* No explicit height: inherits `height: 100%` from .explorer-
+     pagecontent (same element - #Home carries both classes). A
+     `height: calc(100vh - 100px)` here used to override that and
+     fall short of .page-content's actual flex-computed height,
+     leaving .page-content's own (unset, body-inherited near-black)
+     background showing through as a bar below this card - same bug
+     as .explorer-pagecontent/.explorer-content-wrapper above, just
+     hitting the Home tab via cascade order since this rule is
+     later in the file. */
+  overflow-y: auto;
+  /* Google-style layout (first iteration, per direct feedback):
+     wordmark + search vertically centered in the viewport rather than
+     pinned near the top. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-landing-inner {
+  max-width: 560px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+  text-align: center;
+}
+
+/* Single card (per direct feedback) wrapping both the wordmark and the
+   search controls - a header section (wordmark + rule) over a body
+   section (tabs/pills/input), rather than a floating headline above a
+   separate search card. */
+.home-card {
+  background: var(--color-bg-tertiary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 0.6rem 1.8rem rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  text-align: left;
+}
+
+.home-card-header {
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+  border-bottom: var(--border-width) solid var(--border-color);
+  text-align: center;
+}
+
+.home-card-body {
+  padding: var(--spacing-lg);
+}
+
+.home-wordmark {
+  font-family: var(--font-family-base);
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* Two-tone, Google-esque without copying its exact palette - reuses
+   this app's own two brand accents rather than introducing new ones. */
+.home-wordmark .wordmark-accent {
+  color: var(--color-link-primary);
+}
+
+.home-search-tabs {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.home-search-tab {
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: var(--spacing-xs) 0;
+  margin-right: var(--spacing-md);
+  cursor: pointer;
+  border-bottom: 0.15rem solid transparent;
+}
+
+.home-search-tab.active {
+  color: var(--color-text-primary);
+  border-bottom-color: var(--color-text-primary);
+}
+
+.home-mode-row {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-sm);
+}
+
+.home-mode-pill {
+  /* Now nested inside .home-card's tertiary background again, so an
+     inactive pill needs to be one step darker (secondary) to read as
+     a pill rather than blending into the card. */
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: 999px;
+  padding: 0.25rem 0.8rem;
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.home-mode-pill.active {
+  background: var(--color-text-accent);
+  border-color: var(--color-text-accent);
+  color: var(--color-bg-primary);
+}
+
+.home-search-form {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.home-search-input {
+  flex: 1;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--border-color);
+  /* Fully rounded, Google-search-bar style - was
+     --border-radius-small (a boxy card field), now this is the
+     page's main visual anchor with no card around it. */
+  border-radius: 999px;
+  padding: 0.85rem 1.4rem;
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.home-search-input::placeholder {
+  color: var(--color-text-secondary);
+}
+
+.home-search-btn {
+  background: var(--color-text-accent);
+  color: var(--color-bg-primary);
+  border: none;
+  border-radius: 999px;
+  padding: 0 var(--spacing-lg);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.home-search-btn:hover {
+  opacity: 0.85;
+}
+
+.home-search-hint {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  margin: var(--spacing-sm) 0 0;
+}
+
+
+/* -------------------------------------------------------------- */
+/* Top-right "more" dropdown (step-1 redesign, company-dns-ux.md
+   sec10.1): Report Issues / Source Repository, moved out of the About
+   page. */
+
+.more-menu {
+  float: right;
+  position: relative;
+}
+
+.more-menu-trigger {
+  background: transparent;
+  border: none;
+  color: var(--color-link-primary);
+  cursor: pointer;
+  padding: 0.6rem 0.9rem;
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.more-menu-trigger:hover {
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.more-menu-dots {
+  letter-spacing: 0.05em;
+}
+
+.more-menu-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 100%;
+  min-width: 11rem;
+  background: var(--color-bg-secondary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius-small);
+  box-shadow: 0 0.5rem 1.2rem rgba(0, 0, 0, 0.35);
+  padding: var(--spacing-xs) 0;
+  z-index: 200;
+}
+
+.more-menu-dropdown.open {
+  display: block;
+}
+
+.more-menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-md);
+  color: var(--color-text-primary);
+  text-decoration: none;
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+}
+
+.more-menu-item:hover {
+  background: var(--color-bg-tertiary);
+  text-decoration: none;
+}
+
+/* Feather-icon glyph marking a menu item that leaves the app (opens in
+   a new tab) - only items with target="_blank" carry one, so its
+   presence/absence itself signals internal vs. external. */
+.more-menu-external-icon {
+  width: 0.8rem;
+  height: 0.8rem;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+/* -------------------------------------------------------------- */
+/* Wikipedia company lookup panel (Company/Wikipedia mode,
+   company-dns-ux.md sec10.1). Reuses .explorer-result-card/.meta-grid
+   styling already established for EDGAR/Industry results - this is
+   just the page-level wrapper around one such card. */
+
+.wiki-page {
+  overflow-y: auto;
+  height: calc(100vh - 100px);
+}
+
+.wiki-results-wrap {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+}
+
+.wiki-results-wrap h1 {
+  margin-bottom: var(--spacing-sm);
+}
+
+/* -------------------------------------------------------------- */
+/* Industry Classification Explorer redesign (docs/plans/company-
+   dns-ux.md sec10.2): page-level card header + mode tabs
+   (Combined/Keyword/Semantic), same visual standard as Home/About.
+   First iteration - to be refined (per direct feedback, "we are going
+   to iterate"). */
+
+/* Layout history, so this doesn't get re-broken a third time:
+   .explorer-pagecontent (the shared base class every tab uses) is
+   `display: flex; flex-direction: column; max-height: calc(100vh -
+   100px); overflow: hidden` - the WHOLE original V3 results layout
+   (.explorer-results-layout > .explorer-content-wrapper >
+   .explorer-results-filters > sidebar + .explorer-results-area >
+   .explorer-results-container) is built on that flex chain, each
+   level using `flex: 1 1 auto; min-height: 0` to fill exactly the
+   space its parent actually has, bottomed out at the page's own fixed
+   height - no page-level scrolling anywhere, only the innermost
+   boxes (sidebar, results list) scroll internally.
+   An earlier pass here set `.ic-explorer-page { display: block }` to
+   solve an unrelated centering problem on Home, not realizing
+   .ic-explorer-page is also GlobalSearch's class - that single change
+   broke the flex chain for the ENTIRE Explorer page, which is the
+   real root cause behind every scroll bug in this redesign (nested
+   double-scroll, sidebar overflowing past its container, the whole
+   page scrolling as one blob with the sidebar going blank partway
+   down). Fixed at the root instead of patching further downstream:
+   .ic-explorer-page stays flex (matching every other tab), and the
+   new shell/tabs-row/mode-panel wrapper elements this redesign added
+   are properly woven into that same flex chain instead of fighting
+   it. */
+.ic-explorer-page {
+  background: var(--color-bg-secondary);
+}
+
+.ic-explorer-shell {
+  /* Was 900px - that constrained Keyword mode's sidebar+results
+     layout too (it's nested inside this shell), wasting most of a
+     wide desktop viewport on empty margins either side. */
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: var(--spacing-md) var(--spacing-lg);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Slim tab row - no card chrome around it (per direct feedback: the
+   page title moved to the top bar, so this no longer needs to be a
+   bordered/shadowed header card, just the tabs themselves). Fixed
+   size - doesn't grow or shrink, the mode panel below it takes all
+   the remaining space. */
+.ic-mode-tabs-row {
+  flex: 0 0 auto;
+  margin-bottom: var(--spacing-md);
+}
+
+.ic-mode-tabs {
+  margin-bottom: 0;
+}
+
+/* Each mode panel fills whatever space is left under the tabs row and
+   scrolls internally by default (Semantic/Combined have no sidebar to
+   keep stationary, so the whole panel scrolling as one unit is
+   correct for them). Keyword mode overrides this below - it needs its
+   search bar to stay put and only its sidebar+results scroll. */
+.ic-mode-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ic-mode-panel[hidden] {
+  display: none;
+}
+
+#icModeKeyword,
+#icModeSemantic,
+#icModeHybrid,
+#icModeCombined,
+#companyMergedPanel,
+#companyEdgarPanel,
+#companyWikiPanel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* An #id selector beats a .class[attr] selector - without this,
+   #icModeKeyword's own `display: flex` above wins even while
+   [hidden] is set, the same class of bug as before (inline style
+   beating [hidden]), just via specificity instead of inline style
+   this time. Same applies to #icModeSemantic/#icModeCombined now that
+   they use the same pinned-search-bar + internal-scroll flex chain. */
+#icModeKeyword[hidden],
+#icModeSemantic[hidden],
+#icModeHybrid[hidden],
+#icModeCombined[hidden],
+#companyMergedPanel[hidden],
+#companyEdgarPanel[hidden],
+#companyWikiPanel[hidden] {
+  display: none;
+}
+
+/* flex:1 1 auto/min-height:0 here (not just the grid itself) is what
+   lets each column's own result list scroll internally instead of the
+   whole Combined panel scrolling as one blob - same reasoning as
+   Keyword/Semantic's sidebar+results chain, just two parallel columns
+   instead of one. */
+.ic-combined-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ic-combined-column {
+  background: var(--color-bg-tertiary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: var(--spacing-md);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ic-combined-column-title {
+  color: var(--color-link-primary);
+  font-size: 0.95rem;
+  margin: 0 0 var(--spacing-sm);
+  flex: 0 0 auto;
+}
+
+/* Compact facet row at the top of each Combined column (direct
+   feedback) - same "filter this column's results" job as Keyword/
+   Semantic mode's sidebar, just a horizontal row instead of a side
+   column since each of these is already a half-width column. */
+.ic-combined-column-filters {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  padding-bottom: 0.6rem;
+  border-bottom: var(--border-width) solid var(--border-color);
+  flex: 0 0 auto;
+}
+
+.ic-combined-column-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.ic-combined-column-filter input[type="checkbox"] {
+  margin: 0;
+}
+
+.ic-combined-column-filter .explorer-filter-count {
+  position: static;
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+  min-width: 0;
+  transform: none;
+}
+
+.ic-combined-column-results {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ic-combined-column .explorer-result-card {
+  background-color: var(--color-bg-secondary);
+}
+
+@media (max-width: 768px) {
+  .ic-combined-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Compact result-card variant - Combined mode's two side-by-side
+   columns (ic-explorer.js icRenderKeywordCard/icRenderSemanticCard
+   with opts.compact): same card shell/pill styling as the full-size
+   cards elsewhere, just smaller and with the meta-grid/View JSON
+   dropped so two columns fit without either one feeling cramped. */
+.explorer-result-card.compact {
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.6rem;
+}
+
+.explorer-result-card.compact .explorer-result-header {
+  min-height: 0;
+  margin-bottom: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.explorer-result-card.compact .explorer-result-code {
+  font-size: 0.9rem;
+}
+
+.explorer-result-card.compact .explorer-source-pill,
+.explorer-result-card.compact .explorer-similarity-pill {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+}
+
+.explorer-result-card.compact .explorer-view-json-btn {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+}
+
+.explorer-result-card.compact .explorer-result-description {
+  font-size: 0.82rem;
+  margin-bottom: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Keyword mode's pre-existing initial-search card, scoped down within
+   the Explorer specifically (shared .explorer-search-card is also
+   used by EDGAR Explorer, which keeps its own sizing/box). Per direct
+   feedback, this was still rendering as a distinct bordered/boxed card
+   while Semantic/Combined have none at all - stripped the box chrome
+   and width cap here too so all three modes' search bars are visually
+   identical, not just similarly colored. */
+#GlobalSearch .explorer-search-card,
+#MergedCompany .explorer-search-card,
+#EdgarExplorer .explorer-search-card,
+#WikipediaResults .explorer-search-card {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  max-width: none;
+}
+
+/* Same fix, for the OTHER search-bar wrapper: .explorer-search-card
+   only covers Keyword mode's pre-search screen - once results are
+   showing, the top search bar is .explorer-search-wrapper instead,
+   which still had its own box (this is what was still visibly
+   different: a bordered/boxed container with internal padding, unlike
+   Semantic/Combined's bare input+button). */
+#GlobalSearch .explorer-search-wrapper,
+#MergedCompany .explorer-search-wrapper,
+#EdgarExplorer .explorer-search-wrapper,
+#WikipediaResults .explorer-search-wrapper {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin-bottom: var(--spacing-md);
+}
+
+/* Keyword mode's results area (sidebar + result cards). Per direct
+   feedback, in order: (1) no outer card border/background - the bare
+   look used everywhere else now; (2)/(3) fill the real available
+   space and let pagination land wherever the content actually ends.
+   Two earlier attempts got this wrong in opposite directions - one
+   capped this area at a hardcoded `calc(100vh - 260px)` height while
+   the whole page ALSO scrolled (nested double-scroll: stray clipped
+   text, dead space below the inner box); the other stripped every
+   height constraint and let it flow with the page (the sidebar's
+   short natural height then left a blank gap once the much-longer
+   results list scrolled past it - sidebar and results need to stay
+   bounded together, not float independently in page flow).
+   The actual root cause both times was `.ic-explorer-page { display:
+   block }` above breaking the flex chain this entire sub-layout is
+   built on. With that fixed, these just need `flex: 1 1 auto;
+   min-height: 0` (no explicit height/max-height at all) to correctly
+   fill exactly the space the real flex chain gives them - sidebar and
+   results-container each get their own independent internal scrollbar
+   (sidebar filters stay visible while a long results list scrolls,
+   same pattern as any filter-sidebar UI), and nothing scrolls at the
+   page level. */
+#GlobalSearch .explorer-content-wrapper,
+#MergedCompany .explorer-content-wrapper,
+#EdgarExplorer .explorer-content-wrapper,
+#WikipediaResults .explorer-content-wrapper {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  /* The base rule's own `max-height: calc(100vh - 330px)` was never
+     actually overridden here (only background/border/shadow were) -
+     that hardcoded cap was still capping this box's real height
+     regardless of how much the flex chain above it actually had to
+     give it, which is exactly the dead-space-above-the-footer bug
+     this was supposed to have already fixed. flex: 1 1 auto (from the
+     base rule, unchanged) is enough on its own now that the ancestor
+     chain is properly flex. */
+  max-height: none;
+}
+
+#GlobalSearch .explorer-sidebar,
+#MergedCompany .explorer-sidebar,
+#EdgarExplorer .explorer-sidebar,
+#WikipediaResults .explorer-sidebar {
+  height: auto;
+}
+
+/* Same stale-hardcoded-height bug as .explorer-content-wrapper above,
+   just one level deeper - caught at a short viewport, missed these
+   because at that height the hardcoded `calc(100vh - Npx)` numbers
+   happened to be smaller than the real available space, so nothing
+   visibly overflowed. At a taller viewport the same hardcoded numbers
+   become LARGER than the real available space instead, so
+   .explorer-results-container (whose own stale height could exceed
+   what .explorer-results-area actually has) rendered past where
+   .pagination-controls starts, overlapping the last visible card.
+   Every one of these already has `flex: 1 1 auto; min-height: 0` from
+   the base rule - that alone is enough once there's no competing
+   explicit height fighting it. */
+#GlobalSearch .explorer-results-filters,
+#MergedCompany .explorer-results-filters,
+#EdgarExplorer .explorer-results-filters,
+#WikipediaResults .explorer-results-filters {
+  height: auto;
+}
+
+#GlobalSearch .explorer-container-wrapper,
+#MergedCompany .explorer-container-wrapper,
+#EdgarExplorer .explorer-container-wrapper,
+#WikipediaResults .explorer-container-wrapper {
+  height: auto;
+}
+
+#GlobalSearch .explorer-results-container,
+#MergedCompany .explorer-results-container,
+#EdgarExplorer .explorer-results-container,
+#WikipediaResults .explorer-results-container {
+  height: auto;
+}
+
+#GlobalSearch #industry-initial-search {
+  padding: 0;
+}
+
+/* Compare columns: a "Systems" dropdown (the checkboxes) plus one chip per
+   system that lights up in the system's own colour when it is included. */
+.ic-sys-dropdown { position: relative; flex: 0 0 auto; }
+.ic-sys-dropdown-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.ic-sys-dropdown-btn:hover,
+.ic-sys-dropdown-btn[aria-expanded="true"] { border-color: var(--color-link-primary); }
+.ic-sys-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 12rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem;
+  background: var(--color-bg-secondary);
+  border: var(--border-width) solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.ic-sys-menu[hidden] { display: none; }
+.ic-sys-menu .ic-combined-column-filter {
+  justify-content: flex-start;
+  padding: 0.3rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+.ic-sys-menu .ic-combined-column-filter:hover { background: var(--color-bg-tertiary); }
+.ic-sys-menu .ic-combined-column-filter .explorer-filter-count { margin-left: auto; padding-left: 1rem; }
+.ic-sys-menu .ic-combined-column-filter:first-child { border-bottom: var(--border-width) solid var(--border-color); border-radius: 4px 4px 0 0; }
+.ic-sys-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.ic-sys-chip {
+  --chip: #8a8583;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #4a4747;
+  background: transparent;
+  color: #7d7977;
+  font-size: 0.78rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.ic-sys-chip .ic-sys-chip-count { font-variant-numeric: tabular-nums; opacity: 0.85; }
+.ic-sys-chip.pill-us_sic { --chip: #1696c8; }
+.ic-sys-chip.pill-uk_sic { --chip: #ca703f; }
+.ic-sys-chip.pill-eu_nace { --chip: #6fbf6f; }
+.ic-sys-chip.pill-isic { --chip: #b28dd9; }
+.ic-sys-chip.pill-japan_sic { --chip: #f0c674; }
+.ic-sys-chip.src-edgar { --chip: #1696c8; }
+.ic-sys-chip.src-wikipedia { --chip: #6fbf6f; }
+/* Merged card: the source chips are indicators, not buttons. */
+#mergedSources .ic-sys-chip { cursor: default; }
+.ic-sys-chip.on {
+  border-color: var(--chip);
+  color: var(--chip);
+  background: color-mix(in srgb, var(--chip) 16%, transparent);
+  opacity: 1;
+}
+.ic-sys-chip:hover { opacity: 1; }
+
+/* Combined (hybrid) tab: engine badges and the in-browser pager. */
+.explorer-engine-badge {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #3c3b3b;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+.explorer-engine-badge.engine-both { border-color: #d98a3d; color: #d98a3d; }
+.explorer-engine-badge.engine-keyword { border-color: #1696c8; color: #1696c8; }
+.explorer-engine-badge.engine-semantic { border-color: #b28dd9; color: #b28dd9; }
+.ic-hybrid-note {
+  margin: 0.4rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+}
+.ic-hybrid-note[hidden] { display: none; }
+.ic-hybrid-pager {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding-top: 0.6rem;
+}
+.ic-hybrid-pager .pagination-controls { margin: 0; flex: 1 1 auto; justify-content: center; }
+
+/* Company Explorer (EDGAR + Wikipedia) shares the Industry Classification
+   Explorer's shell; the rules above were extended with #EdgarExplorer and
+   #WikipediaResults rather than duplicated. */
+.explorer-empty-hint {
+  margin: 0;
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+
+/* Merged company card: the long Wikipedia description sits below the facts. */
+.merged-description {
+  margin: 1rem 0 0;
+  padding-top: 0.8rem;
+  border-top: var(--border-width) solid var(--border-color);
+}
+#mergedMetaGrid { margin-bottom: 0.8rem; }

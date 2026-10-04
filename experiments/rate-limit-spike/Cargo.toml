@@ -1,0 +1,30 @@
+[package]
+name = "rate-limit-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "rate-limit-spike"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+tower = "0.5"
+# Only pulled in to prove docs/plans/v4-security-hardening.md §4.1: that
+# tower_governor 0.8's `axum` feature actually builds and 429s against
+# this exact axum 0.8 / tower 0.5 combination, not just crates.io's
+# declared semver ranges. The real tiered design (§3.2) does NOT use
+# GovernorLayer - see README "Why governor directly, not GovernorLayer"
+# - so this is a smoke-test dependency, not the thing being promoted.
+tower_governor = "0.8"
+governor = "0.10"
+serde_json = "1"
+anyhow = "1"
+sha2 = "0.11"
+hmac = "0.13"
+chrono = "0.4"
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

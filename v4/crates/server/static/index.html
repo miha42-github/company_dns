@@ -1,0 +1,1413 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!-- UX spike fix (docs/plans/company-dns-ux.md sec10): without an
+       explicit charset, tower-http's ServeDir sends `Content-Type:
+       text/html` with no charset parameter, and the browser falls
+       back to guessing - which misread this page's UTF-8 multi-byte
+       characters (en-dashes, <=, pagination arrow glyphs) as
+       Windows-1252, producing mojibake like "â€"" and "â‰¤". Latent in
+       V3's original html/index.html too (it never declared this
+       either) - just never surfaced there under its old serving
+       stack. Must stay the FIRST element inside <head> per the HTML
+       spec (charset declarations are only honored in the first 1024
+       bytes).-->
+  <meta charset="UTF-8">
+  <link rel="stylesheet" type="text/css" href="/static/styles.css">
+  <title>company_dns - data explorer</title>
+  <script src="/static/js/functions.js"></script>
+  <script src="/static/js/api-service.js"></script>
+  <script src="/static/js/global-search-alpine.js"></script>
+  <script src="/static/js/edgar-explorer-alpine.js"></script>
+  <script src="/static/js/sic-similarity.js"></script>
+  <script src="/static/js/wikipedia-lookup.js"></script>
+  <script src="/static/js/company-merged.js"></script>
+  <script src="/static/js/company-explorer.js"></script>
+  <script src="/static/js/ic-explorer.js"></script>
+  <script src="/static/js/home.js"></script>
+  <script defer src="/static/js/alpine.min.js"></script>
+  <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+</head>
+
+<body>
+  <div class="page-container">
+    <!-- Fixed header section -->
+    <header class="page-header">
+      <div class="menu">
+        <!-- Persistent brand/home link (step-2 redesign, company-dns-
+             ux.md sec10.1): replaces the old "Home" tab button. Always
+             present, always returns to the centralized search page. -->
+        <button type="button" class="brand-link" data-tabname="Home" onclick="showContentTab('Home')">Home</button>
+
+        <!-- Current-page title (per direct feedback: move each page's
+             own heading up here instead of a big in-page header card,
+             so the content area isn't spent on chrome Google's
+             homepage wouldn't have). Set by showContentTab() per tab;
+             empty on Home itself. -->
+        <span class="page-title" id="pageTitle"></span>
+
+        <!-- The former Industry Classification Explorer / EDGAR
+             Explorer / SIC Similarity top-level tabs are gone - the
+             Home search card (sec5) is now the only entry point into
+             those tools; showContentTab() still switches to their
+             underlying panels, just not from a visible nav tab
+             anymore. -->
+
+        <!-- Top-right dropdown: About, API Reference (both moved out
+             of the top nav) plus Report Issues / Source Repository. -->
+        <div class="more-menu">
+          <button type="button" class="more-menu-trigger" onclick="toggleMoreMenu(event)" aria-haspopup="true" aria-label="More links">
+            <span class="more-menu-dots">&#8942;</span>
+          </button>
+          <div id="moreMenuDropdown" class="more-menu-dropdown">
+            <a href="#" class="more-menu-item" data-tabname="About" onclick="showContentTab('About'); toggleMoreMenu(); return false;">About</a>
+            <a href="/docs" target="_blank" class="more-menu-item">API Reference <i data-feather="external-link" class="more-menu-external-icon"></i></a>
+            <a href="https://github.com/miha42-github/company_dns/issues" target="_blank" class="more-menu-item">Report an Issue <i data-feather="external-link" class="more-menu-external-icon"></i></a>
+            <a href="https://github.com/miha42-github/company_dns" target="_blank" class="more-menu-item">Source Repository <i data-feather="external-link" class="more-menu-external-icon"></i></a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Scrollable main content area -->
+    <main class="page-content">
+      <!-- Home Tab Content - the landing search block (step-1
+           redesign, docs/plans/company-dns-ux.md sec10.1). Thin
+           routing UI only - see static/js/home.js. The old Home
+           content (introduction/deployment/help tabs) moved to the
+           About tab below, unchanged except for the two links that
+           moved into the top-right dropdown. -->
+      <div id="Home" class="explorer-pagecontent home-landing">
+        <div class="home-landing-inner">
+          <!-- Single card, per direct feedback: the wordmark (a
+               placeholder for a real logo later) is now this card's
+               header, with a rule under it separating it from the
+               search controls below - not a separate floating
+               element above a separate search card. -->
+          <div class="home-card">
+            <div class="home-card-header">
+              <div class="home-wordmark">COMPANY<span class="wordmark-accent">_DNS</span></div>
+            </div>
+
+            <div class="home-card-body">
+              <div class="home-search-tabs">
+                <button type="button" id="homeSearchTabIc" class="home-search-tab active" onclick="selectHomeSearchTab('ic')">Industry Classification</button>
+                <button type="button" id="homeSearchTabCompany" class="home-search-tab" onclick="selectHomeSearchTab('company')">Company</button>
+              </div>
+
+              <div class="home-search-panel" id="homeSearchPanelIc">
+                <div class="home-mode-row">
+                  <button type="button" id="homeIcModeHybrid" class="home-mode-pill active" onclick="selectIcMode('hybrid')" title="One fused ranking from keyword and semantic search together">Combined</button>
+                  <button type="button" id="homeIcModeCombined" class="home-mode-pill" onclick="selectIcMode('combined')">Compare</button>
+                  <button type="button" id="homeIcModeKeyword" class="home-mode-pill" onclick="selectIcMode('keyword')">Keyword</button>
+                  <button type="button" id="homeIcModeSemantic" class="home-mode-pill" onclick="selectIcMode('semantic')">Semantic</button>
+                </div>
+                <form class="home-search-form" onsubmit="return submitHomeIcSearch(event)">
+                  <input type="text" id="homeIcQuery" class="home-search-input" placeholder="e.g. oil, manufacturing, growing wheat..." required>
+                  <button type="submit" class="home-search-btn">Search</button>
+                </form>
+              </div>
+
+              <div class="home-search-panel" id="homeSearchPanelCompany" hidden>
+                <div class="home-mode-row">
+                  <button type="button" id="homeCompanyModeMerged" class="home-mode-pill" onclick="selectCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
+                  <button type="button" id="homeCompanyModeEdgar" class="home-mode-pill active" onclick="selectCompanyMode('edgar')">EDGAR</button>
+                  <button type="button" id="homeCompanyModeWikipedia" class="home-mode-pill" onclick="selectCompanyMode('wikipedia')">Wikipedia</button>
+                  <button type="button" id="homeCompanyModeIndustryMatch" class="home-mode-pill" onclick="selectCompanyMode('industry-match')">Industry Match</button>
+                </div>
+                <form class="home-search-form" onsubmit="return submitHomeCompanySearch(event)">
+                  <input type="text" id="homeCompanyQuery" class="home-search-input" placeholder="Company name or CIK, e.g. Apple, 0000320193..." required>
+                  <button type="submit" class="home-search-btn">Search</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- About Tab Content (was Home) -->
+      <div id="About" class="help-pagecontent" style="display: none;">
+        <div class="help-container">
+          <h1>About company_dns</h1>
+
+          <div class="help-intro">
+            <p>
+              The company_dns acts as a "domain name service" for company information, providing structured access to firmographic data from multiple sources. This tool allows you to:
+            </p>
+
+            <ul class="help-features">
+              <li>
+                <div class="help-feature-heading">
+                  <div class="help-feature-icon-badge"><i data-feather="search"></i></div>
+                  <strong>Search industry codes</strong>
+                </div>
+                <span>By keyword, semantic or fused (Combined) match, all spanning every registered classification system (US SIC, Japan SIC, EU NACE, ISIC) - semantic and Combined are V4.0-only capabilities</span>
+              </li>
+              <li>
+                <div class="help-feature-heading">
+                  <div class="help-feature-icon-badge"><i data-feather="briefcase"></i></div>
+                  <strong>Retrieve company information</strong>
+                </div>
+                <span>From Wikipedia and EDGAR</span>
+              </li>
+              <li>
+                <div class="help-feature-heading">
+                  <div class="help-feature-icon-badge"><i data-feather="monitor"></i></div>
+                  <strong>Access standardized data</strong>
+                </div>
+                <span>Through a consistent RESTful API</span>
+              </li>
+              <li>
+                <div class="help-feature-heading">
+                  <div class="help-feature-icon-badge"><i data-feather="globe"></i></div>
+                  <strong>Expand to international standards</strong>
+                </div>
+                <span>Japan SIC, EU NACE and International (ISIC Rev. 4) have landed; UK SIC is not planned</span>
+              </li>
+            </ul>
+
+            <div class="help-deployment-info">
+              <h3>Deployment Options</h3>
+              <div class="help-deployment-cards">
+                <div class="help-card">
+                  <h4>Self-Hosted</h4>
+                  <p>Running as your own instance, perhaps in Docker</p>
+                  <code>http://localhost:8000</code>
+                </div>
+                <div class="help-card">
+                  <h4>Mediumroast Hosted</h4>
+                  <p>Using the Mediumroast hosted instance</p>
+                  <a href="https://company-dns.mediumroast.io" target="_blank">https://company-dns.mediumroast.io</a>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="help-tabs-wrapper">
+            <div class="help-tabs">
+              <button class="help-tab-button active" data-help-tab="help-overview" onclick="openHelpTab(event, 'help-overview')">Overview</button>
+              <button class="help-tab-button" data-help-tab="help-api-docs" onclick="openHelpTab(event, 'help-api-docs')">API Documentation</button>
+              <button class="help-tab-button" data-help-tab="help-explorer-help" onclick="openHelpTab(event, 'help-explorer-help')">Industry Classification Explorer</button>
+              <button class="help-tab-button" data-help-tab="help-edgar-explorer" onclick="openHelpTab(event, 'help-edgar-explorer')">EDGAR Explorer</button>
+            </div>
+            
+            <!-- Overview Tab -->
+            <div id="help-overview" class="help-tab-content active">
+              <h2>What is company_dns?</h2>
+              <p>
+                The company_dns integrates data from multiple sources to provide comprehensive firmographic information about companies. Currently, it combines:
+              </p>
+              
+              <div class="help-source-cards">
+                <div class="help-source-card">
+                  <h4>Industry Classifications</h4>
+                  <ul>
+                    <li>US SIC (Standard Industry Classification) - implemented</li>
+                    <li>Japan SIC - implemented</li>
+                    <li>EU NACE - implemented</li>
+                    <li>International (ISIC Rev. 4) - implemented</li>
+                    <li>UK SIC - not planned</li>
+                  </ul>
+                </div>
+                <div class="help-source-card">
+                  <h4>Company Data</h4>
+                  <ul>
+                    <li>Wikipedia - General company information</li>
+                    <li>EDGAR - SEC filings and financial data</li>
+                    <li>Merged sources - Combined firmographic data</li>
+                  </ul>
+                </div>
+              </div>
+
+              <h3>API Versions</h3>
+              <p>company_dns V4 serves one real namespace, plus a compatibility alias for existing V3 integrations:</p>
+
+              <div class="version-tabs-wrapper">
+                <div class="version-tabs">
+                  <button type="button" class="version-tab active" data-version-tab="v4" onclick="selectVersionTab('v4')">V4.0 (Current)</button>
+                  <button type="button" class="version-tab" data-version-tab="v3" onclick="selectVersionTab('v3')">V3.0 (Compatibility Aliases)</button>
+                </div>
+
+                <div id="versionTabV4" class="version-tab-panel">
+                  <p>The real namespace this server implements:</p>
+                  <ul>
+                    <li><code>/V4.0/na/sic/...</code> - US SIC lookups (description, code, division, industry, major)</li>
+                    <li><code>/V4.0/global/sic/description/...</code> - keyword SIC search across every registered classification system (US SIC, Japan SIC, EU NACE)</li>
+                    <li><code>/V4.0/na/sic/similarity/...</code> - semantic SIC search (V4.0-only, no V3 equivalent)</li>
+                    <li><code>/V4.0/global/sic/similarity/...</code> - semantic SIC search across every registered classification system (US SIC, Japan SIC, EU NACE; V4.0-only, no V3 equivalent)</li>
+                    <li><code>/V4.0/global/sic/hybrid/...</code> - fused keyword + semantic SIC search (Reciprocal Rank Fusion) across every registered classification system (V4.0-only)</li>
+                    <li><code>/V4.0/na/companies/edgar/...</code>, <code>/V4.0/na/company/edgar/firmographics/...</code> - EDGAR</li>
+                    <li><code>/V4.0/global/company/wikipedia/firmographics/...</code>, <code>/V4.0/global/company/merged/firmographics/...</code> - Wikipedia/merged</li>
+                  </ul>
+                </div>
+                <div id="versionTabV3" class="version-tab-panel" hidden>
+                  <p>Every V4.0 path above, served at the old URL - same data, same envelope shape, for existing V3 integrations:</p>
+                  <ul>
+                    <li><code>/V3.0/na/sic/...</code> - alias for <code>/V4.0/na/sic/...</code></li>
+                    <li><code>/V3.0/global/sic/description/...</code> - alias for <code>/V4.0/global/sic/description/...</code> (keyword only - semantic/hybrid global are planned, see <code>docs/plans/sic-global-search.md</code>)</li>
+                    <li><code>/V3.0/na/companies/edgar/...</code>, <code>/V3.0/na/company/edgar/firmographics/...</code> - alias for the EDGAR endpoints</li>
+                    <li><code>/V3.0/global/company/wikipedia/firmographics/...</code>, <code>/V3.0/global/company/merged/firmographics/...</code> - alias for Wikipedia/merged</li>
+                    <li><code>/V3.0/uk/...</code>, <code>/V3.0/eu/...</code>, <code>/V3.0/japan/...</code>, <code>/V3.0/international/...</code> - the single-system per-country endpoints (division/major-group/industry-group/description for one system at a time) are not implemented in V4; only the cross-system <code>/V4.0/global/sic/description/...</code> above exists so far</li>
+                  </ul>
+                </div>
+              </div>
+              <p class="version-tabs-footnote"><em>Note: V2.0 is not implemented in V4 - its legacy <code>/V2.0/...</code> paths are intentionally not carried forward.</em></p>
+            </div>
+            
+            <!-- API Documentation Tab -->
+            <div id="help-api-docs" class="help-tab-content">
+              <h2>API Documentation</h2>
+              
+              <div class="help-section">
+                <h3>Interactive API Explorer</h3>
+                <p>
+                  The most comprehensive way to explore and test the API is through our interactive <strong>API Reference</strong> page,
+                  which provides real-time request/response testing, automatic schema validation, and detailed documentation.
+                </p>
+                <p>
+                  <a href="/docs" target="_blank" style="color: #1696c8; text-decoration: underline;">[OpenAPI format]</a>
+                  &nbsp;|&nbsp;
+                  <a href="/redoc" target="_blank" style="color: #1696c8; text-decoration: underline;">[ReDoc format]</a>
+                </p>
+              </div>
+              
+              <div class="help-api-note" style="background-color: var(--color-bg-secondary); padding: 1rem; border-radius: 0.5rem; margin: 1.5rem 0; border-left: 3px solid #1696c8;">
+                <h4 style="margin-top: 0;">Why Use the API Reference?</h4>
+                <ul style="margin: 0.5rem 0; padding-left: 1.5rem;">
+                  <li><strong>Live Testing:</strong> Try requests directly without writing code</li>
+                  <li><strong>Schema Validation:</strong> See request/response models in detail</li>
+                  <li><strong>Documentation:</strong> Full endpoint descriptions and parameter explanations</li>
+                  <li><strong>Request History:</strong> Keep track of recent API calls</li>
+                  <li><strong>OpenAPI Standard:</strong> Industry-standard REST API interface</li>
+                </ul>
+              </div>
+              
+              <h3>Response Format</h3>
+              <p>All endpoints return JSON responses with a consistent envelope:</p>
+              <div class="help-code-container">
+                <pre><code>{
+  "code": 200,                 // HTTP status code, duplicated in the body
+  "message": "3 SIC matches",  // Human-readable status message
+  "module": "SicCatalog->find_by_description", // Which internal call produced this
+  "data": [ /* ... */ ],       // Endpoint-specific payload - shape varies per endpoint,
+                                // not always an array
+  "dependencies": {
+    "modules": {
+      "company_dns_v4": "https://github.com/miha42-github/company_dns"
+    }
+  }
+}</code></pre>
+                <button class="help-copy-button" onclick="copyToClipboard(this)">
+                  <span class="help-copy-icon"></span>
+                  <span class="copy-text">Copy</span>
+                </button>
+              </div>
+
+              <h3>API Versions</h3>
+              <p>Endpoints are served under <code>/V4.0/...</code>, with every path also aliased at <code>/V3.0/...</code> for backward compatibility. See the Overview tab for the full breakdown.</p>
+            </div>
+            
+            <!-- Industry Code Explorer Tab -->
+            <div id="help-explorer-help" class="help-tab-content">
+              <h2>Using the Industry Classification Explorer</h2>
+              
+              <p>
+                The Industry Classification Explorer searches US SIC, Japan SIC, EU NACE and ISIC by both keyword and
+                semantic/meaning-based search (also available from the Home page's Industry Classification panel).
+              </p>
+
+              <p>
+                There are four tabs. <strong>Combined</strong> fuses keyword and semantic search into one ranking, so a
+                single list shows exact-word matches and meaning-based matches together; each result says which
+                engine found it (for example "Keyword #3 &middot; Semantic #1"), and it is paged 10 at a
+                time. If no class contains your words, it says so and shows the semantic results alone.
+                <strong>Compare</strong> shows the Keyword and Semantic result lists side by side, unfused.
+                <strong>Keyword</strong> and <strong>Semantic</strong> each run one engine on its own. Single words
+                ("library", "wheat") are where Combined helps most; long descriptions behave like Semantic.
+              </p>
+              
+              <div class="help-feature-walkthrough">
+                <div class="help-step">
+                  <h4>Step 1: Enter a Search Term</h4>
+                  <p>Enter an industry keyword in the search box (e.g., "oil", "manufacturing", "retail").</p>
+                  <div class="help-example-queries">
+                    <h5>Example Searches:</h5>
+                    <ul>
+                      <li><code>oil</code></li>
+                      <li><code>computer</code></li>
+                      <li><code>retail</code></li>
+                      <li><code>manufacturing</code></li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 2: Filter Results</h4>
+                  <p>Use the checkbox on the left to filter results by classification system:</p>
+                  <ul>
+                    <li>US SIC - United States Standard Industrial Classification</li>
+                    <li>Japan SIC - Japan Standard Industrial Classification</li>
+                    <li>EU NACE - European Classification of Economic Activities</li>
+                    <li>ISIC - International Standard Industrial Classification, Rev. 4</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 3: Explore Results</h4>
+                  <p>Each result shows:</p>
+                  <ul>
+                    <li>Classification system badge</li>
+                    <li>Industry description</li>
+                    <li>Industry code</li>
+                    <li>Additional details when available</li>
+                  </ul>
+                </div>
+                
+                <div class="help-tip-box">
+                  <h4>Pro Tip</h4>
+                  <p>Use broader terms for more comprehensive results. For example, search for "computer" instead of "computer manufacturing" to find all related industries.</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- EDGAR Explorer Tab -->
+            <div id="help-edgar-explorer" class="help-tab-content">
+              <h2>Using the EDGAR Explorer</h2>
+              
+              <p>
+                The EDGAR Explorer provides a powerful interface to search SEC EDGAR filings by company name or CIK. 
+                It allows you to discover and explore annual reports (10-K) and quarterly reports (10-Q) filed with the SEC.
+              </p>
+              
+              <div class="help-feature-walkthrough">
+                <div class="help-step">
+                  <h4>Step 1: Search for a Company</h4>
+                  <p>Enter a company name (e.g., IBM, Apple) or a CIK number (e.g., 0000051143) in the search field.</p>
+                  <div class="help-example-queries">
+                    <h5>Example Searches:</h5>
+                    <ul>
+                      <li>Company name: <code>IBM</code>, <code>Apple</code>, <code>Microsoft</code></li>
+                      <li>CIK: <code>0000051143</code>, <code>0000789019</code></li>
+                    </ul>
+                  </div>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 2: Apply Filters (Optional)</h4>
+                  <p>Use the sidebar filters to narrow your results:</p>
+                  <ul>
+                    <li><strong>Has 10‑K</strong> — Show only companies with annual report filings</li>
+                    <li><strong>Recent 10‑Q</strong> — Show only quarterly reports filed within the last 90 days</li>
+                    <li><strong>Division</strong> — Filter by SIC division (dynamically populated from results)</li>
+                    <li><strong>Fiscal Year End</strong> — Filter by fiscal year end date (MM/YY format)</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 3: Review Company Information</h4>
+                  <p>Results display comprehensive company data including:</p>
+                  <ul>
+                    <li>Company name and CIK</li>
+                    <li>SIC code and description</li>
+                    <li>Division classification</li>
+                    <li>Ticker symbol and exchange</li>
+                    <li>Fiscal year end</li>
+                    <li>Location (city, state, address)</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 4: Access Filings</h4>
+                  <p>Click the 10‑K or 10‑Q buttons to access the latest filings. The buttons display:</p>
+                  <ul>
+                    <li><code>10‑K • YYYY-MM-DD</code> — Latest annual report with filing date</li>
+                    <li><code>10‑Q • YYYY-MM-DD</code> — Latest quarterly report; highlighted if filed within 90 days</li>
+                  </ul>
+                </div>
+                
+                <div class="help-step">
+                  <h4>Step 5: View Raw Data</h4>
+                  <p>Click <strong>View JSON</strong> in the top-right to see the raw API response for any filing result.</p>
+                </div>
+              </div>
+              
+              <div class="help-tip-box">
+                <strong>Pro Tip:</strong> Use broad company names for initial searches. For example, search for "Apple" instead of "Apple Inc." 
+                to get comprehensive results across different filings and entities.
+              </div>
+            </div>
+            
+          </div>
+          
+        </div>
+      </div>
+
+      <!-- Global Search Tab Content - redesigned to the standard
+           established on Home/About (docs/plans/company-dns-ux.md
+           sec10.2): mode tabs (Combined/Keyword/Semantic) only - the
+           page's own title moved to the top bar (per direct feedback
+           that a full header card repeated the title for no reason
+           and ate too much vertical space, Google's homepage doesn't
+           have that). Three mode panels: Keyword reuses the existing
+           Alpine component's UI untouched; Semantic and Combined are
+           new, built alongside this redesign. -->
+      <div id="GlobalSearch" class="explorer-pagecontent ic-explorer-page" x-data="createGlobalSearchComponent()" @load="init()">
+        <div class="ic-explorer-shell">
+          <div class="ic-mode-tabs-row">
+            <div class="home-search-tabs ic-mode-tabs">
+              <button type="button" class="home-search-tab active" data-ic-explorer-mode="hybrid" onclick="selectIcExplorerMode('hybrid')" title="One fused ranking from keyword and semantic search together">Combined</button>
+              <button type="button" class="home-search-tab" data-ic-explorer-mode="combined" onclick="selectIcExplorerMode('combined')">Compare</button>
+              <button type="button" class="home-search-tab" data-ic-explorer-mode="keyword" onclick="selectIcExplorerMode('keyword')">Keyword</button>
+              <button type="button" class="home-search-tab" data-ic-explorer-mode="semantic" onclick="selectIcExplorerMode('semantic')">Semantic</button>
+            </div>
+          </div>
+
+        <!-- Keyword mode - the pre-existing Alpine-driven UI, wrapped
+             but otherwise untouched per direct feedback ("For Keyword
+             we can use the same layout already present"). -->
+        <div id="icModeKeyword" class="ic-mode-panel" hidden>
+        <!-- Initial centered search (shown before search) -->
+        <div id="industry-initial-search" class="explorer-search-container" x-show="!showResults">
+          <div class="explorer-search-card">
+            <form id="industry-search-form" @submit.prevent="performSearch()">
+              <div class="explorer-input-group">
+                <input type="text" x-model="searchQuery" id="industry-search-input" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                  <i class="explorer-action-icon"></i>
+                  <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Post-search layout (initially hidden) -->
+        <div id="industry-results-layout" class="explorer-results-layout" x-show="showResults">
+          <div class="explorer-search-wrapper">
+            <div class="explorer-top-container">
+            <form id="industry-search-form-top" @submit.prevent="performSearch()">
+                <div class="explorer-input-group">
+                  <input type="text" x-model="searchQuery" id="industry-search-input-top" class="dns-textfield explorer-input" placeholder="Enter industry keyword (e.g., oil, manufacturing, retail)" required>
+                  <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                    <i class="explorer-action-icon"></i>
+                    <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          
+          <div class="explorer-content-wrapper">
+            <div class="explorer-results-filters">
+              <div class="explorer-sidebar">
+                <h3 class="explorer-sidebar-title">Filter Results</h3>
+                
+                <div class="explorer-filter-options">
+                  <div class="explorer-filter-label">Classification System:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <div class="explorer-filter-checkbox">
+                      <label><input type="checkbox" name="sourceFilter" value="All" x-model="filters.all" @change="toggleAllFilters(filters.all)" id="filterAll"> All Results</label>
+                      <span class="explorer-filter-count" x-text="filterCounts.all">0</span>
+                    </div>
+                    <div class="explorer-filter-checkbox">
+                      <label><input type="checkbox" name="sourceFilter" value="US SIC" x-model="filters['US SIC']" @change="toggleFilter('US SIC')"> US SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['US SIC']">0</span>
+                    </div>
+                    <!-- Japan SIC data landed (docs/plans/sic-global-search.md)
+                         and the server now fans keyword search out
+                         across it via /V4.0/global/sic/description -
+                         re-added per the "re-add as each system's data
+                         actually lands" note this replaced. EU NACE
+                         landed the same way. UK/ISIC still have no
+                         data, stay removed. -->
+                    <div class="explorer-filter-checkbox">
+                      <label><input type="checkbox" name="sourceFilter" value="Japan SIC" x-model="filters['Japan SIC']" @change="toggleFilter('Japan SIC')"> Japan SIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['Japan SIC']">0</span>
+                    </div>
+                    <div class="explorer-filter-checkbox">
+                      <label><input type="checkbox" name="sourceFilter" value="EU NACE" x-model="filters['EU NACE']" @change="toggleFilter('EU NACE')"> EU NACE</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['EU NACE']">0</span>
+                    </div>
+                    <div class="explorer-filter-checkbox">
+                      <label><input type="checkbox" name="sourceFilter" value="ISIC" x-model="filters['ISIC']" @change="toggleFilter('ISIC')"> ISIC</label>
+                      <span class="explorer-filter-count" x-text="filterCounts['ISIC']">0</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="explorer-filter-guide">
+                  <h4>Understanding Codes</h4>
+                  <ul class="explorer-classification-guide">
+                    <li><strong>US SIC</strong> - United States Standard Industrial Classification</li>
+                    <li><strong>EU NACE</strong> - European Classification of Economic Activities</li>
+                    <li><strong>ISIC</strong> - International Standard Industrial Classification</li>
+                    <li><strong>Japan SIC</strong> - Japan Standard Industrial Classification</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div class="explorer-results-area">
+                <div class="explorer-header-section">
+                  <div class="results-status">
+                    <div class="status-top">
+                      <span class="status-title">Results</span>
+                      <span class="status-count" x-text="getResultsHeadline()"></span>
+                    </div>
+                    <div class="status-meta">
+                      <span x-text="getResultsRangeLabel()"></span>
+                      <span class="status-dot">•</span>
+                      <span x-text="getActiveFiltersLabel()"></span>
+                    </div>
+                  </div>
+                  <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
+                </div>
+                
+                <div class="explorer-container-wrapper">
+                  <div id="industry-search-results" class="explorer-results-container">
+                    <!-- Results will be populated via Alpine.js -->
+                    <template x-if="hasResults && getCurrentPageResults().length > 0">
+                      <div>
+                        <template x-for="result in getCurrentPageResults()" :key="result.code + result.source_type">
+                          <div class="explorer-result-card">
+                            <div class="explorer-result-header">
+                              <div class="explorer-result-heading">
+                                <span class="explorer-result-code" x-text="result.code"></span>
+                                <span class="explorer-source-pill" :class="getSourceClass(result.source_type)" x-text="result.source_type"></span>
+                              </div>
+                              <div class="explorer-result-actions">
+                                <button @click="viewResultJson(result)" class="explorer-view-json-btn">View JSON</button>
+                              </div>
+                            </div>
+
+                            <p class="explorer-result-description" x-show="!isExpanded(result)" x-text="getTruncatedDescription(result)"></p>
+                            <p class="explorer-result-description" x-show="isExpanded(result)" x-text="result.description"></p>
+                            <button class="explorer-show-more" x-show="shouldShowToggle(result)" @click="toggleDescription(result)" type="button">
+                              <span x-text="isExpanded(result) ? 'Show less' : 'Show more'"></span>
+                            </button>
+
+                            <div class="explorer-result-meta" x-show="hasMetadata(result)">
+                              <template x-if="result.source_type === 'US SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.division">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.division_desc"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.major_group">
+                                    <div class="meta-label">Major Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.major_group"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.major_group_desc"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.industry_group">
+                                    <div class="meta-label">Industry Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.industry_group"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.industry_group_desc"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'EU NACE'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.section_code">
+                                    <div class="meta-label">Section</div>
+                                    <div class="meta-value" x-text="result.additional_data?.section_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'ISIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.section_code">
+                                    <div class="meta-label">Section</div>
+                                    <div class="meta-value" x-text="result.additional_data?.section_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'Japan SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="result.additional_data?.division_code">
+                                    <div class="meta-label">Division</div>
+                                    <div class="meta-value" x-text="result.additional_data?.division_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.major_group_code">
+                                    <div class="meta-label">Major Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.major_group_code"></div>
+                                  </div>
+                                  <div class="meta-item" x-show="result.additional_data?.group_code">
+                                    <div class="meta-label">Group</div>
+                                    <div class="meta-value" x-text="result.additional_data?.group_code"></div>
+                                  </div>
+                                </div>
+                              </template>
+
+                              <template x-if="result.source_type === 'UK SIC'">
+                                <div class="meta-grid">
+                                  <div class="meta-item" x-show="hasUkMetadata(result)">
+                                    <div class="meta-label">Code</div>
+                                    <div class="meta-value" x-text="result.additional_data?.code || result.code"></div>
+                                    <div class="meta-sub" x-text="result.additional_data?.description"></div>
+                                  </div>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                
+                <div class="pagination-controls" x-show="hasResults && filteredResults.length">
+                  <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
+                  <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
+                  <template x-for="page in getVisiblePages()" :key="'industry-page-' + page">
+                    <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
+                  </template>
+                  <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
+                  <button class="pagination-btn" @click="lastPage()" :disabled="currentPage === totalPages" aria-label="Last page">⏭</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+        <!-- /Keyword mode -->
+
+        <!-- Semantic mode - new (docs/plans/company-dns-ux.md
+             sec10.2 step 3). Same shell as Keyword mode (direct
+             feedback: "Semantic search should adopt the same search
+             layout as keyword", then "Where did the search facets
+             go like with keywords?" after the first pass only ported
+             the result-card style, not the filter sidebar) - pinned
+             top search bar, Filter Results sidebar + Understanding
+             Codes guide, Results header, scrollable results area.
+             Only one classification system exists for Semantic today
+             (US SIC, same as Keyword's current real data - the
+             UK/EU/ISIC/Japan SIC checkboxes are absent there too for
+             the same reason), so "All Results" and "US SIC" are kept
+             in sync as a single effective toggle rather than
+             independent filters. Results use .explorer-result-card,
+             same as Keyword, with a per-result similarity pill
+             (calibrated match-quality label + a plain similarity
+             score, not a percentage) standing in for Keyword's
+             source-type pill. -->
+        <!-- Combined (hybrid) mode - docs/plans/sic-hybrid-search.md. One
+             fused ranking of keyword + semantic results across every
+             system (Reciprocal Rank Fusion, server-side), shown with the
+             Semantic tab's full-size cards and facets. Visible label is
+             "Combined"; ids and code are "hybrid" because the Compare tab
+             still uses "combined" internally. The 50 results the endpoint
+             returns are paged in the browser. -->
+        <div id="icModeHybrid" class="ic-mode-panel">
+          <div class="explorer-results-layout">
+            <div class="explorer-search-wrapper">
+              <div class="explorer-top-container">
+                <form id="icHybridForm" onsubmit="return submitIcExplorerHybridSearch(event)">
+                  <div class="explorer-input-group">
+                    <input type="text" id="icHybridQuery" class="dns-textfield explorer-input" placeholder="Search by word or description, e.g. wheat, software publishing, a farm that grows grain..." required>
+                    <button type="submit" class="dns-button explorer-button">Search</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div class="explorer-content-wrapper">
+              <div class="explorer-results-filters">
+                <div class="explorer-sidebar">
+                  <h3 class="explorer-sidebar-title">Filter Results</h3>
+
+                  <div class="explorer-filter-options">
+                    <div class="explorer-filter-label">Classification System:</div>
+                    <div class="explorer-filter-checkboxes">
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icHybridFilterAll" checked onchange="icToggleHybridAll(this.checked)"> All Results</label>
+                        <span class="explorer-filter-count" id="icHybridFilterCountAll">0</span>
+                      </div>
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icHybridFilterUsSic" checked onchange="icToggleHybridSource('US SIC', this.checked)"> US SIC</label>
+                        <span class="explorer-filter-count" id="icHybridFilterCountUsSic">0</span>
+                      </div>
+                      <!-- Semantic now hits the global/multi-system
+                           endpoint too (docs/plans/sic-global-search.md) -
+                           real per-source toggle, same as Keyword's. -->
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icHybridFilterJapanSic" checked onchange="icToggleHybridSource('Japan SIC', this.checked)"> Japan SIC</label>
+                        <span class="explorer-filter-count" id="icHybridFilterCountJapanSic">0</span>
+                      </div>
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icHybridFilterEuNace" checked onchange="icToggleHybridSource('EU NACE', this.checked)"> EU NACE</label>
+                        <span class="explorer-filter-count" id="icHybridFilterCountEuNace">0</span>
+                      </div>
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icHybridFilterIsic" checked onchange="icToggleHybridSource('ISIC', this.checked)"> ISIC</label>
+                        <span class="explorer-filter-count" id="icHybridFilterCountIsic">0</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="explorer-filter-guide">
+                    <h4>Understanding Codes</h4>
+                    <ul class="explorer-classification-guide">
+                      <li><strong>US SIC</strong> - United States Standard Industrial Classification</li>
+                      <li><strong>Japan SIC</strong> - Japan Standard Industrial Classification</li>
+                      <li><strong>EU NACE</strong> - European Classification of Economic Activities</li>
+                      <li><strong>ISIC</strong> - International Standard Industrial Classification (Rev. 4)</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div class="explorer-results-area">
+                  <div class="explorer-header-section">
+                    <div class="results-status">
+                      <div class="status-top">
+                        <span class="status-title">Results</span>
+                        <span class="status-count" id="icHybridResultsCount">No results</span>
+                      </div>
+                      <div class="status-meta">
+                        <span id="icHybridRangeLabel">Showing 0-0 of 0</span>
+                        <span class="status-dot">&bull;</span>
+                        <span id="icHybridFiltersLabel">Filters: all systems</span>
+                      </div>
+                    </div>
+                    <p class="sic-sim-status" id="icHybridStatus" style="display:none"></p>
+                    <p class="ic-hybrid-note" id="icHybridNote" hidden></p>
+                  </div>
+
+                  <div class="explorer-container-wrapper">
+                    <div class="explorer-results-container">
+                      <div class="ic-semantic-results-list" id="icHybridResultsList"></div>
+                    </div>
+                  </div>
+                  <div class="ic-hybrid-pager">
+                    <div class="pagination-controls" id="icHybridPagination"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /Combined (hybrid) mode -->
+
+        <div id="icModeSemantic" class="ic-mode-panel" hidden>
+          <div class="explorer-results-layout">
+            <div class="explorer-search-wrapper">
+              <div class="explorer-top-container">
+                <form id="icSemanticForm" onsubmit="return submitIcExplorerSemanticSearch(event)">
+                  <div class="explorer-input-group">
+                    <input type="text" id="icSemanticQuery" class="dns-textfield explorer-input" placeholder="Describe a business, e.g. growing wheat, software company..." required>
+                    <button type="submit" class="dns-button explorer-button">Search</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div class="explorer-content-wrapper">
+              <div class="explorer-results-filters">
+                <div class="explorer-sidebar">
+                  <h3 class="explorer-sidebar-title">Filter Results</h3>
+
+                  <div class="explorer-filter-options">
+                    <div class="explorer-filter-label">Classification System:</div>
+                    <div class="explorer-filter-checkboxes">
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icSemanticFilterAll" checked onchange="icToggleSemanticAll(this.checked)"> All Results</label>
+                        <span class="explorer-filter-count" id="icSemanticFilterCountAll">0</span>
+                      </div>
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icSemanticFilterUsSic" checked onchange="icToggleSemanticSource('US SIC', this.checked)"> US SIC</label>
+                        <span class="explorer-filter-count" id="icSemanticFilterCountUsSic">0</span>
+                      </div>
+                      <!-- Semantic now hits the global/multi-system
+                           endpoint too (docs/plans/sic-global-search.md) -
+                           real per-source toggle, same as Keyword's. -->
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icSemanticFilterJapanSic" checked onchange="icToggleSemanticSource('Japan SIC', this.checked)"> Japan SIC</label>
+                        <span class="explorer-filter-count" id="icSemanticFilterCountJapanSic">0</span>
+                      </div>
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icSemanticFilterEuNace" checked onchange="icToggleSemanticSource('EU NACE', this.checked)"> EU NACE</label>
+                        <span class="explorer-filter-count" id="icSemanticFilterCountEuNace">0</span>
+                      </div>
+                      <div class="explorer-filter-checkbox">
+                        <label><input type="checkbox" id="icSemanticFilterIsic" checked onchange="icToggleSemanticSource('ISIC', this.checked)"> ISIC</label>
+                        <span class="explorer-filter-count" id="icSemanticFilterCountIsic">0</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="explorer-filter-guide">
+                    <h4>Understanding Codes</h4>
+                    <ul class="explorer-classification-guide">
+                      <li><strong>US SIC</strong> - United States Standard Industrial Classification</li>
+                      <li><strong>Japan SIC</strong> - Japan Standard Industrial Classification</li>
+                      <li><strong>EU NACE</strong> - European Classification of Economic Activities</li>
+                      <li><strong>ISIC</strong> - International Standard Industrial Classification (Rev. 4)</li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div class="explorer-results-area">
+                  <div class="explorer-header-section">
+                    <div class="results-status">
+                      <div class="status-top">
+                        <span class="status-title">Results</span>
+                        <span class="status-count" id="icSemanticResultsCount">No results</span>
+                      </div>
+                      <div class="status-meta">
+                        <span id="icSemanticRangeLabel">Showing 0-0 of 0</span>
+                        <span class="status-dot">&bull;</span>
+                        <span id="icSemanticFiltersLabel">Filters: all systems</span>
+                      </div>
+                    </div>
+                    <p class="sic-sim-status" id="icSemanticStatus" style="display:none"></p>
+                  </div>
+
+                  <div class="explorer-container-wrapper">
+                    <div class="explorer-results-container">
+                      <div class="ic-semantic-results-list" id="icSemanticResultsList"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- /Semantic mode -->
+
+        <!-- Combined mode - new (docs/plans/company-dns-ux.md
+             sec10.2 step 5): one query, both engines, side by side so
+             the two can be compared directly. Each side is a
+             simplified, non-paginated top-N view - not a replacement
+             for Keyword mode's full filtering/pagination. -->
+        <!-- Each column's cards are the "compact" variant of
+             .explorer-result-card (ic-explorer.js icRenderKeywordCard/
+             icRenderSemanticCard with opts.compact - smaller padding,
+             clamped description, no meta-grid/View JSON) - direct
+             feedback: copy the card look but shrink it and drop detail,
+             since two full-size cards side by side is too much. Both
+             columns cap at 10 entries. Scrolling mirrors Keyword/
+             Semantic: #icModeCombined is the same pinned-search-bar +
+             internally-scrolling flex chain (styles.css), just with
+             two independently-scrolling result lists instead of one. -->
+        <div id="icModeCombined" class="ic-mode-panel" hidden>
+          <div class="explorer-search-wrapper">
+            <div class="explorer-top-container">
+              <form id="icCombinedForm" onsubmit="return submitIcExplorerCombinedSearch(event)">
+                <div class="explorer-input-group">
+                  <input type="text" id="icCombinedQuery" class="dns-textfield explorer-input" placeholder="e.g. oil, manufacturing, growing wheat..." required>
+                  <button type="submit" class="dns-button explorer-button">Search</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="ic-combined-columns">
+            <div class="ic-combined-column">
+              <h3 class="ic-combined-column-title">Keyword</h3>
+              <!-- Keyword and Semantic both hit the global/multi-system
+                   endpoints (docs/plans/sic-global-search.md). Per-column
+                   system filter: the "Systems" dropdown holds the real
+                   checkboxes; the chips beside it mirror them, lit in each
+                   system's colour when included, and toggle on click. -->
+              <div class="ic-combined-column-filters">
+                <div class="ic-sys-dropdown">
+                  <button type="button" class="ic-sys-dropdown-btn" id="icCombinedKeywordMenuBtn" aria-haspopup="true" aria-expanded="false" onclick="icToggleSystemsMenu('keyword', event)">Systems <span class="ic-sys-caret" aria-hidden="true">&#9662;</span></button>
+                  <div class="ic-sys-menu" id="icCombinedKeywordMenu" hidden>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedKeywordFilterAll" checked onchange="icToggleCombinedKeywordAll(this.checked)"> All Results <span class="explorer-filter-count" id="icCombinedKeywordFilterCountAll">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedKeywordFilterUsSic" checked onchange="icToggleCombinedKeywordSource('US SIC', this.checked)"> US SIC <span class="explorer-filter-count" id="icCombinedKeywordFilterCountUsSic">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedKeywordFilterJapanSic" checked onchange="icToggleCombinedKeywordSource('Japan SIC', this.checked)"> Japan SIC <span class="explorer-filter-count" id="icCombinedKeywordFilterCountJapanSic">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedKeywordFilterEuNace" checked onchange="icToggleCombinedKeywordSource('EU NACE', this.checked)"> EU NACE <span class="explorer-filter-count" id="icCombinedKeywordFilterCountEuNace">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedKeywordFilterIsic" checked onchange="icToggleCombinedKeywordSource('ISIC', this.checked)"> ISIC <span class="explorer-filter-count" id="icCombinedKeywordFilterCountIsic">0</span></label>
+                  </div>
+                </div>
+                <div class="ic-sys-chips" id="icCombinedKeywordChips"></div>
+              </div>
+              <p class="sic-sim-status" id="icCombinedKeywordStatus" style="display:none"></p>
+              <div class="ic-combined-column-results" id="icCombinedKeywordResults"></div>
+            </div>
+            <div class="ic-combined-column">
+              <h3 class="ic-combined-column-title">Semantic</h3>
+              <div class="ic-combined-column-filters">
+                <div class="ic-sys-dropdown">
+                  <button type="button" class="ic-sys-dropdown-btn" id="icCombinedSemanticMenuBtn" aria-haspopup="true" aria-expanded="false" onclick="icToggleSystemsMenu('semantic', event)">Systems <span class="ic-sys-caret" aria-hidden="true">&#9662;</span></button>
+                  <div class="ic-sys-menu" id="icCombinedSemanticMenu" hidden>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedSemanticFilterAll" checked onchange="icToggleCombinedSemanticAll(this.checked)"> All Results <span class="explorer-filter-count" id="icCombinedSemanticFilterCountAll">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedSemanticFilterUsSic" checked onchange="icToggleCombinedSemanticSource('US SIC', this.checked)"> US SIC <span class="explorer-filter-count" id="icCombinedSemanticFilterCountUsSic">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedSemanticFilterJapanSic" checked onchange="icToggleCombinedSemanticSource('Japan SIC', this.checked)"> Japan SIC <span class="explorer-filter-count" id="icCombinedSemanticFilterCountJapanSic">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedSemanticFilterEuNace" checked onchange="icToggleCombinedSemanticSource('EU NACE', this.checked)"> EU NACE <span class="explorer-filter-count" id="icCombinedSemanticFilterCountEuNace">0</span></label>
+                    <label class="ic-combined-column-filter"><input type="checkbox" id="icCombinedSemanticFilterIsic" checked onchange="icToggleCombinedSemanticSource('ISIC', this.checked)"> ISIC <span class="explorer-filter-count" id="icCombinedSemanticFilterCountIsic">0</span></label>
+                  </div>
+                </div>
+                <div class="ic-sys-chips" id="icCombinedSemanticChips"></div>
+              </div>
+              <p class="sic-sim-status" id="icCombinedSemanticStatus" style="display:none"></p>
+              <div class="ic-combined-column-results" id="icCombinedSemanticResults"></div>
+            </div>
+          </div>
+        </div>
+        <!-- /Combined mode -->
+        </div>
+      </div>
+
+      <!-- EDGAR Explorer Tab Content -->
+      <!-- Company Explorer: Merged. One company record built from EDGAR and
+           Wikipedia together, from /V4.0/global/company/merged/firmographics.
+           Wikipedia is looked up first; EDGAR is matched by the CIK Wikipedia
+           reports (or, without one, a careful whole-word name match - see
+           docs/plans/v4-server-prototype.md 8.2). Same shell as the EDGAR and
+           Wikipedia pages. -->
+      <div id="MergedCompany" class="explorer-pagecontent ic-explorer-page" style="display: none;">
+        <div class="ic-explorer-shell">
+          <div class="ic-mode-tabs-row">
+            <div class="home-search-tabs ic-mode-tabs">
+              <button type="button" class="home-search-tab active" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('edgar')">EDGAR</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+            </div>
+          </div>
+          <div id="companyMergedPanel" class="ic-mode-panel">
+            <div class="explorer-results-layout">
+              <div class="explorer-search-wrapper">
+                <div class="explorer-top-container">
+                  <form id="mergedSearchForm">
+                    <div class="explorer-input-group">
+                      <input type="text" id="mergedQuery" class="dns-textfield explorer-input" placeholder="Company name, e.g. Apple Inc., International Business Machines, Tesla..." autocomplete="off" required>
+                      <button type="submit" id="mergedSearchBtn" class="dns-button explorer-button">Search</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <div class="explorer-content-wrapper">
+                <div class="explorer-results-filters">
+                  <div class="explorer-sidebar">
+                    <h3 class="explorer-sidebar-title">About this source</h3>
+                    <div class="explorer-filter-guide">
+                      <h4>Merged firmographics</h4>
+                      <ul class="explorer-classification-guide">
+                        <li><strong>Wikipedia first</strong> - the company is found on Wikipedia/Wikidata, which supplies the description, industry, location and listings.</li>
+                        <li><strong>EDGAR by CIK</strong> - when Wikipedia reports the company's CIK, its SEC filings are matched on that exact number.</li>
+                        <li><strong>No CIK?</strong> - EDGAR is matched on the name only when that identifies a single company; otherwise you are told why it was left out.</li>
+                        <li><strong>Use the full name</strong> - "Apple Inc." rather than "Apple".</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div class="explorer-results-area">
+                    <div class="explorer-header-section">
+                      <div class="results-status">
+                        <div class="status-top">
+                          <span class="status-title">Results</span>
+                          <span class="status-count" id="mergedCount">No results</span>
+                        </div>
+                      </div>
+                      <p class="sic-sim-status" id="mergedStatus" style="display:none"></p>
+                    </div>
+
+                    <div class="explorer-container-wrapper">
+                      <div class="explorer-results-container">
+                        <p class="explorer-empty-hint" id="mergedEmptyHint">Look up a company to see its EDGAR filings and Wikipedia profile together.</p>
+                        <div class="explorer-result-card" id="mergedResultCard" style="display: none;">
+                          <div class="explorer-result-header">
+                            <div class="explorer-result-heading">
+                              <span class="explorer-result-code" id="mergedName"></span>
+                              <div class="ic-sys-chips" id="mergedSources"></div>
+                            </div>
+                            <div class="explorer-result-header-middle"><span class="explorer-engine-badge engine-both" id="mergedMatch"></span></div>
+                            <div class="explorer-result-actions">
+                              <button class="explorer-view-json-btn" id="mergedViewJsonBtn">View JSON</button>
+                            </div>
+                          </div>
+                          <p class="ic-hybrid-note" id="mergedNote" hidden></p>
+                          <!-- Key facts, filings and links first; the Wikipedia description
+                               is long and would otherwise push them below the fold. -->
+                          <div class="meta-grid" id="mergedMetaGrid"></div>
+                          <div class="edgar-recent-forms-compact" id="mergedFormsRow">
+                            <span class="edgar-forms-label">Recent Filings:</span>
+                            <div class="edgar-pill-group" id="mergedForms"></div>
+                          </div>
+                          <div class="edgar-quick-links" id="mergedLinks"></div>
+                          <p class="explorer-result-description merged-description" id="mergedDescription"></p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Company Explorer: EDGAR. Same shell as the Industry Classification
+           Explorer (mode tab row, pinned bare search bar, sidebar + results,
+           no page heading or intro) - the earlier version had its own heading,
+           intro and a centered pre-search card, and a different boxed layout
+           once results arrived. The Wikipedia page below shares this shell. -->
+      <div id="EdgarExplorer" class="explorer-pagecontent ic-explorer-page" x-data="createEdgarExplorerComponent()" @load="init()" style="display: none;">
+        <div class="ic-explorer-shell">
+          <div class="ic-mode-tabs-row">
+            <div class="home-search-tabs ic-mode-tabs">
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
+              <button type="button" class="home-search-tab active" onclick="showCompanyMode('edgar')">EDGAR</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+            </div>
+          </div>
+          <div id="companyEdgarPanel" class="ic-mode-panel">
+        <div id="edgar-results-layout" class="explorer-results-layout">
+          <div class="explorer-search-wrapper">
+            <div class="explorer-top-container">
+              <form id="edgar-search-form-top" @submit.prevent="performSearch()">
+                <div class="explorer-input-group">
+                  <input type="text" x-model="searchQuery" id="edgar-search-input-top" class="dns-textfield explorer-input" placeholder="Company name or CIK, e.g. Apple Inc. or 0000320193" autocomplete="off" required>
+                  <button type="submit" class="dns-button explorer-button" :disabled="isSearching">
+                    <i class="explorer-action-icon" x-show="!isSearching"></i>
+                    <i class="spinner-icon" x-show="isSearching"></i>
+                    <span x-text="isSearching ? 'Searching...' : 'Search'"></span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="explorer-content-wrapper">
+            <div class="explorer-results-filters">
+              <div class="explorer-sidebar">
+                <h3 class="explorer-sidebar-title">Filter Results</h3>
+                <div class="explorer-filter-options">
+                  <div class="explorer-filter-checkbox">
+                    <label><input type="checkbox" x-model="filters.has10K" @change="applyFilters()"> Has 10‑K</label>
+                  </div>
+                  <div class="explorer-filter-checkbox">
+                    <label><input type="checkbox" x-model="filters.recent10Q" @change="applyFilters()"> Recent 10‑Q (≤ 90 days)</label>
+                  </div>
+                </div>
+                
+                <div class="explorer-filter-options" x-show="availableDivisions.length > 0">
+                  <div class="explorer-filter-label">Division:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <select x-model="filters.division" @change="applyFilters()" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background-color: #0F0D0E; border: 1px solid #3c3b3b; color: #1696c8; border-radius: 0.3rem;">
+                      <option value="">-- All Divisions --</option>
+                      <template x-for="div in availableDivisions" :key="div">
+                        <option :value="div" x-text="div"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                
+                <div class="explorer-filter-options" x-show="availableFiscalYearEnds.length > 0">
+                  <div class="explorer-filter-label">Fiscal Year End:</div>
+                  <div class="explorer-filter-checkboxes">
+                    <select x-model="filters.fiscalYearEnd" @change="applyFilters()" style="width: 100%; padding: 0.5rem; margin-bottom: 1rem; background-color: #0F0D0E; border: 1px solid #3c3b3b; color: #1696c8; border-radius: 0.3rem;">
+                      <option value="">-- All Fiscal Year Ends --</option>
+                      <template x-for="fye in availableFiscalYearEnds" :key="fye">
+                        <option :value="fye" x-text="fye"></option>
+                      </template>
+                    </select>
+                  </div>
+                </div>
+                <div class="explorer-filter-guide">
+                  <h4>About Filters</h4>
+                  <ul class="explorer-classification-guide">
+                    <li><strong>Has 10‑K</strong> — shows annual report filings</li>
+                    <li><strong>Recent 10‑Q</strong> — shows quarterly reports filed within 90 days</li>
+                  </ul>
+                </div>
+              </div>
+              <div class="explorer-results-area">
+                <div class="explorer-header-section">
+                  <div class="results-status">
+                    <div class="status-top">
+                      <span class="status-title">Results</span>
+                      <span class="status-count" x-text="getResultsHeadline()"></span>
+                    </div>
+                    <div class="status-meta">
+                      <span x-text="getResultsRangeLabel()"></span>
+                      <span class="status-dot">•</span>
+                      <span x-text="getActiveFiltersLabel()"></span>
+                    </div>
+                  </div>
+                  <div x-show="errorMessage" class="explorer-error-message" x-text="errorMessage"></div>
+                </div>
+
+                <div class="explorer-container-wrapper">
+                  <div id="edgar-search-results" class="explorer-results-container">
+                    <p class="explorer-empty-hint" x-show="!hasResults && !isSearching && !errorMessage">Search SEC EDGAR filings by company name or CIK. Use the filters to focus on annual reports (10-K) or recent quarterly reports (10-Q).</p>
+                    <template x-if="hasResults && getCurrentPageResults().length > 0">
+                      <div>
+                        <template x-for="item in getCurrentPageResults()" :key="item.cik">
+                          <div class="explorer-result-card">
+                            <!-- Company Header Line -->
+                            <div class="edgar-company-header">
+                              <div class="edgar-company-info">
+                                <strong>Company:</strong>
+                                <span x-text="item.companyName"></span>
+                                <span class="edgar-meta">CIK: <span x-text="item.cik"></span></span>
+                                <span class="edgar-meta">Total Filings: <span x-text="item.totalForms"></span></span>
+                              </div>
+                              <button class="explorer-view-json-btn" @click="viewItemJson(item)" title="View JSON">View JSON</button>
+                            </div>
+
+                            <!-- Top 3 Recent Forms as Pills -->
+                            <div class="edgar-recent-forms-compact">
+                              <span class="edgar-forms-label">Recent Forms:</span>
+                              <div class="edgar-pill-group">
+                                <template x-if="item.recentForms.length > 0">
+                                  <template x-for="form in item.recentForms.slice(0, 3)" :key="form.key">
+                                    <a :href="form.url" target="_blank" class="edgar-pill">
+                                      <i class="external-link-icon"></i>
+                                      <span x-text="form.type + ' ' + form.date"></span>
+                                    </a>
+                                  </template>
+                                </template>
+                                <template x-if="item.recentForms.length === 0">
+                                  <span style="color: #888; font-size: 0.9em;">No filings in database</span>
+                                </template>
+                              </div>
+                            </div>
+
+                            <!-- Quick Action Links -->
+                            <div class="edgar-quick-links">
+                              <a :href="item.edgarUrls.browse" target="_blank" class="edgar-quick-link" title="Browse all filings for this company">Browse EDGAR</a>
+                              <a :href="item.edgarUrls.issuerTransactions" target="_blank" class="edgar-quick-link" title="View insider transactions filed by issuer">Issuer Transactions</a>
+                              <a :href="item.edgarUrls.ownerTransactions" target="_blank" class="edgar-quick-link" title="View insider transactions by beneficial owner">Insider Trades</a>
+                            </div>
+                          </div>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+                
+                <div class="pagination-controls" x-show="hasResults && filteredResults.length">
+                  <button class="pagination-btn" @click="firstPage()" :disabled="currentPage === 1" aria-label="First page">⏮</button>
+                  <button class="pagination-btn" @click="prevPage()" :disabled="currentPage === 1" aria-label="Previous page">◀</button>
+                  <template x-for="page in getVisiblePages()" :key="'edgar-page-' + page">
+                    <button class="pagination-btn" :class="{ 'active': page === currentPage }" @click="goToPage(page)" x-text="page"></button>
+                  </template>
+                  <button class="pagination-btn" @click="nextPage()" :disabled="currentPage === totalPages" aria-label="Next page">▶</button>
+                  <button class="pagination-btn" @click="lastPage()" :disabled="currentPage === totalPages" aria-label="Last page">⏭</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIC Similarity Search Tab Content - ported forward from
+           experiments/ic-similarity-service (docs/plans/company-dns-
+           ux.md sec4/sec10.2) as a starting point to iterate from, not
+           a finished design. Plain vanilla JS (sic-similarity.js),
+           same as the source - no Alpine component needed for this
+           experience's amount of state. -->
+      <div id="SicSimilarity" class="explorer-pagecontent sic-sim-panel" style="display: none;">
+        <div class="sic-sim-wrap">
+          <h1>SIC Similarity Search</h1>
+          <div class="sic-sim-subtitle">
+            Semantic search over US SIC codes using <code>all-MiniLM-L6-v2</code>
+            (<a href="https://github.com/mediumroast/company_dns/blob/main/docs/plans/go-duckdb-rewrite.md" target="_blank">go-duckdb-rewrite.md &sect;7.8</a>'s
+            model decision). Ported into the app shell from
+            <code>experiments/ic-similarity-service</code> - a spike, not
+            yet the settled design (see
+            <code>docs/plans/company-dns-ux.md</code> &sect;10.2).
+          </div>
+
+          <div class="sic-sim-tabs">
+            <button type="button" class="sic-sim-tab active" id="simTabSimple" data-mode="simple">Simple</button>
+            <button type="button" class="sic-sim-tab" id="simTabDetailed" data-mode="detailed">Detailed</button>
+          </div>
+
+          <div class="sic-sim-input-panel" id="simPanelSimple">
+            <input type="text" id="simQuerySimple" placeholder="e.g. growing wheat, software company, oil drilling...">
+          </div>
+
+          <div class="sic-sim-input-panel" id="simPanelDetailed" hidden>
+            <textarea id="simQueryDetailed" placeholder="Paste a longer description here - a company description, a fuller phrase, etc."></textarea>
+          </div>
+
+          <!-- Live, input-layer truncation check - fires as the user
+               types, before they search (company-dns-ux.md sec4: "tell
+               the user what's about to happen, not what already
+               happened"). Backed by the real
+               /V4.0/na/sic/similarity-check endpoint (real tokenizer,
+               not an estimate). -->
+          <div class="sic-sim-truncation-warning" id="simTruncationWarning" style="display:none"></div>
+          <div class="sic-sim-token-count-note" id="simTokenCountNote" style="display:none"></div>
+
+          <div class="sic-sim-controls-row">
+            <label for="simK">results:</label>
+            <input type="number" id="simK" value="10" min="1" max="50" title="how many results">
+            <button id="simSearchBtn" class="sic-sim-search-btn">Search</button>
+          </div>
+
+          <div class="sic-sim-status" id="simStatus"></div>
+
+          <table class="sic-sim-results" id="simResults" style="display:none">
+            <thead>
+              <tr>
+                <th class="sic-sim-rank">#</th>
+                <th class="sic-sim-cell">similarity</th>
+                <th>classification path</th>
+              </tr>
+            </thead>
+            <tbody id="simResultsBody"></tbody>
+          </table>
+          <div class="sic-sim-calibration-note" id="simCalibrationNote" style="display:none">
+            Match labels are calibrated against this corpus's own results, not a raw 0-100%
+            scale (hover a result's percentage for the exact score). See
+            <code>docs/plans/ic-similarity-search-poc.md</code> &sect;5.
+          </div>
+        </div>
+      </div>
+
+      <!-- Wikipedia company lookup - new, backing the Company panel's
+           Wikipedia mode (docs/plans/company-dns-ux.md sec10.1). No
+           dedicated top-level tab of its own (centralized search, per
+           direct feedback) - reached only from Home. Reuses the
+           existing .explorer-result-card/.meta-grid classes already
+           styled for EDGAR/Industry results instead of introducing a
+           parallel result-card design. -->
+      <div id="WikipediaResults" class="explorer-pagecontent ic-explorer-page" style="display: none;">
+        <div class="ic-explorer-shell">
+          <div class="ic-mode-tabs-row">
+            <div class="home-search-tabs ic-mode-tabs">
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('edgar')">EDGAR</button>
+              <button type="button" class="home-search-tab active" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+            </div>
+          </div>
+          <div id="companyWikiPanel" class="ic-mode-panel">
+            <div class="explorer-results-layout">
+              <!-- Search again from here instead of going back to Home. Filled
+                   with the current query by wikipedia-lookup.js whenever a
+                   search runs, including one started from Home. -->
+              <div class="explorer-search-wrapper">
+                <div class="explorer-top-container">
+                  <form id="wikiSearchForm">
+                    <div class="explorer-input-group">
+                      <input type="text" id="wikiQuery" class="dns-textfield explorer-input" placeholder="Company name, e.g. Apple Inc., IBM, Tesla..." autocomplete="off" required>
+                      <button type="submit" id="wikiSearchBtn" class="dns-button explorer-button">Search</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
+              <div class="explorer-content-wrapper">
+                <div class="explorer-results-filters">
+                  <div class="explorer-sidebar">
+                    <h3 class="explorer-sidebar-title">About this source</h3>
+                    <div class="explorer-filter-guide">
+                      <h4>Wikipedia / Wikidata</h4>
+                      <ul class="explorer-classification-guide">
+                        <li><strong>Best match</strong> - use the company's full name, e.g. "Apple Inc." rather than "Apple".</li>
+                        <li><strong>What you get</strong> - description, industry, location, listings and, when Wikidata has it, the CIK.</li>
+                        <li><strong>Need filings?</strong> - use the EDGAR tab with the company name or CIK.</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div class="explorer-results-area">
+                    <div class="explorer-header-section">
+                      <div class="results-status">
+                        <div class="status-top">
+                          <span class="status-title">Results</span>
+                          <span class="status-count" id="wikiCount">No results</span>
+                        </div>
+                      </div>
+                      <p class="sic-sim-status" id="wikiStatus" style="display:none"></p>
+                    </div>
+
+                    <div class="explorer-container-wrapper">
+                      <div class="explorer-results-container">
+                        <p class="explorer-empty-hint" id="wikiEmptyHint">Look up a company on Wikipedia by name.</p>
+                        <div class="explorer-result-card" id="wikiResultCard" style="display: none;">
+                          <div class="explorer-result-header">
+                            <div class="explorer-result-heading">
+                              <span class="explorer-result-code" id="wikiName"></span>
+                              <span class="explorer-source-pill" id="wikiType"></span>
+                            </div>
+                            <div class="explorer-result-actions">
+                              <button class="explorer-view-json-btn" id="wikiViewJsonBtn">View JSON</button>
+                            </div>
+                          </div>
+                          <p class="explorer-result-description" id="wikiDescription"></p>
+                          <div class="meta-grid" id="wikiMetaGrid"></div>
+                          <p><a id="wikiUrl" href="#" target="_blank" rel="noopener"></a></p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Fixed footer section -->
+    <footer class="page-footer">
+      <p class="copyright">&copy; 2026 Mediumroast. All rights reserved.</p>
+      <span class="footer-sep">&middot;</span>
+      <a href="http://www.apache.org/licenses/" target="_blank" class="footer-license-link">Apache 2.0 License</a>
+    </footer>
+  </div>
+
+  <!-- Feather Icons local script -->
+  <script src="/static/js/feather.min.js"></script>
+  <script>
+    // Update the window.onload function
+    window.onload = function () {
+      console.log("Window loaded, initializing application...");
+
+      console.log("Setting initial tab state");
+
+      // Initialize the main tab (Home) - centralized search page.
+      // Skipped when a deep-link query param (?q=...) is present:
+      // GlobalSearch's own Alpine init() (which runs earlier, on
+      // DOMContentLoaded via the deferred Alpine script - before this
+      // window.onload/`load`-event handler fires) already detected it
+      // and switched to the GlobalSearch tab itself so the results it
+      // silently ran would actually be visible. Calling
+      // showContentTab('Home') unconditionally here was clobbering
+      // that back to Home every time, after the search had already
+      // run - exactly the "search works but the wrong tab is shown"
+      // bug this was for.
+      if (!new URLSearchParams(window.location.search).get('q')) {
+        showContentTab('Home');
+      }
+
+      console.log("Application initialization complete");
+
+      // Replace any Feather icons if present
+      try {
+        if (window.feather && typeof feather.replace === 'function') {
+          feather.replace();
+        }
+      } catch (e) {
+        console.warn('Feather icon replacement failed:', e);
+      }
+    }
+  </script>
+</body>
+
+</html>

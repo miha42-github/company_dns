@@ -111,7 +111,10 @@ fn string_col<'a>(
         .unwrap_or_else(|| panic!("column {name} is not LargeStringArray"))
 }
 
-fn format_float_array_literal(values: &[f32]) -> String {
+/// `pub(crate)`, not private - reused by `global.rs`'s semantic-global
+/// search, which needs the same query-vector-as-SQL-literal encoding
+/// across every registered system's table, not just `sic_data`.
+pub(crate) fn format_float_array_literal(values: &[f32]) -> String {
     let parts: Vec<String> = values.iter().map(|v| format!("{v}")).collect();
     format!("[{}]", parts.join(","))
 }

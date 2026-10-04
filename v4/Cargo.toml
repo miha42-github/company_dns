@@ -28,8 +28,38 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
-axum = "0.7"
-tower-http = { version = "0.6", features = ["fs", "cors"] }
+# Upgraded 0.7 -> 0.8 (docs/plans/v4-openapi-docs.md sec2): a
+# prerequisite for utoipa-axum/utoipa-swagger-ui/utoipa-redoc, which all
+# require axum ^0.8.4. Checked the real migration surface before
+# upgrading rather than assuming risk: only the route-path syntax
+# (:param -> {param}) and nothing else in axum 0.8's breaking-changes
+# list applies to this codebase's actual usage (Router/State/Path/
+# Query/get/IntoResponse/Json/CorsLayer/axum::serve only) - v4 is
+# pre-release, so taking this now is fine.
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors", "limit", "timeout", "trace", "set-header"] }
+utoipa = { version = "6", features = ["axum_extras"] }
+utoipa-axum = "0.3"
+utoipa-swagger-ui = { version = "10", features = ["axum"] }
+utoipa-redoc = { version = "7", features = ["axum"] }
+# docs/plans/v4-security-hardening.md sec2/sec4: rate limiting
+# (tower_governor's GovernorLayer confirmed working, sec4.1, but the
+# actual tiered/bypass design uses governor's RateLimiter::keyed
+# directly - sec3.2's "resolved... option (b)"), and the sec3.5 rolling
+# shared-secret User-Agent (HMAC-SHA256 over a UTC date+hour salt).
+tower_governor = "0.8"
+governor = "0.10"
+sha2 = "0.11"
+hmac = "0.13"
+# docs/plans/v4-dynamic-log-level.md sec3/sec4: real structured logging
+# (replacing println!/eprintln!, and giving TraceLayer's own events -
+# already generated, previously silently dropped - somewhere to go),
+# plus a live-reloadable level (tracing_subscriber::reload, confirmed
+# in experiments/dynamic-log-level-spike/ to need no separate cargo
+# feature beyond env-filter's own dependency chain).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Promoted from experiments/wikipedia-spike/ (docs/plans/
 # v4-server-prototype.md sec8.1): the real Wikipedia/Wikidata HTTP
 # client in company-dns-wikipedia. Deliberately raw reqwest, not a

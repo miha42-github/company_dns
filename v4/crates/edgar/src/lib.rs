@@ -1,6 +1,8 @@
 pub mod catalog;
 pub mod client;
+pub mod data_dir;
 pub mod firmographics;
+pub mod periods;
 
 pub use catalog::{CatalogEntry, EdgarCatalog, FormEntry, GroupedCompany};
 pub use client::EdgarClient;

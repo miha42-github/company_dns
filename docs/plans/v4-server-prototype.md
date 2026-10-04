@@ -169,17 +169,20 @@ pattern, generalized from a one-off test into a real ingest step:
   this prototype's — it needs *a* real catalog to serve V3-parity
   endpoints against, not the complete one.
 - **Decided (2026-09-28): catalog freshness is a build-time concern,
-  not a runtime one.** The real service's refresh story is a GitHub
-  Actions workflow that rebuilds the image monthly with a freshly
-  ingested catalog baked in — the same shape this ingest step already
-  is (§4's ingest binary, run once at build time, `.feather` written to
-  `./tmp` and packaged into the image), just on a schedule rather than
-  invoked manually for this prototype. **This means the server itself
-  never needs to know about refreshing** — no cron, no background
-  re-ingest job, no "is the catalog stale" logic inside the running
-  process. Out of scope for this prototype specifically (no CI workflow
-  being built here, just the ingest step the workflow would eventually
-  call), but no longer an open question about *how* it would work.
+  not a runtime one. Revised (2026-10-04): quarterly, over a rolling two-year
+  window.** The real service's refresh story is a scheduled GitHub Actions
+  workflow that rebuilds the image with a freshly ingested catalog baked in
+  (`.feather` written to the data directory and packaged into the image).
+  It was first planned monthly over one quarter; it is now **quarterly**
+  (the first day of January, April, July and October), and the ingest covers
+  **the last two years of completed quarters (8)**, so the catalog is a rolling
+  window rebuilt from scratch each time. `ingest-edgar` takes `--years N`,
+  `--from`/`--to` quarters or the original `<year> <quarter>`, and defaults to
+  that two-year window (`docs/plans/v4-deployment.md` §3.2.2). **The server
+  itself still never needs to know about refreshing** - no cron, no background
+  re-ingest job, no "is the catalog stale" logic inside the running process.
+  The workflow itself is not built yet (nothing here depends on it); the
+  ingest step it calls is.
 - **EDGAR spillover** (live firmographics for CIKs not in the catalog,
   or a catalog entry that's gone stale) is `edgar-cache-spike`'s
   cache-on-top-of-`edgarkit` pattern, wired directly into the `edgar`
@@ -635,18 +638,66 @@ the Wikipedia data from the response entirely. `merge` now takes
 `wikipedia: Result<Value, String>` and genuinely includes the data on
 success — verified live: `.../merged/firmographics/International%20
 Business%20Machines` returns `"source": "edgar+wikipedia"` with both
-`edgar` and `wikipedia` keys actually populated; `.../merged/
-firmographics/IBM` (a name EDGAR's fuzzy catalog match misses, a
-pre-existing, separate, unrelated limitation) correctly falls back to
-`"source": "wikipedia-only"` with real Wikipedia data still present.
+`edgar` and `wikipedia` keys actually populated; `.../merged/firmographics/IBM` (a name EDGAR's name match missed) fell back to
+`"source": "wikipedia-only"` with real Wikipedia data still present - that
+miss was fixed on 2026-10-04, below.
+
+**Fixed (2026-10-04): the EDGAR side is now matched by CIK, as V3 does.**
+V3's `merge_data` takes the CIK out of the Wikipedia record and asks EDGAR for
+exactly that company. V4 had instead been running `ILIKE '%name%'` over the
+catalog, which both merged unrelated companies in ("Apple" returned "PINEAPPLE
+EXPRESS CANNABIS Co" as its EDGAR match) and missed real ones whose EDGAR name
+differs from the query ("IBM" has no "IBM" in "INTERNATIONAL BUSINESS MACHINES
+CORP"). The endpoint (`main.rs`, `merged_firmographics_impl`) now:
+
+1. looks Wikipedia up first;
+2. if Wikipedia reports a usable CIK, finds that company with
+   `EdgarCatalog::find_by_cik` (`"edgar_match": "cik"`);
+3. if it does not (the literal `"Unknown"`, a list of CIKs, or no Wikipedia
+   record at all) falls back to the name, but only whole leading words
+   (`"apple"` matches `"APPLE INC"`, never `"PINEAPPLE ..."`) and only when that
+   picks out a single company (`"edgar_match": "name"`); otherwise the EDGAR
+   side is left out and the `note` says why ("3 EDGAR companies match this
+   name and Wikipedia gave no CIK to choose between them; use a fuller name or
+   the company's CIK.", "Wikipedia reports CIK N, but the loaded EDGAR catalog
+   has no filings for it.", "No EDGAR catalog is loaded.").
+
+`company-dns-firmographics` exports `cik_from_wikipedia` and `name_matches`
+with unit tests; `merge` takes an `EdgarLookup` describing how the EDGAR side
+was found. Live: IBM, Microsoft, Tesla, Nike and "Apple Inc." now return
+`edgar+wikipedia` matched by CIK; General Electric matches by name; "Apple" and
+"Ford" (20 EDGAR companies) return `wikipedia-only` with the explanation
+instead of a wrong merge. The response keeps its shape (`edgar` is still the
+list of catalog filing rows) plus the additive `edgar_match` field.
+
+Not done: V3's richer merge (one flat record with EDGAR's fields filling
+Wikipedia's unknowns, plus geocoding and Google URLs) - V4's merged response
+still returns the two sources side by side, as it did before this fix. The
+catalog covers one quarter of 10-x filings (`ingest-edgar`), so a company with
+a CIK but no filing in that quarter still comes back `wikipedia-only`.
+
+**Fixed (2026-10-04): "Apple, Inc." returned "API Error" in the EDGAR Explorer.**
+Two separate causes. (1) The catalog stores "Apple Inc." and V3's `LIKE
+'%name%'` (kept exactly by the §6 decision) cannot match the legal name with
+its comma, so `summary` returned a 404. `EdgarCatalog::find_by_name` now
+retries with punctuation ignored on both sides, but only when the V3-style
+match found nothing, so no result V3 would have returned changes (verified:
+"Apple" still returns the same six companies, including the mid-word
+"MAUI LAND & PINEAPPLE CO INC"). (2) The UI's `api-service.js` built its error
+from `errorData.detail`, but this server's envelope carries `message`, so every
+failed call showed "API Error"; it now shows the server's text ("No company
+found for [Zzzz Nonexistent]"). Unit tests in `crates/edgar/src/catalog.rs`
+run both match paths against a small in-memory catalog.
 
 ## 9. UX: explicitly deferred
 
-No `html/`, no web UI, for this prototype. JSON API only. An
-OpenAPI-equivalent discovery endpoint is worth keeping (§7's harness
-extension leans on `openapi.json` existing, the same way it already
-does for V3) but that's API introspection, not a UX decision — nothing
-here should be read as prejudging what
+No `html/`, no web UI, for this prototype. JSON API only. **The
+OpenAPI-equivalent discovery endpoint flagged here as worth keeping is
+now built** — see [`v4-openapi-docs.md`](v4-openapi-docs.md) (built
+2026-09-28): `/openapi.json`, `/docs` (Swagger UI), `/redoc` (ReDoc),
+matching V3's FastAPI routes exactly, plus `/V3.0/` backward-compat
+aliases for every resource V4 implements. This is API introspection,
+not a UX decision — nothing here should be read as prejudging what
 [`company-dns-ux.md`](company-dns-ux.md) eventually decides. That doc's
 own §7 next-step ("react to this skeleton... before it grows further")
 is still where UX work resumes, together, once this prototype gives us
@@ -662,10 +713,10 @@ something real to design a UX around rather than a hypothetical one.
 - ~~§6's matching-semantics decision...~~ **Decided (2026-09-28, §6)**:
   V4 matches V3's `LIKE` behavior exactly; anything more sophisticated
   deferred until additional company data justifies it.
-- ~~EDGAR catalog refresh policy...~~ **Decided (2026-09-28, §4)**: a
-  monthly GitHub Actions workflow rebuilds the image with a freshly
-  ingested catalog baked in — a build-time concern, not something the
-  running server needs any logic for.
+- ~~EDGAR catalog refresh policy...~~ **Decided (2026-09-28, §4), revised
+  2026-10-04**: a *quarterly* GitHub Actions workflow rebuilds the image with
+  a freshly ingested rolling two-year catalog baked in - a build-time concern,
+  not something the running server needs any logic for.
 - **Response envelope shape — decided for V3 endpoints, deferred for
   V4-only ones (2026-09-28).** V3's `{code, message, module, data,
   dependencies}` envelope (`go-duckdb-rewrite.md` §2) **must stay
