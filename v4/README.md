@@ -82,9 +82,7 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 `SIC_DATA_PATH`, `JAPAN_SIC_DATA_PATH`, `EU_NACE_DATA_PATH`, `ISIC_DATA_PATH`,
 `EDGAR_CATALOG_PATH`, plus `SIC_MODELS`
 (`all_minilm_l6_v2` default, per `go-duckdb-rewrite.md` §7.8), `PORT`
-(default `4000`), `MEDIUMROAST_SHARED_SECRET` (see "## Security" below
-— unset disables mediumroast.io's rolling-token rate-limit bypass, it
-does not affect anything else), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
+(default `4000`), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
 "## Experimental: SQL endpoint
 
 > **Experimental.** `POST /V4.0/sql` may change or be removed without notice.
@@ -178,18 +176,16 @@ design and live-verification record:
   the gate entirely — it protects the firmographics/SIC data
   endpoints, not Kubernetes' own liveness/readiness probes or a human
   reading documentation.
-- The local dev site and mediumroast.io skip the gate entirely via a
-  trusted-`Origin` check; mediumroast.io additionally proves trust via
-  a `User-Agent` that rotates every hour
-  (`HMAC-SHA256(MEDIUMROAST_SHARED_SECRET, current UTC date+hour)`) —
-  the only signal that works for mediumroast.io's own server-to-server
-  calls, which carry no `Origin` at all. Set
-  `MEDIUMROAST_SHARED_SECRET` to enable it; unset, this bypass is
-  simply disabled (fails closed) and mediumroast.io still gets the
-  origin-based bypass. See
-  [`docs/plans/v4-deployment.md`](../docs/plans/v4-deployment.md)
-  for how that value actually gets deployed (a runtime K8s Secret, not
-  baked into the image).
+- The local dev site and mediumroast.io skip the limiter via a
+  trusted-`Origin` check. That header is set by the client, so it is a
+  convenience for browsers, not proof of identity, and it is never
+  honoured by the SQL endpoint. The earlier hourly-HMAC `User-Agent`
+  secret (`MEDIUMROAST_SHARED_SECRET`) was removed; authenticated access
+  is the profiles mechanism (HTTP Basic Auth), so far used only by the
+  experimental SQL endpoint below. Access is a ladder: no or generic
+  `User-Agent` gets the draconian tier, a self-identifying one
+  (`YourApp/1.0 (contact@example.com)`) the normal tier, and a Basic-Auth
+  profile whatever its grants allow.
 - Client IP for rate-limit keying is read from `X-Forwarded-For`
   (rightmost entry — the one Traefik itself appended, not anything a
   client could pre-populate to spoof an earlier entry), since this

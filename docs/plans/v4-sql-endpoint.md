@@ -209,6 +209,23 @@ mediumroast.io's existing rate-limit trust is expressed in the same mechanism.
 
 mediumroast.io is one profile. Open-source users define their own.
 
+### Three access levels (decided 2026-10-05)
+
+Access is a ladder, and each rung buys a better experience:
+
+| Level | Who | What they get |
+|---|---|---|
+| 1. Anonymous | no `User-Agent`, or one that fails the format check | the draconian rate-limit tier (a nudge to identify yourself) |
+| 2. Self-identifying | a valid `User-Agent` such as `YourApp/1.0 (contact@example.com)` | the normal rate-limit tier. **This existing mechanism stays**: it is how a well-behaved caller gets a better experience without any credential. |
+| 3. Authenticated | HTTP Basic Auth with a profile from the profiles file | the profile's grants: **lower or no rate limits**, and **enhanced access such as SQL over REST** |
+
+What the plan replaces is only the *secret* carried in the `User-Agent`
+(the rolling hourly HMAC, `secret_ua.rs`), because the profiles file with
+Basic Auth does that job better. The `User-Agent` format check and the
+normal/draconian tiering are unchanged. The profile's `rate_limit` grant (phase 2)
+is what moves an authenticated caller up from level 2: a higher quota, or none,
+set per profile.
+
 ### What the existing gates do and why SQL cannot reuse them
 
 The data routes are gated by a self-identifying `User-Agent`, a tiered per-IP
@@ -220,8 +237,8 @@ limiter, and two bypasses that skip the limiter (`rate_limit.rs`,
   acceptable as proof of identity for SQL**. (Worth a note in
   `v4-security-hardening.md` 3.4: today it means any caller willing to send
   that header is unlimited on every data route.)
-- **Rolling HMAC `User-Agent`**. A real credential, but being replaced by the
-  profiles mechanism below (nothing is implemented against it on the
+- **Rolling HMAC carried in the `User-Agent`**. A real credential, but being
+  replaced by the profiles mechanism below (nothing is implemented against it on the
   mediumroast.io side yet).
 
 For SQL: Origin/Referer are ignored entirely, and the route sits behind its
@@ -282,11 +299,14 @@ own gate, not the tiered limiter's bypasses.
   - Not chosen: a rolling hourly HMAC (needs custom client code, needs the raw
     secret on the server, and mainly mattered when the value sat in
     `User-Agent`), and HTTP Digest (same raw-secret problem, weak tooling).
-- **No legacy path.** mediumroast.io has nothing implemented against the old
-  hourly-HMAC `User-Agent` mechanism, so this replaces it outright: no
-  compatibility mode, `secret_ua.rs` is removed when the profiles module is
-  built, and `MEDIUMROAST_SHARED_SECRET` goes away in favour of the
-  `mediumroast.io` profile. There is one credential mechanism.
+- **No legacy secret path.** mediumroast.io has nothing implemented against the old
+  hourly-HMAC-in-`User-Agent` secret, so Basic Auth replaces that secret outright (the
+  self-identifying `User-Agent` tiering stays, see the access levels above): no
+  compatibility mode. **Done 2026-10-05:** `secret_ua.rs`, the
+  `MEDIUMROAST_SHARED_SECRET` setting and the `hmac` dependency are removed from
+  the code (the self-identifying `User-Agent` tiering and the trusted-origin check
+  are untouched, with new tests). Authenticated access is the profiles mechanism;
+  mediumroast.io becomes a profile in phase 2.
 - **Fails closed**: flag on for a feature that needs profiles (SQL) but the
   file is missing, empty or malformed means startup fails with a clear
   message. It never starts open.
@@ -348,11 +368,11 @@ logged with source IP and counted. Secrets and tokens are never logged.
   open questions. **Updated.**
 - **`v4-security-hardening.md`**: 3.5 and 3.4 notes; the profiles mechanism
   replaces 3.5: HTTP Basic Auth against hashed profile tokens becomes the single
-  credential mechanism, with no legacy User-Agent path. **Updated.**
-- **Code, when built (not now)**: a small `access` module that loads the
+  credential mechanism, with no legacy secret-in-`User-Agent` path; the self-identifying `User-Agent` tiering stays. **Updated.**
+- **Code, phase 2**: a small `access` module that loads the
   profiles file and answers "who is this request, and what are they granted";
-  the tiered limiter and the SQL handler both ask it, replacing
-  `secret_ua.rs`'s single-secret check. The origin-based trust in
+  the tiered limiter and the SQL handler both ask it (the limiter's old
+  single-secret check is already gone). The origin-based trust in
   `trusted_origin.rs` stays for browser-driven lookups for now (browsers cannot
   hold a secret); tightening it is the hardening doc's open question.
 
@@ -433,7 +453,7 @@ prod uses the same method on its 4-replica sizing.
    considered and not chosen.
 9. General solution (2026-10-05): the `<NAME>_FILE` convention applies to any
    secret env var, one profiles file serves every feature, and mediumroast.io's
-   rate-limit trust becomes a profile grant. No legacy `User-Agent` path,
+   rate-limit trust becomes a profile grant. No legacy secret-in-`User-Agent` path (the self-identifying `User-Agent` tier stays),
    because nothing depends on it yet.
 
 10. Concurrency cap (2026-10-05): kept; tried out in testing with
@@ -472,7 +492,7 @@ Decided 2026-10-05: **the endpoint first, per-profile limits afterwards.**
 **Phase 2: profiles and limits (discussed after phase 1 exists).**
 - Per-profile limit overrides, clamped by the global set (the two-set design in
   section 5a), and the `rate_limit` grant so mediumroast.io's trust moves into
-  the profiles file (replacing `secret_ua.rs`).
+  the profiles file (the old `secret_ua.rs` check is already removed).
 - `<NAME>_FILE` convention for secret env vars.
 - Deployment wiring (`v4-deployment.md` Step G): per-tier sealed profiles file
   and ConfigMap limits.

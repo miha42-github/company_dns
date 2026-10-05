@@ -269,7 +269,10 @@ env var may also be given as `<NAME>_FILE` pointing at a mounted file (so
 `MEDIUMROAST_SHARED_SECRET_FILE` too), the Docker-secrets convention.
 The profiles file holds token hashes, clients authenticate with HTTP Basic
 Auth (`v4-sql-endpoint.md` 5a), and the old `MEDIUMROAST_SHARED_SECRET` is
-replaced by the `mediumroast.io` profile (nothing depends on it yet).
+**removed from the code (2026-10-05)**, replaced by the `mediumroast.io`
+profile in phase 2 (nothing depended on it). The remaining mentions of that
+secret in this document (§1.3, the §2 recommendation, §3.4, step 8) describe the
+earlier design and are superseded: provision the profiles file instead.
 
 ## 3. Design
 

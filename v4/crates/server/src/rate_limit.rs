@@ -1,9 +1,13 @@
 //! Tiered rate limiting - `docs/plans/v4-security-hardening.md` §3.2,
 //! built on `experiments/rate-limit-spike/`'s proven design: two
 //! independent `governor` keyed rate limiters (one per tier) selected
-//! per-request by `user_agent::classify`, checked only after the
-//! trusted-origin (§3.4) and rolling shared-secret (§3.5) bypasses
-//! have both had a chance to skip the limiter entirely.
+//! per-request by `user_agent::classify` (a self-identifying
+//! `User-Agent` gets the normal tier, anything else the draconian one),
+//! checked only after the trusted-origin bypass (§3.4) has had a chance
+//! to skip the limiter. The rolling shared-secret `User-Agent` bypass
+//! (§3.5) was removed 2026-10-05: authenticated callers are the profiles
+//! mechanism's job (`docs/plans/v4-sql-endpoint.md` §5a), not a secret
+//! hidden in the `User-Agent`.
 //!
 //! `tower_governor::GovernorLayer` is deliberately NOT used here - it
 //! only supports one fixed quota per layer instance, with no
@@ -27,7 +31,6 @@ use axum::{
 use governor::{clock::Clock, DefaultKeyedRateLimiter, Quota, RateLimiter};
 
 use crate::envelope::too_many_requests;
-use crate::secret_ua;
 use crate::trusted_origin;
 use crate::user_agent::{classify, Tier};
 
@@ -68,15 +71,10 @@ fn per_pod(aggregate: u32) -> NonZeroU32 {
 pub struct TieredLimiterState {
     normal: Arc<DefaultKeyedRateLimiter<IpAddr>>,
     draconian: Arc<DefaultKeyedRateLimiter<IpAddr>>,
-    /// §3.5: the raw shared secret used to recompute the expected
-    /// rolling HMAC token each request - `None` disables the check
-    /// entirely (fails closed: no configured secret means no bypass,
-    /// never "no check needed").
-    trusted_ua_secret: Option<String>,
 }
 
 impl TieredLimiterState {
-    pub fn new(trusted_ua_secret: Option<String>) -> Self {
+    pub fn new() -> Self {
         let normal_quota =
             Quota::per_minute(per_pod(NORMAL_QUOTA_PER_MINUTE)).allow_burst(per_pod(NORMAL_BURST));
         let draconian_quota = Quota::per_minute(per_pod(DRACONIAN_QUOTA_PER_MINUTE))
@@ -84,7 +82,6 @@ impl TieredLimiterState {
         Self {
             normal: Arc::new(RateLimiter::keyed(normal_quota)),
             draconian: Arc::new(RateLimiter::keyed(draconian_quota)),
-            trusted_ua_secret,
         }
     }
 
@@ -138,11 +135,9 @@ pub(crate) fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
     peer.ip()
 }
 
-/// §3.4/§3.5 first: a trusted first-party origin (local dev site,
-/// mediumroast.io) OR a matching rolling shared-secret `User-Agent`
-/// (mediumroast.io only, additive - covers server-to-server calls with
-/// no `Origin`/`Referer` at all) skips the limiter entirely, before
-/// either tier's quota is ever touched. Otherwise picks a tier from
+/// §3.4 first: a trusted first-party origin (local dev site,
+/// mediumroast.io) skips the limiter entirely, before either tier's
+/// quota is ever touched. Otherwise picks a tier from
 /// the request's `User-Agent` header, checks the matching keyed
 /// limiter for the caller's IP, and either forwards the request or
 /// returns a 429 with `Retry-After`.
@@ -160,9 +155,6 @@ pub async fn tiered_rate_limit(
         .and_then(|v| v.to_str().ok());
 
     if trusted_origin::is_trusted(origin, referer) {
-        return next.run(request).await;
-    }
-    if secret_ua::is_trusted(ua, state.trusted_ua_secret.as_deref(), chrono::Utc::now()) {
         return next.run(request).await;
     }
 
@@ -183,6 +175,74 @@ pub async fn tiered_rate_limit(
                 wait.as_secs().max(1),
             )
             .into_response()
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{extract::ConnectInfo, middleware, routing::get, Router};
+    use axum::http::StatusCode;
+    use tower::ServiceExt;
+
+    fn app() -> Router {
+        Router::new()
+            .route("/x", get(|| async { "ok" }))
+            .layer(middleware::from_fn_with_state(TieredLimiterState::new(), tiered_rate_limit))
+    }
+
+    async fn hit(app: &Router, ua: Option<&str>, origin: Option<&str>) -> StatusCode {
+        let mut b = Request::builder().uri("/x");
+        if let Some(ua) = ua {
+            b = b.header(header::USER_AGENT, ua);
+        }
+        if let Some(o) = origin {
+            b = b.header(header::ORIGIN, o);
+        }
+        let mut req = b.body(Body::empty()).unwrap();
+        req.extensions_mut().insert(ConnectInfo::<SocketAddr>("10.0.0.1:1".parse().unwrap()));
+        app.clone().oneshot(req).await.unwrap().status()
+    }
+
+    #[tokio::test]
+    async fn no_user_agent_gets_the_draconian_tier() {
+        let a = app();
+        assert_eq!(hit(&a, None, None).await, StatusCode::OK);
+        assert_eq!(hit(&a, None, None).await, StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[tokio::test]
+    async fn self_identifying_user_agent_gets_the_normal_tier() {
+        let a = app();
+        let ua = Some("YourApp/1.0 (contact@example.com)");
+        // far past the draconian burst of 1: the normal tier is a separate, larger bucket
+        for i in 0..4 {
+            assert_eq!(hit(&a, ua, None).await, StatusCode::OK, "request {i}");
+        }
+    }
+
+    #[tokio::test]
+    async fn the_two_tiers_are_independent_buckets() {
+        let a = app();
+        assert_eq!(hit(&a, None, None).await, StatusCode::OK);
+        assert_eq!(hit(&a, None, None).await, StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(hit(&a, Some("YourApp/1.0 (contact@example.com)"), None).await, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn an_hmac_looking_user_agent_is_no_longer_a_bypass() {
+        let a = app();
+        let hex = "a".repeat(64);
+        assert_eq!(hit(&a, Some(&hex), None).await, StatusCode::OK);
+        assert_eq!(hit(&a, Some(&hex), None).await, StatusCode::TOO_MANY_REQUESTS, "treated as an ordinary draconian caller");
+    }
+
+    #[tokio::test]
+    async fn trusted_origin_still_skips_the_limiter() {
+        let a = app();
+        for _ in 0..30 {
+            assert_eq!(hit(&a, None, Some("https://mediumroast.io")).await, StatusCode::OK);
         }
     }
 }

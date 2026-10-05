@@ -51,7 +51,6 @@ utoipa-redoc = { version = "7", features = ["axum"] }
 tower_governor = "0.8"
 governor = "0.10"
 sha2 = "0.11"
-hmac = "0.13"
 # docs/plans/v4-dynamic-log-level.md sec3/sec4: real structured logging
 # (replacing println!/eprintln!, and giving TraceLayer's own events -
 # already generated, previously silently dropped - somewhere to go),

@@ -307,7 +307,10 @@ single largest remaining body of work in this roadmap.
       (§0's dev-tier-first decision), the pipeline only needs to reach
       "deploy dev" to satisfy an initial release — staging/prod
       promotion can follow once dev is real and stable.
-- [ ] Distinct `MEDIUMROAST_SHARED_SECRET` SealedSecret provisioned for
+- [ ] ~~Distinct `MEDIUMROAST_SHARED_SECRET` SealedSecret~~ **superseded
+      2026-10-05: the setting was removed; a per-tier profiles file
+      (`v4-sql-endpoint.md`) replaces it, needed only if the SQL endpoint is
+      enabled.** Originally: provisioned for
       whichever environment(s) this release actually reaches (§3.4) —
       design already done in `v4-security-hardening.md` §3.5, not yet
       actually provisioned anywhere.
@@ -399,7 +402,8 @@ actually outstanding, not from the original 7-item list:
       scope, treated as a checklist item this roadmap gates on, not
       just background information.
 - [ ] **Secrets audit before anything public-facing.** Confirm
-      `MEDIUMROAST_SHARED_SECRET` is actually provisioned (§5) and that
+      the profiles file, if the SQL endpoint is enabled (formerly
+      `MEDIUMROAST_SHARED_SECRET`, removed), is actually provisioned (§5) and that
       no test/placeholder secret value from this session's own spikes
       (`experiments/rate-limit-spike/`, `experiments/dynamic-log-level-spike/`)
       ever made it anywhere near a real deployment.

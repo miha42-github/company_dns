@@ -1,7 +1,6 @@
 mod envelope;
 mod logging;
 mod rate_limit;
-mod secret_ua;
 mod sql_endpoint;
 mod trusted_origin;
 mod user_agent;
@@ -78,30 +77,6 @@ impl utoipa::Modify for SecurityAddon {
             .components
             .get_or_insert_with(Default::default)
             .add_security_scheme("basic_auth", SecurityScheme::Http(Http::new(HttpAuthScheme::Basic)));
-    }
-}
-
-/// `docs/plans/v4-security-hardening.md` §3.5/§5 step 2: unlike
-/// `experiments/rate-limit-spike/`'s convenience fallback to a fixed
-/// test secret, the real server fails closed - no configured secret
-/// means the rolling shared-secret bypass is simply disabled (every
-/// request from mediumroast.io still gets the origin-based bypass,
-/// §3.4; it just loses the second, stronger signal until this is set).
-/// `docs/plans/v4-deployment.md` covers how the real value
-/// reaches this env var in production (a K8s Secret, not baked into
-/// the image).
-fn load_shared_secret() -> Option<String> {
-    match std::env::var("MEDIUMROAST_SHARED_SECRET") {
-        Ok(secret) if !secret.trim().is_empty() => Some(secret),
-        _ => {
-            tracing::warn!(
-                "MEDIUMROAST_SHARED_SECRET not set - the rolling \
-                 shared-secret User-Agent bypass (v4-security-hardening.md §3.5) \
-                 is disabled; mediumroast.io still gets the trusted-origin \
-                 bypass (§3.4)."
-            );
-            None
-        }
     }
 }
 
@@ -246,7 +221,7 @@ async fn main() -> anyhow::Result<()> {
     // `.layer(...)` was called (`OpenApiRouter::layer` is a pass-
     // through to `axum::Router::layer`, same "layer wraps what's
     // already there, not what's merged in after" semantics).
-    let tiered_limiter_state = TieredLimiterState::new(load_shared_secret());
+    let tiered_limiter_state = TieredLimiterState::new();
     tiered_limiter_state.spawn_periodic_sweep(Duration::from_secs(5 * 60));
 
     let health_router = OpenApiRouter::new().routes(routes!(health));

@@ -32,6 +32,5 @@ tower_governor.workspace = true
 governor.workspace = true
 sha2.workspace = true
 base64.workspace = true
-hmac.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

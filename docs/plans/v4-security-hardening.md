@@ -379,11 +379,18 @@ into the bypass, the other being §3.5's secret User-Agent.
 > ([`v4-sql-endpoint.md`](v4-sql-endpoint.md) §5a) replaces this scheme with
 > one profiles file (a section per profile: a token hash and per-feature grants
 > such as rate-limit bypass and SQL), delivered as a mounted secret file, with
-> HTTP Basic Auth as the credential. Nothing on the mediumroast.io side was
-> built against the rolling User-Agent HMAC below, so there is no legacy path:
-> when the profiles module is built, `secret_ua.rs` and
-> `MEDIUMROAST_SHARED_SECRET` are removed. Kept below as the record of what was
-> decided and built first.
+> HTTP Basic Auth as the credential. Only the *secret carried in the User-Agent*
+> (the rolling HMAC below) is superseded: nothing on the mediumroast.io side was
+> built against it, so there is no legacy path, and when the profiles module is
+> built. **Removed from the code 2026-10-05:** `secret_ua.rs`,
+> `MEDIUMROAST_SHARED_SECRET` and the `hmac` dependency are gone, with tests
+> showing an HMAC-looking User-Agent is now an ordinary draconian-tier caller.
+> **§3.1's
+> self-identifying `User-Agent` requirement and §3.2's normal/draconian tiering
+> stay**: they are the "identify yourself for a better experience" rung. The
+> ladder is anonymous (draconian), self-identifying `User-Agent` (normal), then
+> Basic-Auth profile (lower or no rate limit plus enhanced access such as SQL).
+> Kept below as the record of what was decided and built first.
 
 **Decided (raised directly, superseding an earlier static-secret-hash
 draft):** mediumroast.io's calls to company_dns carry a second trust
