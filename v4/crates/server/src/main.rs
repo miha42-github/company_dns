@@ -10,9 +10,9 @@ use axum::{
     response::IntoResponse,
 };
 use company_dns_edgar::{EdgarCatalog, EdgarClient};
-use company_dns_sic::{model_info, Embedders, SicCatalog};
+use company_dns_sic::{company_match, model_info, Embedders, SicCatalog};
 use company_dns_wikipedia::{WikipediaClient, WikipediaError};
-use envelope::{not_found, ok, server_error, ApiEnvelope};
+use envelope::{bad_request, not_found, ok, server_error, ApiEnvelope};
 use rate_limit::{tiered_rate_limit, TieredLimiterState};
 use serde::Deserialize;
 use serde_json::json;
@@ -244,6 +244,8 @@ async fn main() -> anyhow::Result<()> {
         // Semantic SIC search, global/multi-system (sic-global-search.md)
         .routes(routes!(sic_similarity_global))
         .routes(routes!(sic_hybrid_global))
+        .routes(routes!(sic_match))
+        .routes(routes!(sic_map))
         // EDGAR, V3 parity (sec5.3/5.4) + V3.0 aliases
         .routes(routes!(edgar_ciks))
         .routes(routes!(edgar_ciks_v3))
@@ -832,6 +834,280 @@ async fn sic_hybrid_global(
         )
         .into_response(),
         Err(e) => server_error("SicCatalog->search_hybrid_global", e.to_string()).into_response(),
+    }
+}
+
+// -------------------------------------------------------------- //
+// Company description -> a recommended SET of industry codes per system
+// (docs/plans/company-sic-match.md). V4-only, and the first POST route: a
+// description of 100-650 tokens does not belong in a URL path. Chunked
+// (sentence windows of about 128 word pieces) because the model reads only
+// 256 and a long description is several businesses, not one. No LLM.
+
+#[derive(Deserialize, utoipa::ToSchema)]
+struct MatchRequest {
+    /// The company description (pasted, or fetched from the Wikipedia/merged
+    /// endpoint by the caller). Up to about 30 KB. Ignored when `chunks` is given.
+    #[serde(default)]
+    text: String,
+    /// Optional: already-split segments to match as they are (the stepper's
+    /// "re-match with the segments I kept"). Nothing is re-chunked.
+    #[serde(default)]
+    chunks: Vec<String>,
+    /// Which classification systems to match against, by label ("US SIC",
+    /// "ISIC", "EU NACE", "Japan SIC"). Default: US SIC only; the other systems
+    /// are reached by mapping the chosen codes (`/V4.0/global/sic/map`).
+    #[serde(default = "default_match_systems")]
+    systems: Vec<String>,
+    #[serde(default = "default_model")]
+    model: String,
+}
+
+fn default_match_systems() -> Vec<String> {
+    vec![company_match::US.to_string()]
+}
+
+const MATCH_MAX_CHARS: usize = 30_000;
+
+#[utoipa::path(
+    post,
+    path = "/V4.0/global/sic/match",
+    request_body = MatchRequest,
+    responses(
+        (status = 200, description = "For every registered classification system: 2-5 recommended codes with their hierarchy and the chunk that supports each, plus alternatives; the chunks; and stated limitations", body = ApiEnvelope),
+        (status = 400, description = "Empty or too-long text, or unknown model", body = ApiEnvelope),
+    ),
+    tag = "SIC Company Match (V4.0-only)"
+)]
+async fn sic_match(
+    State(state): State<Arc<AppState>>,
+    axum::Json(req): axum::Json<MatchRequest>,
+) -> axum::response::Response {
+    const MODULE: &str = "SicCatalog->match_company";
+    if model_info(&req.model).is_none() {
+        return bad_request(MODULE, format!("unknown model: {}", req.model)).into_response();
+    }
+    if req.chunks.is_empty() && req.text.trim().is_empty() {
+        return bad_request(MODULE, "text is empty").into_response();
+    }
+    if req.text.chars().count() + req.chunks.iter().map(|c| c.chars().count()).sum::<usize>() > MATCH_MAX_CHARS {
+        return bad_request(MODULE, format!("text is longer than {MATCH_MAX_CHARS} characters")).into_response();
+    }
+
+    // Tokenise, chunk and embed under the embedder lock; search after releasing it.
+    let (prepared, vectors) = {
+        let mut embedders = state.embedders.lock().await;
+        let prepared = match if req.chunks.is_empty() {
+            embedders.prepare_text(&req.model, &req.text)
+        } else {
+            embedders.prepare_chunks(&req.model, &req.chunks)
+        } {
+            Ok(p) => p,
+            Err(e) => return server_error(MODULE, e.to_string()).into_response(),
+        };
+        if prepared.chunks.is_empty() {
+            return bad_request(MODULE, "text has no content").into_response();
+        }
+        if prepared.chunks.len() > company_match::MAX_CHUNKS {
+            return bad_request(
+                MODULE,
+                format!(
+                    "text is too long: {} chunks (limit {}); use the company's own summary paragraphs",
+                    prepared.chunks.len(),
+                    company_match::MAX_CHUNKS
+                ),
+            )
+            .into_response();
+        }
+        let texts: Vec<String> = prepared
+            .chunks
+            .iter()
+            .map(|c| prepared.text[c.span.start..c.span.end].to_string())
+            .collect();
+        // chunks and key phrases embedded together, one batch
+        let mut all = texts;
+        all.extend(prepared.phrases.iter().cloned());
+        match embedders.embed_batch(&req.model, &all) {
+            Ok(v) => (prepared, v),
+            Err(e) => return server_error(MODULE, e.to_string()).into_response(),
+        }
+    };
+
+    let n_chunks = prepared.chunks.len();
+    let mut per_chunk = Vec::with_capacity(n_chunks);
+    for v in &vectors[..n_chunks] {
+        match state.sic.search_systems(&req.model, v, Some(&req.systems), None, company_match::POOL_PER_SYSTEM).await {
+            Ok(hits) => per_chunk.push(hits),
+            Err(e) => return server_error(MODULE, e.to_string()).into_response(),
+        }
+    }
+    let mut per_phrase = Vec::with_capacity(prepared.phrases.len());
+    for (text, v) in prepared.phrases.iter().zip(&vectors[n_chunks..]) {
+        match state.sic.search_systems(&req.model, v, Some(&req.systems), None, 1).await {
+            Ok(hits) => per_phrase.push((text.clone(), hits)),
+            Err(e) => return server_error(MODULE, e.to_string()).into_response(),
+        }
+    }
+    let systems = company_match::choose(&per_chunk, &per_phrase);
+
+    let mut limitations = vec![
+        json!({"code": "suggestion_not_a_decision", "message": "These are ranked suggestions from how the text reads, not a determination of the company's classification."}),
+        json!({"code": "english_only", "message": "Matching uses an English model against English labels; non-English text is not supported."}),
+        json!({"code": "no_judgement_of_primary_business", "message": "The method cannot tell a company's main business from a side line; votes and similarity are only proxies."}),
+    ];
+    if prepared.total_tokens < company_match::SHORT_INPUT_BELOW {
+        limitations.push(json!({"code": "short_input", "message": "Very little text was given; add more of the company's description for a meaningful result."}));
+    }
+    for s in &systems {
+        let top = s.recommended.iter().map(|e| e.similarity).fold(f32::MIN, f32::max);
+        if top < company_match::WEAK_MATCH_BELOW {
+            limitations.push(json!({"code": "weak_match", "system": s.system, "message": format!("Nothing in {} matched this text closely.", s.system)}));
+        }
+    }
+
+    // Each chunk's own three best codes per system (the reading view shows
+    // what each segment, on its own, points at).
+    let chunks: Vec<_> = prepared
+        .chunks
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let mut top = serde_json::Map::new();
+            for hit in &per_chunk[i] {
+                let list = top.entry(hit.system.clone()).or_insert_with(|| json!([]));
+                if let Some(arr) = list.as_array_mut() {
+                    if arr.len() < 3 {
+                        arr.push(json!({
+                            "code": hit.levels.last().map(|l| l.id.as_str()).unwrap_or(""),
+                            "title": hit.levels.last().map(|l| l.description.as_str()).unwrap_or(""),
+                            "similarity": hit.similarity,
+                        }));
+                    }
+                }
+            }
+            json!({
+                "index": i,
+                "text": &prepared.text[c.span.start..c.span.end],
+                "tokens": c.tokens,
+                "model_window": prepared.window_of(c),
+                "top": top,
+            })
+        })
+        .collect();
+    ok(
+        MODULE,
+        format!("{} chunk(s) matched against {} system(s)", chunks.len(), systems.len()),
+        json!({
+            "input": {
+                "text": prepared.text,
+                "tokens": prepared.total_tokens,
+                "chunks": chunks.len(),
+                "chunk_target_tokens": company_match::CHUNK_TARGET,
+                "truncated_without_chunking": prepared.truncation_at.is_some(),
+                "phrases": prepared.phrases,
+            },
+            "chunks": chunks,
+            "systems": systems,
+            "limitations": limitations,
+        }),
+    )
+    .into_response()
+}
+
+// -------------------------------------------------------------- //
+// Map a chosen set of codes in one system into others
+// (docs/plans/company-sic-match.md sec. 11). By embedding similarity between
+// the chosen codes and each target system (no crosswalk tables are used);
+// ranked by fit to the description when one is given.
+// With no description this is a plain code-to-code lookup.
+
+#[derive(Deserialize, utoipa::ToSchema)]
+struct MapRequest {
+    /// The system the codes belong to: "US SIC", "ISIC", "EU NACE" or "Japan SIC".
+    from: String,
+    /// Class ids in `from` (e.g. "3571", "2620", "26.20").
+    codes: Vec<String>,
+    /// Target systems by label; default: every other system.
+    #[serde(default)]
+    to: Vec<String>,
+    /// Optional company description, used to rank the candidates.
+    #[serde(default)]
+    description: String,
+    #[serde(default = "default_model")]
+    model: String,
+}
+
+const KNOWN_SYSTEMS: [&str; 4] = [company_match::US, company_match::ISIC, company_match::NACE, company_match::JAPAN];
+
+#[utoipa::path(
+    post,
+    path = "/V4.0/global/sic/map",
+    request_body = MapRequest,
+    responses(
+        (status = 200, description = "For each target system: recommended codes (up to 5) and alternatives, each with its hierarchy and the source codes it came from", body = ApiEnvelope),
+        (status = 400, description = "Unknown system, no codes, or too many codes", body = ApiEnvelope),
+    ),
+    tag = "SIC Map (V4.0-only)"
+)]
+async fn sic_map(
+    State(state): State<Arc<AppState>>,
+    axum::Json(req): axum::Json<MapRequest>,
+) -> axum::response::Response {
+    const MODULE: &str = "SicCatalog->map_codes";
+    if model_info(&req.model).is_none() {
+        return bad_request(MODULE, format!("unknown model: {}", req.model)).into_response();
+    }
+    if !KNOWN_SYSTEMS.contains(&req.from.as_str()) {
+        return bad_request(MODULE, format!("unknown system: {} (use one of {})", req.from, KNOWN_SYSTEMS.join(", "))).into_response();
+    }
+    if req.codes.is_empty() || req.codes.len() > 20 {
+        return bad_request(MODULE, "give between 1 and 20 codes").into_response();
+    }
+    let to: Vec<String> = if req.to.is_empty() {
+        KNOWN_SYSTEMS.iter().filter(|s| **s != req.from).map(|s| s.to_string()).collect()
+    } else {
+        req.to.clone()
+    };
+    if let Some(bad) = to.iter().find(|t| !KNOWN_SYSTEMS.contains(&t.as_str())) {
+        return bad_request(MODULE, format!("unknown target system: {bad}")).into_response();
+    }
+    if req.description.chars().count() > MATCH_MAX_CHARS {
+        return bad_request(MODULE, format!("description is longer than {MATCH_MAX_CHARS} characters")).into_response();
+    }
+
+    // Embed the description's chunks when there is one (under the embedder lock).
+    let vectors: Vec<Vec<f32>> = if req.description.trim().is_empty() {
+        Vec::new()
+    } else {
+        let mut embedders = state.embedders.lock().await;
+        let prepared = match embedders.prepare_text(&req.model, &req.description) {
+            Ok(p) => p,
+            Err(e) => return server_error(MODULE, e.to_string()).into_response(),
+        };
+        if prepared.chunks.len() > company_match::MAX_CHUNKS {
+            return bad_request(MODULE, format!("description is too long: {} chunks (limit {})", prepared.chunks.len(), company_match::MAX_CHUNKS)).into_response();
+        }
+        let texts: Vec<String> = prepared.chunks.iter().map(|c| prepared.text[c.span.start..c.span.end].to_string()).collect();
+        match embedders.embed_batch(&req.model, &texts) {
+            Ok(v) => v,
+            Err(e) => return server_error(MODULE, e.to_string()).into_response(),
+        }
+    };
+
+    match state.sic.map_codes(&req.model, &req.from, &req.codes, &to, &vectors).await {
+        Ok(targets) => {
+            let limitations = vec![
+                json!({"code": "by_similarity", "message": "Matches in other systems are found by how similar the code descriptions read, not from an official correspondence table. Treat them as suggestions and check them."}),
+                json!({"code": "suggestion_not_a_decision", "message": "These are ranked suggestions, not a determination of the company's classification."}),
+            ];
+            ok(
+                MODULE,
+                format!("{} code(s) in {} mapped into {} system(s)", req.codes.len(), req.from, targets.len()),
+                json!({"from": req.from, "codes": req.codes, "used_description": !vectors.is_empty(), "targets": targets, "limitations": limitations}),
+            )
+            .into_response()
+        }
+        Err(e) => server_error(MODULE, e.to_string()).into_response(),
     }
 }
 

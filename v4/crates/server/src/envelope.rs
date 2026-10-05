@@ -61,6 +61,13 @@ pub fn not_found(module: &str, message: impl Into<String>) -> impl IntoResponse 
     )
 }
 
+pub fn bad_request(module: &str, message: impl Into<String>) -> impl IntoResponse {
+    (
+        StatusCode::BAD_REQUEST,
+        Json(envelope(400, message, module, json!(null))),
+    )
+}
+
 pub fn server_error(module: &str, message: impl Into<String>) -> impl IntoResponse {
     (
         StatusCode::INTERNAL_SERVER_ERROR,

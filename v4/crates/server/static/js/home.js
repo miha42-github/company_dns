@@ -35,13 +35,13 @@ function selectCompanyMode(mode) {
 
   const input = document.getElementById("homeCompanyQuery");
   if (mode === "merged") {
-    input.placeholder = "Company name, e.g. Apple Inc., International Business Machines...";
+    input.placeholder = "Company name, e.g. Apple Inc.";
   } else if (mode === "edgar") {
-    input.placeholder = "Company name or CIK, e.g. Apple, 0000320193...";
+    input.placeholder = "Company name or CIK, e.g. Apple";
   } else if (mode === "wikipedia") {
-    input.placeholder = "Company name, e.g. Apple Inc...";
+    input.placeholder = "Company name, e.g. Apple Inc.";
   } else {
-    input.placeholder = "Describe the company's business, e.g. makes semiconductor test equipment...";
+    input.placeholder = "A company name, or paste a description of what it makes and sells: its products, services, or both.";
   }
 }
 
@@ -84,15 +84,24 @@ function submitHomeCompanySearch(evt) {
     showContentTab("WikipediaResults");
     if (window.wikipediaLookup) window.wikipediaLookup.search(query);
   } else {
-    // Industry Match: matching a company description to SIC codes is
-    // the same semantic-search capability the IC panel's Semantic mode
-    // uses (docs/plans/company-dns-ux.md sec5's "regular + semantic
-    // search" IC experience) - reused here rather than reimplemented.
-    // Lands in the Industry Classification Explorer's own Semantic
-    // panel (redesign step 2), not the standalone SIC Similarity spike.
-    showContentTab("GlobalSearch");
-    selectIcExplorerMode("semantic");
-    icRunSemanticSearch(query);
+    // Industry Match: a company name (its description is fetched) or a pasted
+    // description goes to the Company Explorer's Industry Match tab, which
+    // returns a recommended SET of codes per system (docs/plans/company-sic-match.md).
+    showContentTab("IndustryMatch");
+    if (window.industryMatch) window.industryMatch.open(query);
   }
   return false;
 }
+
+// Enter searches; Shift+Enter adds a line (the company box is a growable textarea).
+document.addEventListener("DOMContentLoaded", () => {
+  const box = document.getElementById("homeCompanyQuery");
+  if (box) {
+    box.addEventListener("keydown", (evt) => {
+      if (evt.key === "Enter" && !evt.shiftKey) {
+        evt.preventDefault();
+        box.form.requestSubmit();
+      }
+    });
+  }
+});

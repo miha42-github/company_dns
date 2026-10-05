@@ -1,0 +1,484 @@
+# One company per line; # comments allowed. Mix of very large and smaller companies so the
+# set covers short (<128), medium and long (>256 token) descriptions.
+Apple Inc.
+Microsoft
+International Business Machines
+Tesla, Inc.
+General Electric
+Alphabet Inc.
+Walmart
+Johnson & Johnson
+JPMorgan Chase
+Boeing
+Ford Motor Company
+Pfizer
+Coca-Cola Company
+Intel
+Cisco
+Netflix
+Nike, Inc.
+Starbucks
+McDonald's
+Caterpillar Inc.
+3M
+Honeywell
+Procter & Gamble
+Chevron Corporation
+Verizon
+Walt Disney Company
+Nvidia
+Salesforce
+Adobe Inc.
+PayPal
+Uber
+Airbnb
+Lockheed Martin
+Goldman Sachs
+Costco
+Home Depot
+Target Corporation
+UnitedHealth Group
+Moderna
+Zoom Video Communications
+Etsy
+Peloton Interactive
+Hormel Foods
+Crocs
+Fastenal
+Chewy
+Duolingo
+Mattel
+Domino's Pizza
+Southwest Airlines
+Kellogg Company
+Harley-Davidson
+# --- added to grow the set toward 200 (2026-10-04): sector-spread, large to small ---
+# tech / software / semis / hardware
+Oracle Corporation
+Qualcomm
+Broadcom Inc.
+Texas Instruments
+Advanced Micro Devices
+Micron Technology
+Applied Materials
+Lam Research
+KLA Corporation
+Analog Devices
+Marvell Technology
+ON Semiconductor
+Microchip Technology
+Skyworks Solutions
+Western Digital
+Seagate Technology
+NetApp
+Dell Technologies
+HP Inc.
+Hewlett Packard Enterprise
+Juniper Networks
+Arista Networks
+Palo Alto Networks
+Fortinet
+CrowdStrike
+Splunk
+ServiceNow
+Workday, Inc.
+Intuit
+Autodesk
+Synopsys
+Cadence Design Systems
+Atlassian
+Twilio
+Okta, Inc.
+Zscaler
+Datadog
+Snowflake Inc.
+MongoDB, Inc.
+Palantir Technologies
+DocuSign
+Dropbox, Inc.
+Box, Inc.
+Akamai Technologies
+VeriSign
+GoDaddy
+Cloudflare
+Squarespace
+Shopify
+Roku, Inc.
+Spotify
+Snap Inc.
+Pinterest
+Match Group
+Zillow Group
+eBay
+Booking Holdings
+Expedia Group
+Yelp
+Lyft
+DoorDash
+Block, Inc.
+Coinbase
+Robinhood Markets
+Corning Inc.
+Amphenol
+TE Connectivity
+Garmin
+Logitech
+Zebra Technologies
+Trimble Inc.
+Teradyne
+Cognizant
+Accenture
+Gartner
+EPAM Systems
+Leidos
+Booz Allen Hamilton
+# banks / insurance / finance
+Bank of America
+Wells Fargo
+Citigroup
+Morgan Stanley
+U.S. Bancorp
+PNC Financial Services
+Truist Financial
+Capital One
+American Express
+Charles Schwab Corporation
+BlackRock
+State Street Corporation
+Northern Trust
+Fifth Third Bancorp
+KeyCorp
+Regions Financial Corporation
+Huntington Bancshares
+M&T Bank
+Citizens Financial Group
+First Horizon Corporation
+Zions Bancorporation
+Comerica
+Synchrony Financial
+Discover Financial
+Ally Financial
+SLM Corporation
+MetLife
+Prudential Financial
+Aflac
+Allstate
+Progressive Corporation
+Chubb Limited
+Travelers Companies
+AIG
+Hartford (company)
+Lincoln National Corporation
+Principal Financial Group
+Unum
+Marsh McLennan
+Aon plc
+Arthur J. Gallagher & Co.
+Visa Inc.
+Mastercard
+Fiserv
+Global Payments
+Intercontinental Exchange
+CME Group
+Nasdaq, Inc.
+Cboe Global Markets
+S&P Global
+Moody's Corporation
+MSCI
+T. Rowe Price
+Franklin Resources
+Invesco
+KKR
+Blackstone Inc.
+Apollo Global Management
+Carlyle Group
+LendingClub
+Lemonade, Inc.
+Root, Inc.
+# health care / pharma / biotech / devices
+Merck & Co.
+AbbVie
+Eli Lilly and Company
+Bristol Myers Squibb
+Amgen
+Gilead Sciences
+Regeneron Pharmaceuticals
+Vertex Pharmaceuticals
+Biogen
+Illumina, Inc.
+Thermo Fisher Scientific
+Danaher Corporation
+Abbott Laboratories
+Medtronic
+Boston Scientific
+Stryker Corporation
+Becton Dickinson
+Edwards Lifesciences
+Intuitive Surgical
+Zimmer Biomet
+Baxter International
+ResMed
+Align Technology
+Dexcom
+Hologic
+IDEXX Laboratories
+Cigna
+Humana
+Centene Corporation
+Elevance Health
+CVS Health
+HCA Healthcare
+Tenet Healthcare
+Quest Diagnostics
+Labcorp
+McKesson Corporation
+Cardinal Health
+AmerisourceBergen
+Walgreens Boots Alliance
+Teladoc Health
+Novavax
+Exact Sciences
+Insulet
+Catalent
+Charles River Laboratories
+# consumer / retail / restaurants / food
+Amazon (company)
+Lowe's
+Best Buy
+Dollar General
+Dollar Tree
+Kroger
+Albertsons
+Ross Stores
+TJX Companies
+Gap Inc.
+Macy's, Inc.
+Kohl's
+Nordstrom
+Williams-Sonoma, Inc.
+Bed Bath & Beyond
+Tractor Supply Company
+AutoZone
+O'Reilly Automotive
+Advance Auto Parts
+CarMax
+Carvana
+Ulta Beauty
+Estée Lauder Companies
+Colgate-Palmolive
+Kimberly-Clark
+Clorox
+Church & Dwight
+Mondelez International
+PepsiCo
+Keurig Dr Pepper
+Monster Beverage
+Constellation Brands
+Molson Coors
+Brown-Forman
+Philip Morris International
+Altria
+Tyson Foods
+General Mills
+Campbell Soup Company
+Conagra Brands
+J. M. Smucker Company
+Hershey Company
+Kraft Heinz
+Lamb Weston
+Chipotle Mexican Grill
+Yum! Brands
+Darden Restaurants
+Wendy's Company
+Papa John's
+Shake Shack
+Wingstop
+Cracker Barrel
+Marriott International
+Hilton Worldwide
+Hyatt
+Las Vegas Sands
+MGM Resorts International
+Carnival Corporation
+Royal Caribbean Group
+Lululemon Athletica
+Under Armour
+VF Corporation
+Ralph Lauren Corporation
+Tapestry, Inc.
+Skechers
+Hasbro
+Electronic Arts
+Activision Blizzard
+Take-Two Interactive
+Warner Bros. Discovery
+Paramount Global
+Comcast
+Charter Communications
+Fox Corporation
+New York Times Company
+Live Nation Entertainment
+# industrials / autos / aerospace / transport
+General Motors
+Rivian
+Lucid Group
+Paccar
+Cummins
+Deere & Company
+Emerson Electric
+Eaton Corporation
+Parker Hannifin
+Illinois Tool Works
+Dover Corporation
+Rockwell Automation
+Xylem Inc.
+Otis Worldwide
+Carrier Global
+Trane Technologies
+Johnson Controls
+Raytheon Technologies
+Northrop Grumman
+General Dynamics
+L3Harris Technologies
+Textron
+Huntington Ingalls Industries
+TransDigm Group
+Howmet Aerospace
+Spirit AeroSystems
+United Airlines Holdings
+Delta Air Lines
+American Airlines Group
+JetBlue
+Alaska Air Group
+FedEx
+United Parcel Service
+Union Pacific Corporation
+CSX Corporation
+Norfolk Southern Railway
+J.B. Hunt
+Old Dominion Freight Line
+Knight-Swift Transportation
+XPO, Inc.
+Waste Management, Inc.
+Republic Services
+Cintas
+Robert Half
+ManpowerGroup
+Rollins, Inc.
+W. W. Grainger
+Sherwin-Williams
+PPG Industries
+Ecolab
+Air Products
+Linde plc
+Dow Inc.
+DuPont
+LyondellBasell
+Nucor
+Steel Dynamics
+Cleveland-Cliffs
+Freeport-McMoRan
+Newmont Corporation
+Albemarle Corporation
+Mosaic Company
+Corteva
+International Paper
+WestRock
+Ball Corporation
+Vulcan Materials Company
+Martin Marietta Materials
+D. R. Horton
+Lennar
+Pulte Group
+NVR, Inc.
+Toll Brothers
+Masco
+Mohawk Industries
+# energy / utilities / telecom / REIT
+ConocoPhillips
+Occidental Petroleum
+EOG Resources
+Pioneer Natural Resources
+Marathon Petroleum
+Valero Energy
+Phillips 66
+Schlumberger
+Halliburton
+Baker Hughes
+Kinder Morgan
+Williams Companies
+Cheniere Energy
+Duke Energy
+NextEra Energy
+Southern Company
+Dominion Energy
+American Electric Power
+Exelon
+Sempra Energy
+Consolidated Edison
+Xcel Energy
+PG&E Corporation
+Edison International
+American Water Works
+T-Mobile US
+Lumen Technologies
+American Tower
+Crown Castle
+Equinix
+Prologis
+Simon Property Group
+Public Storage
+Realty Income
+Welltower
+Digital Realty
+Vornado Realty Trust
+Weyerhaeuser
+# smaller / niche
+Sprouts Farmers Market
+Krispy Kreme
+Vita Coco
+Celsius Holdings
+Beyond Meat
+Oatly
+Sweetgreen
+Dutch Bros
+Warby Parker
+Allbirds
+Figs, Inc.
+Funko
+Sonos
+GoPro
+Fitbit
+Vail Resorts
+Six Flags
+SeaWorld Entertainment
+Planet Fitness
+Bowlero
+World Wrestling Entertainment
+Cricut
+Yeti Holdings
+Traeger
+Solo Brands
+Sleep Number
+Purple Innovation
+Tempur Sealy
+La-Z-Boy
+Hooker Furniture
+Lifetime Brands
+Central Garden & Pet
+Spectrum Brands
+Scotts Miracle-Gro
+Tootsie Roll Industries
+Lancaster Colony
+John B. Sanfilippo & Son
+Cal-Maine Foods
+Sanderson Farms
+Seaboard Corporation
+Alico
+Limoneira
+Calavo Growers
+Farmer Bros.
+Coffee Holding Co.
+National Beverage Corp.
+Reed's, Inc.
+Jones Soda

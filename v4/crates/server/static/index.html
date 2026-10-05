@@ -22,6 +22,8 @@
   <script src="/static/js/sic-similarity.js"></script>
   <script src="/static/js/wikipedia-lookup.js"></script>
   <script src="/static/js/company-merged.js"></script>
+  <script src="/static/js/simple-pdf.js"></script>
+  <script src="/static/js/industry-match.js"></script>
   <script src="/static/js/company-explorer.js"></script>
   <script src="/static/js/ic-explorer.js"></script>
   <script src="/static/js/home.js"></script>
@@ -116,10 +118,129 @@
                   <button type="button" id="homeCompanyModeIndustryMatch" class="home-mode-pill" onclick="selectCompanyMode('industry-match')">Industry Match</button>
                 </div>
                 <form class="home-search-form" onsubmit="return submitHomeCompanySearch(event)">
-                  <input type="text" id="homeCompanyQuery" class="home-search-input" placeholder="Company name or CIK, e.g. Apple, 0000320193..." required>
+                  <textarea id="homeCompanyQuery" class="home-search-input home-search-textarea" rows="1" placeholder="Company name or CIK, e.g. Apple" required></textarea>
                   <button type="submit" class="home-search-btn">Search</button>
                 </form>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- Company Explorer: Industry Match. A company description in, a small
+           RECOMMENDED SET of industry codes out, per classification system, each
+           with its hierarchy (docs/plans/company-sic-match.md, decision 9: a
+           company has several lines of business, not one code). Four steps, all
+           reachable at any time: Company (description in) > Segments (the reading
+           view: what each part of the text points at) > Codes (choose 2-5 per
+           system) > Result. Backed by POST /V4.0/global/sic/match. -->
+      <div id="IndustryMatch" class="explorer-pagecontent ic-explorer-page" style="display: none;">
+        <div class="ic-explorer-shell">
+          <div class="ic-mode-tabs-row">
+            <div class="home-search-tabs ic-mode-tabs">
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('edgar')">EDGAR</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+              <button type="button" class="home-search-tab active" onclick="showCompanyMode('industry')" title="Match a company description to a recommended set of industry codes">Industry Match</button>
+            </div>
+          </div>
+          <div id="companyIndustryPanel" class="ic-mode-panel">
+            <div class="im-wrap">
+              <ol class="im-rail" id="imRail"></ol>
+
+              <!-- 1 Describe: the text (editable at any time) and the system to start in -->
+              <section class="im-step" id="imStep1">
+                <div class="im-body">
+                  <form id="imLookupForm" class="im-lookup">
+                    <input type="text" id="imCompanyName" class="dns-textfield im-input" placeholder="Company name, to fetch its description (e.g. Apple Inc.)" autocomplete="off">
+                    <button type="submit" id="imLookupBtn" class="im-btn">Look up</button>
+                  </form>
+                  <textarea id="imText" class="dns-textfield im-textarea" placeholder="Describe what the company makes and sells: its products, services, or both. Longer is fine; it is split into segments and each is matched on its own."></textarea>
+                  <details class="im-help">
+                    <summary>How to read the results</summary>
+                    <ul>
+                      <li>Suggestions ranked by how the text reads against each code's wording. No language model decides.</li>
+                      <li>A company has a <strong>set</strong> of codes, not one: you keep up to 5.</li>
+                      <li>Other systems are found by similarity to the codes you keep. It is not an official correspondence: check it.</li>
+                      <li>Similarity numbers run low (0.25 to 0.45 is typical). Compare codes with each other, not with the other tabs.</li>
+                      <li>Old history in the text can pull in irrelevant codes: switch those segments off in step 2. English only.</li>
+                    </ul>
+                  </details>
+                </div>
+                <div class="im-foot">
+                  <label class="im-start">Start in
+                    <select id="imStartSystem" class="im-select">
+                      <option value="US SIC" selected>US SIC</option>
+                      <option value="ISIC">ISIC Rev. 4</option>
+                      <option value="EU NACE">EU NACE Rev. 2</option>
+                      <option value="Japan SIC">Japan SIC</option>
+                    </select>
+                  </label>
+                  <span class="im-meta" id="imTextMeta"></span>
+                  <span class="sic-sim-status" id="imStatus" style="display:none"></span>
+                  <span class="im-spacer"></span>
+                  <button type="button" id="imAnalyzeBtn" class="im-btn">Find codes &rarr;</button>
+                </div>
+              </section>
+
+              <!-- 2 Segments and codes in the starting system, and which systems to find next -->
+              <section class="im-step" id="imStep2" hidden>
+                <div class="im-cols">
+                  <div class="im-col">
+                    <h4 class="im-h">Segments <small>switch off what is not business</small></h4>
+                    <p class="im-note" id="imWindowNote" hidden></p>
+                    <div id="imChunks"></div>
+                    <div class="im-bar">
+                      <button type="button" id="imRematchBtn" class="im-btn">Re-match</button>
+                      <span class="sic-sim-status" id="imStatus2" style="display:none"></span>
+                    </div>
+                  </div>
+                  <div class="im-col">
+                    <h4 class="im-h" id="imPhase1Title"></h4>
+                    <div id="imLimitNotes" class="im-note" hidden></div>
+                    <div id="imPicks"></div>
+                  </div>
+                </div>
+                <div class="im-foot">
+                  <span class="im-foot-label">Then find it in</span>
+                  <span id="imTargetChips" class="im-chips"></span>
+                  <span class="im-spacer"></span>
+                  <span class="im-btns">
+                    <span class="im-hint" id="imNextHint"></span>
+                    <button type="button" class="im-btn" data-go="1">&larr; Description</button>
+                    <button type="button" id="imToTargets" class="im-btn">Next &rarr;</button>
+                  </span>
+                </div>
+              </section>
+
+              <!-- 3.. one step per chosen target system -->
+              <section class="im-step" id="imStepT" hidden>
+                <div class="im-body">
+                  <h4 class="im-h" id="imTargetTitle"></h4>
+                  <div id="imTargetNote" class="im-note" hidden></div>
+                  <div id="imTargetList"></div>
+                </div>
+                <div class="im-foot">
+                  <button type="button" id="imTargetSkip" class="im-btn" title="Leave this system out of the report">Skip this system</button>
+                  <span class="im-spacer"></span>
+                  <button type="button" id="imTargetBack" class="im-btn">&larr; Back</button>
+                  <button type="button" id="imTargetNext" class="im-btn">Next &rarr;</button>
+                </div>
+              </section>
+
+              <!-- Report -->
+              <section class="im-step" id="imStepR" hidden>
+                <div class="im-body"><div id="imReport"></div></div>
+                <div class="im-foot">
+                  <button type="button" id="imPdfBtn" class="im-btn">Download PDF</button>
+                  <button type="button" id="imCopyBtn" class="im-btn">Copy as text</button>
+                  <button type="button" class="im-btn" id="imViewJsonBtn">View JSON</button>
+                  <span class="im-spacer"></span>
+                  <button type="button" id="imReportBack" class="im-btn">&larr; Back</button>
+                  <button type="button" id="imRestartBtn" class="im-btn">Start over</button>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -980,6 +1101,7 @@
               <button type="button" class="home-search-tab active" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
               <button type="button" class="home-search-tab" onclick="showCompanyMode('edgar')">EDGAR</button>
               <button type="button" class="home-search-tab" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('industry')" title="Match a company description to a recommended set of industry codes">Industry Match</button>
             </div>
           </div>
           <div id="companyMergedPanel" class="ic-mode-panel">
@@ -1068,6 +1190,7 @@
               <button type="button" class="home-search-tab" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
               <button type="button" class="home-search-tab active" onclick="showCompanyMode('edgar')">EDGAR</button>
               <button type="button" class="home-search-tab" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('industry')" title="Match a company description to a recommended set of industry codes">Industry Match</button>
             </div>
           </div>
           <div id="companyEdgarPanel" class="ic-mode-panel">
@@ -1293,6 +1416,7 @@
               <button type="button" class="home-search-tab" onclick="showCompanyMode('merged')" title="EDGAR and Wikipedia combined into one company record">Merged</button>
               <button type="button" class="home-search-tab" onclick="showCompanyMode('edgar')">EDGAR</button>
               <button type="button" class="home-search-tab active" onclick="showCompanyMode('wikipedia')">Wikipedia</button>
+              <button type="button" class="home-search-tab" onclick="showCompanyMode('industry')" title="Match a company description to a recommended set of industry codes">Industry Match</button>
             </div>
           </div>
           <div id="companyWikiPanel" class="ic-mode-panel">

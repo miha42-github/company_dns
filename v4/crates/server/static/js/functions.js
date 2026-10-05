@@ -16,6 +16,7 @@ const PAGE_TITLES = {
     EdgarExplorer: "Company Explorer",
     SicSimilarity: "SIC Similarity (spike)",
     WikipediaResults: "Company Explorer",
+    IndustryMatch: "Company Explorer",
     About: "About",
 };
 

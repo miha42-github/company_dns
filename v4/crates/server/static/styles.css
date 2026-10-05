@@ -3276,3 +3276,103 @@ label {
   border-top: var(--border-width) solid var(--border-color);
 }
 #mergedMetaGrid { margin-bottom: 0.8rem; }
+
+
+
+
+/* Home: the company box can hold a pasted description. At rest it is exactly as tall as the
+   one-line Industry Classification box (3.2rem), so the two tabs are the same height; it grows only
+   while focused, and can be dragged taller. Enter still searches. */
+.home-search-textarea {
+  box-sizing: border-box; height: 3.2rem; min-height: 3.2rem; max-height: 16rem; resize: vertical;
+  line-height: 1.4; border-radius: 1.6rem; overflow-y: auto; transition: height 0.15s ease;
+}
+.home-search-textarea:focus { height: 8rem; }
+#homeSearchPanelCompany .home-search-form { align-items: flex-start; }
+#homeSearchPanelCompany .home-search-btn { align-self: flex-start; height: 3.2rem; min-height: 0; box-sizing: border-box; }
+
+
+
+/* Industry Match, compact stepper (docs/plans/company-sic-match.md). A fixed-height layout:
+   the step rail on top, the buttons pinned at the bottom, and only the lists in between scroll. */
+#companyIndustryPanel { display: flex; flex-direction: column; overflow: hidden; }
+#companyIndustryPanel[hidden] { display: none; }
+.im-wrap { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; width: 100%; max-width: 64rem; margin: 0 auto; padding: 0 var(--spacing-sm) var(--spacing-sm); box-sizing: border-box; font-size: 0.92rem; }
+.im-rail { flex: 0 0 auto; list-style: none; display: flex; gap: 0.4rem; padding: 0; margin: 0 0 1.1rem; flex-wrap: wrap; }
+.im-rail button { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.2rem 0.7rem; border-radius: 999px; border: 1px solid #4a4747; background: transparent; color: var(--color-text-secondary); font: inherit; font-size: 0.82rem; cursor: pointer; }
+.im-rail button:disabled { opacity: 0.4; cursor: default; }
+.im-rail button.active { border-color: var(--color-text-primary); color: var(--color-text-primary); background: color-mix(in srgb, var(--color-text-primary) 14%, transparent); }
+.im-rail button.done { border-color: #6fbf6f; color: #6fbf6f; }
+.im-rail .im-n { display: inline-flex; width: 1.1rem; height: 1.1rem; border-radius: 50%; border: 1px solid currentColor; align-items: center; justify-content: center; font-size: 0.68rem; }
+.im-step { flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.im-step:not([hidden]) { display: flex; }
+.im-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 0.3rem; }
+.im-cols { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 1rem; overflow: hidden; }
+.im-col { min-height: 0; overflow-y: auto; padding-right: 0.3rem; }
+@media (max-width: 860px) { .im-cols { grid-template-columns: 1fr; overflow-y: auto; } .im-col { overflow: visible; } }
+.im-foot { flex: 0 0 auto; display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; padding-top: 0.55rem; border-top: 1px solid #3c3b3b; flex-wrap: wrap; }
+.im-foot-label { color: var(--color-text-secondary); font-size: 0.85rem; }
+.im-spacer { flex: 1; }
+.im-hint { color: #e07a5f; font-size: 0.82rem; }
+.im-hint:empty { display: none; }
+.im-btns { display: inline-flex; align-items: center; gap: 0.5rem; margin-left: auto; flex-wrap: nowrap; }
+
+/* every button in the stepper: orange outline on black with orange text; solid orange with black text on hover */
+.im-btn, #IndustryMatch .explorer-view-json-btn {
+  background: var(--color-bg-primary); color: var(--color-text-primary); border: 1px solid var(--color-text-primary);
+  border-radius: 999px; padding: 0.35rem 1rem; font: inherit; font-size: 0.85rem; cursor: pointer; transition: background var(--transition-fast), color var(--transition-fast);
+}
+.im-btn:hover:not(:disabled), #IndustryMatch .explorer-view-json-btn:hover { background: var(--color-text-primary); color: var(--color-bg-primary); }
+.im-btn:disabled { opacity: 0.4; cursor: default; }
+
+.im-lookup { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+.im-input { flex: 1; box-sizing: border-box; padding: 0.45rem 0.9rem; border-radius: 999px; background: var(--color-bg-primary); border: var(--border-width) solid var(--border-color); color: var(--color-text-primary); font: inherit; }
+.im-textarea { width: 100%; box-sizing: border-box; height: calc(100% - 4.5rem); min-height: 9rem; resize: none; padding: 0.6rem 0.9rem; background: var(--color-bg-primary); color: var(--color-text-primary); border: var(--border-width) solid var(--border-color); border-radius: var(--border-radius); font: inherit; line-height: 1.45; }
+.im-start { display: inline-flex; align-items: center; gap: 0.4rem; }
+.im-select { background: var(--color-bg-primary); color: var(--color-text-primary); border: var(--border-width) solid var(--border-color); border-radius: 999px; padding: 0.25rem 0.8rem; font: inherit; }
+.im-bar { display: flex; align-items: center; gap: 0.7rem; margin: 0.5rem 0; flex-wrap: wrap; }
+.im-meta { color: var(--color-text-secondary); font-size: 0.8rem; }
+.im-help { color: var(--color-text-secondary); font-size: 0.85rem; margin-top: 0.4rem; }
+.im-help summary { cursor: pointer; }
+.im-help li { margin: 0.2rem 0; }
+.im-note { padding: 0.35rem 0.7rem; border-left: 3px solid #f0c674; background: color-mix(in srgb, #f0c674 10%, transparent); margin: 0 0 0.5rem; font-size: 0.85rem; line-height: 1.4; }
+.im-note[hidden] { display: none; }
+.im-h { margin: 0 0 0.4rem; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.im-h small { font-weight: 400; color: var(--color-text-secondary); font-size: 0.78rem; }
+.im-count { color: var(--color-text-secondary); font-size: 0.8rem; font-weight: 400; }
+.im-count-bad { color: #e07a5f; }
+
+.im-seg { border: 1px solid #3c3b3b; border-radius: var(--border-radius-small); padding: 0.3rem 0.55rem; margin-bottom: 0.3rem; background: var(--color-bg-secondary); }
+.im-seg.off { opacity: 0.45; }
+.im-seg-head { display: flex; align-items: center; gap: 0.45rem; cursor: pointer; font-size: 0.82rem; }
+.im-seg-text { margin: 0.15rem 0 0; font-size: 0.82rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; cursor: pointer; }
+.im-seg-text.open { -webkit-line-clamp: unset; }
+.im-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; display: inline-block; background: #f0c674; }
+
+.im-row { border: 1px solid #3c3b3b; border-radius: var(--border-radius-small); margin-bottom: 0.25rem; background: var(--color-bg-secondary); }
+.im-row.picked { border-color: var(--color-text-primary); background: color-mix(in srgb, var(--color-text-primary) 8%, var(--color-bg-secondary)); }
+.im-row-main { display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.5rem; }
+.im-row-main label { display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 0; cursor: pointer; }
+.im-code { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--color-text-primary); flex: 0 0 auto; }
+.im-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.im-from { color: var(--color-text-secondary); font-size: 0.74rem; white-space: nowrap; max-width: 9rem; overflow: hidden; text-overflow: ellipsis; }
+.im-bar-sim { display: inline-block; width: 3rem; height: 0.3rem; border-radius: 999px; background: #3c3b3b; overflow: hidden; flex: 0 0 auto; }
+.im-bar-sim > i { display: block; height: 100%; background: var(--color-text-primary); }
+.im-toggle { background: none; border: none; color: var(--color-text-secondary); cursor: pointer; padding: 0 0.2rem; font-size: 0.8rem; }
+.im-detail { padding: 0 0.5rem 0.4rem 1.9rem; font-size: 0.8rem; color: var(--color-text-secondary); line-height: 1.4; }
+.im-detail[hidden] { display: none; }
+.im-detail p { margin: 0.2rem 0 0; }
+.im-more { margin: 0.3rem 0 0; }
+.im-more > summary { cursor: pointer; color: var(--color-text-primary); font-size: 0.82rem; margin-bottom: 0.3rem; }
+.im-chips { display: inline-flex; gap: 0.35rem; flex-wrap: wrap; }
+.im-chips .ic-sys-chip { cursor: pointer; }
+
+.im-rep { margin-bottom: 0.9rem; }
+.im-rep-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; }
+.im-rep-head .ic-sys-chip { cursor: default; }
+.im-rep-row { padding: 0.2rem 0 0.25rem; border-bottom: 1px solid #2c2a2a; }
+.im-rep-row .im-crumb { color: var(--color-text-secondary); font-size: 0.78rem; line-height: 1.3; }
+
+.im-rep-more[hidden] { display: none; }
+.im-expand { background: none; border: none; color: var(--color-text-primary); cursor: pointer; font: inherit; font-size: 0.82rem; padding: 0.25rem 0; text-decoration: underline; text-underline-offset: 2px; }
+.im-expand:hover { text-decoration: none; }

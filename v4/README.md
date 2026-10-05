@@ -172,7 +172,16 @@ New, V4-only (§5.1), no `/V3.0/` equivalent:
 
 ```
 GET /V4.0/na/sic/similarity/{query}?model=all_minilm_l6_v2&k=10
+POST /V4.0/global/sic/match          {"text": "..."} or {"chunks": [...]}   (default: US SIC only; "systems" to add more)
+POST /V4.0/global/sic/map            {"from": "US SIC", "codes": ["3571"], "to": [...], "description": "..."}
 ```
+
+`POST /V4.0/global/sic/match` is the first POST route: a company description in, a
+recommended set of 2-5 industry codes per classification system out, each with
+its hierarchy and the text segment that supports it
+(`docs/plans/company-sic-match.md`; the Company Explorer's Industry Match tab).
+`POST /V4.0/global/sic/map` carries a chosen set of codes into the other systems by
+embedding similarity (no crosswalk tables are used).
 
 Real, built 2026-09-28 (§8.1/§8.2 — near-exact company/page title, same
 as V3; V3's corporate-suffix hint restored and actually executed as a

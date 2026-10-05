@@ -10,6 +10,7 @@ const COMPANY_PAGES = {
   merged: "MergedCompany",
   edgar: "EdgarExplorer",
   wikipedia: "WikipediaResults",
+  industry: "IndustryMatch",
 };
 
 function companyEdgarData() {
@@ -30,6 +31,7 @@ function companyActiveMode() {
 
 // The query currently in a mode's own search bar.
 function companyQueryOf(mode) {
+  if (mode === "industry") return (document.getElementById("imCompanyName")?.value || "").trim();
   if (mode === "edgar") return (companyEdgarData()?.searchQuery || "").trim();
   const id = mode === "merged" ? "mergedQuery" : "wikiQuery";
   return (document.getElementById(id)?.value || "").trim();
@@ -38,6 +40,7 @@ function companyQueryOf(mode) {
 // Whether a mode is already showing results (or an answer) for `query`.
 function companyModeShows(mode, query) {
   if (companyQueryOf(mode) !== query) return false;
+  if (mode === "industry") return !!window.industryMatch?.hasResult();
   if (mode === "edgar") {
     const d = companyEdgarData();
     return !!(d && (d.hasResults || d.errorMessage));
@@ -63,6 +66,8 @@ function showCompanyMode(mode) {
     }
   } else if (mode === "merged") {
     window.companyMerged?.search(query);
+  } else if (mode === "industry") {
+    window.industryMatch?.open(query);
   } else {
     window.wikipediaLookup?.search(query);
   }
