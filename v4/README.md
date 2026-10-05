@@ -85,7 +85,73 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 (default `4000`), `MEDIUMROAST_SHARED_SECRET` (see "## Security" below
 — unset disables mediumroast.io's rolling-token rate-limit bypass, it
 does not affect anything else), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
-"## Observability" below).
+"## Experimental: SQL endpoint
+
+> **Experimental.** `POST /V4.0/sql` may change or be removed without notice.
+> It is **off by default**, takes arbitrary SQL, and can use real CPU and memory,
+> so it is closed to everyone who does not hold a credential you issued. Design
+> and decisions: [`docs/plans/v4-sql-endpoint.md`](../docs/plans/v4-sql-endpoint.md).
+
+One read-only statement per request, against one dataset: `sic` (US SIC plus
+Japan SIC, EU NACE and ISIC when loaded) or `edgar` (the filings catalog), in
+DataFusion's SQL dialect. The embedding (`vector_*`) columns are not exposed.
+`select * from information_schema.columns` lists tables and columns.
+
+**Turn it on** (nothing below is set by default):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `COMPANY_DNS_SQL_ENABLED` | off | `true` registers the route. Without it the route does not exist (404) and is absent from `/docs`. |
+| `COMPANY_DNS_PROFILES_FILE` | none, required when enabled | Path to the profiles file (below). The server refuses to start without a valid one; it never starts open. |
+| `COMPANY_DNS_SQL_DEFAULT_ROWS` / `_MAX_ROWS` | 1000 / 10000 | Rows returned by default / the ceiling a request's `limit` is clamped to. |
+| `COMPANY_DNS_SQL_TIMEOUT_SECS` | 10 | Statement timeout; the query is cancelled. |
+| `COMPANY_DNS_SQL_MEMORY_MB` | 256 | Memory pool per dataset's query context; no spilling to disk. |
+| `COMPANY_DNS_SQL_MAX_CONCURRENT` | 4 | Queries running at once on this process; more get a 429, not a queue. |
+| `COMPANY_DNS_SQL_PARALLELISM` | 2 | DataFusion partitions per query, so one query cannot take every core. |
+
+These are one global set of limits for every profile (per-profile limits are the
+next phase). Invalid values stop startup.
+
+**Credentials.** Clients authenticate with HTTP Basic Auth: the profile id as the
+user name and a generated token as the password. The profiles file holds only a
+SHA-256 of each token, so a leaked file is not a working credential. `Origin` and
+`Referer` are ignored (a client can send any value), and this route sits outside the
+rate limiter's trusted-origin bypass. Failed logins are throttled per source IP.
+Use TLS: the token travels with every request.
+
+```sh
+TOKEN=$(openssl rand -hex 32)                      # give this to the client, once
+printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1   # put this in the file
+```
+
+```json
+{"profiles": {
+  "my-app": {"secret_sha256": "<the hash>", "sql": {"datasets": ["sic", "edgar"]}},
+  "viewer": {"secret_sha256": "<another hash>", "sql": {"datasets": ["sic"]}}
+}}
+```
+
+Keep the file out of the repository and the image: a mounted secret (a Kubernetes
+Secret or a Docker secret) in a deployment, a gitignored file locally. A profile
+without a `sql` section is not granted SQL; unknown keys are an error.
+
+```sh
+curl -u my-app:$TOKEN -H 'Content-Type: application/json' http://localhost:4000/V4.0/sql \
+  -d '{"dataset": "sic", "sql": "select count(*) as n from sic_data"}'
+```
+
+**Try and test it locally:** [`scripts/sql-try.sh`](scripts/sql-try.sh) creates
+throwaway profiles under `.local/sql/` (gitignored), starts the server with SQL on
+and small limits, and runs a battery of checks (access, read-only, hidden vectors,
+limits, throttling) against it:
+
+```sh
+scripts/sql-try.sh start          # in one terminal
+scripts/sql-try.sh check          # in another
+scripts/sql-try.sh q sic "select * from sic_data limit 3"
+```
+
+## Observability" below).
 
 ## API docs
 

@@ -66,6 +66,13 @@ impl SicCatalog {
         })
     }
 
+    /// What the experimental SQL endpoint (`docs/plans/v4-sql-endpoint.md`) is
+    /// built from: this catalog's session and the names of every registered
+    /// system table (US SIC plus whichever others loaded).
+    pub fn query_source(&self) -> (SessionContext, Vec<String>) {
+        (self.ctx.clone(), self.systems.iter().map(|s| s.table_name.clone()).collect())
+    }
+
     /// Registers an additional classification system's `.feather` file
     /// (e.g. Japan SIC) as its own table in the same `SessionContext`,
     /// alongside the primary US table. Called before the catalog is

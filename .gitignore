@@ -81,3 +81,6 @@ experiments/ic-similarity-service/.fastembed_cache/
 v4/crates/server/.fastembed_cache/
 # fastembed model download cache
 .fastembed_cache/
+
+# Local test credentials for the experimental SQL endpoint (v4/scripts/sql-try.sh)
+v4/.local/

@@ -2,6 +2,7 @@ mod envelope;
 mod logging;
 mod rate_limit;
 mod secret_ua;
+mod sql_endpoint;
 mod trusted_origin;
 mod user_agent;
 
@@ -37,6 +38,9 @@ struct AppState {
     edgar_client: EdgarClient,
     embedders: Mutex<Embedders>,
     wikipedia: WikipediaClient,
+    /// The experimental SQL endpoint (`sql_endpoint.rs`); `None` unless
+    /// `COMPANY_DNS_SQL_ENABLED` is set.
+    sql: Option<sql_endpoint::SqlState>,
 }
 
 /// `docs/plans/v4-openapi-docs.md` §3.4/§8: the OpenAPI document V4
@@ -55,6 +59,7 @@ struct AppState {
 #[derive(OpenApi)]
 #[openapi(
     components(schemas(ApiEnvelope)),
+    modifiers(&SecurityAddon),
     info(
         title = "company_dns API (V4)",
         version = "4.0.0",
@@ -62,6 +67,19 @@ struct AppState {
     )
 )]
 struct ApiDoc;
+
+/// Declares the HTTP Basic security scheme the experimental SQL operation refers to.
+struct SecurityAddon;
+
+impl utoipa::Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        use utoipa::openapi::security::{Http, HttpAuthScheme, SecurityScheme};
+        openapi
+            .components
+            .get_or_insert_with(Default::default)
+            .add_security_scheme("basic_auth", SecurityScheme::Http(Http::new(HttpAuthScheme::Basic)));
+    }
+}
 
 /// `docs/plans/v4-security-hardening.md` §3.5/§5 step 2: unlike
 /// `experiments/rate-limit-spike/`'s convenience fallback to a fixed
@@ -187,12 +205,32 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Loading embedding models: {models_to_load:?}...");
     let embedders = Embedders::load(&models_to_load)?;
 
+    // docs/plans/v4-sql-endpoint.md: off unless COMPANY_DNS_SQL_ENABLED. With it
+    // on, a bad setting or a missing/invalid profiles file stops startup: the
+    // endpoint never comes up open.
+    let sql = match sql_endpoint::SqlConfig::from_lookup(&|k| std::env::var(k).ok())? {
+        None => None,
+        Some(config) => {
+            let path = std::env::var("COMPANY_DNS_PROFILES_FILE")
+                .ok()
+                .filter(|p| !p.trim().is_empty())
+                .ok_or_else(|| anyhow::anyhow!(
+                    "COMPANY_DNS_SQL_ENABLED is set but COMPANY_DNS_PROFILES_FILE is not: the SQL endpoint will not start without credentials"
+                ))?;
+            let profiles = sql_endpoint::Profiles::load(std::path::Path::new(&path))?;
+            let sql = sql_endpoint::SqlState::build(config, profiles, &sic, edgar_catalog.as_ref()).await?;
+            tracing::warn!("{} (profiles from {path})", sql.describe());
+            Some(sql)
+        }
+    };
+
     let state = Arc::new(AppState {
         sic,
         edgar_catalog,
         edgar_client,
         embedders: Mutex::new(embedders),
         wikipedia,
+        sql,
     });
 
     // docs/plans/v4-security-hardening.md §3.1a/§5 step 2: `/health`
@@ -212,6 +250,15 @@ async fn main() -> anyhow::Result<()> {
     tiered_limiter_state.spawn_periodic_sweep(Duration::from_secs(5 * 60));
 
     let health_router = OpenApiRouter::new().routes(routes!(health));
+
+    // The experimental SQL route: only when enabled, and OUTSIDE the tiered
+    // rate limiter (its Origin/secret bypasses must never apply to SQL; the
+    // handler authenticates every request itself, sql_endpoint.rs).
+    let sql_router = if state.sql.is_some() {
+        OpenApiRouter::new().routes(routes!(sql_query))
+    } else {
+        OpenApiRouter::new()
+    };
 
     // Each `routes!(...)` call is ONE path - the macro bundles multiple
     // handlers together only when they share a path and differ by HTTP
@@ -268,6 +315,7 @@ async fn main() -> anyhow::Result<()> {
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(data_router)
         .merge(health_router)
+        .merge(sql_router)
         .with_state(state)
         .split_for_parts();
 
@@ -843,6 +891,39 @@ async fn sic_hybrid_global(
 // description of 100-650 tokens does not belong in a URL path. Chunked
 // (sentence windows of about 128 word pieces) because the model reads only
 // 256 and a long description is several businesses, not one. No LLM.
+
+// ---- EXPERIMENTAL: SQL endpoint (docs/plans/v4-sql-endpoint.md) ----
+
+#[utoipa::path(
+    post,
+    path = "/V4.0/sql",
+    request_body = sql_endpoint::SqlRequest,
+    security(("basic_auth" = [])),
+    responses(
+        (status = 200, description = "Columns and rows (explicit nulls), with the row cap applied and stated limitations", body = ApiEnvelope),
+        (status = 400, description = "Unknown dataset, empty SQL, SQL that does not parse, or a statement that is not a single read-only query", body = ApiEnvelope),
+        (status = 401, description = "No or wrong HTTP Basic credentials", body = ApiEnvelope),
+        (status = 403, description = "The profile is not granted SQL, or not that dataset", body = ApiEnvelope),
+        (status = 422, description = "The query needed more memory than the pool allows", body = ApiEnvelope),
+        (status = 429, description = "Too many SQL queries running, or too many failed logins", body = ApiEnvelope),
+        (status = 504, description = "The statement hit the timeout and was cancelled", body = ApiEnvelope),
+    ),
+    tag = "experimental",
+    summary = "Experimental: run one read-only SQL statement against a dataset",
+    description = "EXPERIMENTAL: may change or be removed without notice. Off unless the operator sets COMPANY_DNS_SQL_ENABLED. Needs HTTP Basic Auth (profile id and token) from the operator's profiles file. One read-only statement per request against dataset `sic` or `edgar`, in DataFusion's SQL dialect; embedding columns are not exposed; rows, time and memory are capped. `select * from information_schema.columns` lists tables and columns."
+)]
+async fn sql_query(
+    State(state): State<Arc<AppState>>,
+    axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<SocketAddr>,
+    headers: axum::http::HeaderMap,
+    axum::Json(req): axum::Json<sql_endpoint::SqlRequest>,
+) -> axum::response::Response {
+    match &state.sql {
+        Some(sql) => sql.handle(peer, &headers, req).await,
+        None => not_found(sql_endpoint::MODULE, "The SQL endpoint is not enabled on this server.").into_response(),
+    }
+}
+
 
 #[derive(Deserialize, utoipa::ToSchema)]
 struct MatchRequest {

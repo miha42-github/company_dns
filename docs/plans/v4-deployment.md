@@ -254,6 +254,23 @@ runtime env var sourced from each environment's own K8s Secret
 BuildKit `--secret` for a genuine build-time need, if one turns out to
 exist once §3.2 is decided.
 
+**Addendum (2026-10-05, SQL endpoint, `v4-sql-endpoint.md` 5a/5b):** runtime
+secrets are no longer a single value. The experimental SQL endpoint needs
+several credentialed parties, so the single secret becomes **one profiles
+file** (`COMPANY_DNS_PROFILES_FILE`): a section per profile (mediumroast.io,
+partners, an open-source operator's own), each with a token hash and per-feature
+grants (rate-limit treatment, SQL access and limits). It is a general
+mechanism for V4, not an SQL-only one. It follows the same rule as above: a runtime
+secret, never baked into the image, never in the repo, one per tier. It is
+delivered as a **mounted file**, which fits a SealedSecret mounted as a volume
+on the cluster and a Docker secret (`/run/secrets/...`) for plain-Docker runs,
+and a gitignored file for local development. Decided convention: any secret
+env var may also be given as `<NAME>_FILE` pointing at a mounted file (so
+`MEDIUMROAST_SHARED_SECRET_FILE` too), the Docker-secrets convention.
+The profiles file holds token hashes, clients authenticate with HTTP Basic
+Auth (`v4-sql-endpoint.md` 5a), and the old `MEDIUMROAST_SHARED_SECRET` is
+replaced by the `mediumroast.io` profile (nothing depends on it yet).
+
 ## 3. Design
 
 ### 3.1 Build-time secrets, for whichever actual build-time need exists
@@ -436,6 +453,20 @@ environment gets its own SealedSecret (already installed cluster-wide,
 §1.3), so staging/dev testing never has access to, or could leak, the
 real production secret mediumroast.io's live site trusts. Cheap to do;
 the alternative gives a noisy dev environment the same trust as prod.
+
+**SQL endpoint configuration per tier (added 2026-10-05, experimental,
+off by default).** Each tier gets its own sealed profiles file (same
+reasoning as the distinct shared secret: staging and dev never hold prod's
+credentials) and its own **server-wide SQL limits** in the tier's ConfigMap
+(concurrency, query memory pool, request budget, row and timeout ceilings). The
+limits are sized against the tier's real pod: prod is 4 replicas with requests
+256Mi/100m and limits 1Gi/500m; staging 2 replicas. Request budgets are
+aggregate divided by replicas, the `rate_limit.rs` convention, with its known
+drift if the replica count and constant diverge. The SQL flag stays off until a
+tier's profiles file exists; with the flag on and no valid file the server
+refuses to start. Staging's capacity check (§4.7) must include the SQL capacity test
+(`v4-sql-endpoint.md` §5c): deliberately heavy SQL under steady lookup load,
+raising the caps until lookups degrade, to set the server-wide values.
 
 ### 3.5 The pipeline, with the plain-Docker-on-Ubuntu step explicit
 
@@ -657,6 +688,12 @@ inoperable.
 **Step F — promotion to `company-dns` (prod)** only after staging passes
 (§3.5 step 5). `k8s/dev/` (§3.8) is not part of any of the above.
 
+**Step G — SQL endpoint wiring (after the feature exists, `v4-sql-endpoint.md`
+section 8):** add `profiles.example.json` and the `.gitignore` pattern; a
+SealedSecret and ConfigMap entries per tier (`k8s/staging/`, `k8s/prod/`);
+document the Docker-secret equivalent in the README; run the SQL capacity test
+at staging (§3.4 addendum); flag stays off in prod until that passes.
+
 If §3.1's build-time secret mechanism ends up needed (for example to fetch the
 SIC files in CI, §3.2.3), wire it in following §3.1's pattern.
 
@@ -675,6 +712,10 @@ SIC files in CI, §3.2.3), wire it in following §3.1's pattern.
 
 **Still open:**
 
+- **SQL endpoint operations** (`v4-sql-endpoint.md`): real server-wide limit
+  values per tier, from the staging capacity test (pass criteria decided in
+  `v4-sql-endpoint.md` §5c). Profiles are read at startup only; changing them
+  means a restart (decided).
 - **How the SIC feather files reach CI.** They are staged by hand in `tmp/`
   (gitignored) because the mediumroast.io delivery mechanism is not confirmed
   (§3.2.3). Until it is, the scheduled build can refresh the EDGAR catalog but

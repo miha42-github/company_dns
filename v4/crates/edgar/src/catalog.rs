@@ -256,6 +256,12 @@ impl EdgarCatalog {
         Ok(Self { ctx })
     }
 
+    /// What the experimental SQL endpoint (`docs/plans/v4-sql-endpoint.md`) is
+    /// built from: this catalog's session and its table name.
+    pub fn query_source(&self) -> (SessionContext, Vec<String>) {
+        (self.ctx.clone(), vec!["edgar_catalog".to_string()])
+    }
+
     /// Company-name search. **Decided
     /// (`docs/plans/v4-server-prototype.md` §6, 2026-09-28): matches
     /// V3's `LIKE '%name%'` behavior exactly**, for an honest

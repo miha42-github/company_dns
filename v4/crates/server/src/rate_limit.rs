@@ -121,7 +121,7 @@ impl TieredLimiterState {
 /// going through Traefik at all (e.g. `kubectl port-forward`, or
 /// direct-to-pod traffic from elsewhere in the cluster - out of scope
 /// for this pass, `docs/plans/v4-security-hardening.md` §7).
-fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
+pub(crate) fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
     if let Some(xff) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         if let Some(ip) = xff
             .rsplit(',')

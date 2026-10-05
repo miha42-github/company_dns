@@ -336,6 +336,14 @@ Enable `limit`, `timeout`, `trace` features in `v4/Cargo.toml:40`, add:
 
 ### 3.4 Trusted-origin bypass: local dev site + mediumroast.io
 
+> **Note (2026-10-05):** `Origin`/`Referer` are client-set headers, so any
+> caller that sends `Origin: https://mediumroast.io` is treated as trusted and
+> skips the limiter on every data route. Acceptable for cheap lookups, but it
+> is not proof of identity, which is why the SQL endpoint ignores these headers
+> and requires a credential ([`v4-sql-endpoint.md`](v4-sql-endpoint.md) §5a).
+> Whether to tighten this for the lookup routes is an open question for this
+> document.
+
 **Decided:** two first-party callers — the local development website
 and the production mediumroast.io site — should not be rate-limited at
 all, not merely placed in the normal tier. Both are browser-driven, so
@@ -366,6 +374,16 @@ first thing in the rate-limit middleware, short-circuiting straight to
 into the bypass, the other being §3.5's secret User-Agent.
 
 ### 3.5 Rolling shared-secret User-Agent for mediumroast.io (additive to §3.4's origin check)
+
+> **Note (2026-10-05): superseded in plan.** The experimental SQL endpoint
+> ([`v4-sql-endpoint.md`](v4-sql-endpoint.md) §5a) replaces this scheme with
+> one profiles file (a section per profile: a token hash and per-feature grants
+> such as rate-limit bypass and SQL), delivered as a mounted secret file, with
+> HTTP Basic Auth as the credential. Nothing on the mediumroast.io side was
+> built against the rolling User-Agent HMAC below, so there is no legacy path:
+> when the profiles module is built, `secret_ua.rs` and
+> `MEDIUMROAST_SHARED_SECRET` are removed. Kept below as the record of what was
+> decided and built first.
 
 **Decided (raised directly, superseding an earlier static-secret-hash
 draft):** mediumroast.io's calls to company_dns carry a second trust

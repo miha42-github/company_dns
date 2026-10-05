@@ -69,5 +69,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 roxmltree = "0.20"
 regex = "1"
+# HTTP Basic Auth header decoding for the experimental SQL endpoint
+# (docs/plans/v4-sql-endpoint.md section 5a). 0.22 is already in the tree.
+base64 = "0.22"
 html2text = "0.17"
 thiserror = "2"
