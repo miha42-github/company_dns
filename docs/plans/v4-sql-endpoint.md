@@ -1,7 +1,7 @@
 # V4 SQL endpoint: accepting SQL over HTTP, and which Rust crate to build on
 
-Status: **Phase 1 built (2026-10-05), under test.** The endpoint, profiles file,
-Basic Auth, per-dataset contexts, global limits, tests and a local test script
+Status: **Phase 1 built (2026-10-05), under test.** The endpoint, profiles
+(credentials and rules files), Basic Auth, per-dataset contexts, global limits, tests and a local test script
 exist (`v4/crates/server/src/sql_endpoint.rs`, `v4/scripts/sql-try.sh`); phase 2
 (per-profile limits and the rest) is not started. Earlier status follows.
 **Decided (2026-10-05).** The
@@ -219,10 +219,10 @@ Access is a ladder, and each rung buys a better experience:
 |---|---|---|
 | 1. Anonymous | no `User-Agent`, or one that fails the format check | the draconian rate-limit tier (a nudge to identify yourself) |
 | 2. Self-identifying | a valid `User-Agent` such as `YourApp/1.0 (contact@example.com)` | the normal rate-limit tier. **This existing mechanism stays**: it is how a well-behaved caller gets a better experience without any credential. |
-| 3. Authenticated | HTTP Basic Auth with a profile from the profiles file | the profile's grants: **lower or no rate limits**, and **enhanced access such as SQL over REST** |
+| 3. Authenticated | HTTP Basic Auth with a profile from the credentials file | the profile's grants: **lower or no rate limits**, and **enhanced access such as SQL over REST** |
 
 What the plan replaces is only the *secret* carried in the `User-Agent`
-(the rolling hourly HMAC, `secret_ua.rs`), because the profiles file with
+(the rolling hourly HMAC, `secret_ua.rs`), because the credentials file with
 Basic Auth does that job better. The `User-Agent` format check and the
 normal/draconian tiering are unchanged. The profile's `rate_limit` grant (phase 2)
 is what moves an authenticated caller up from level 2: a higher quota, or none,
@@ -250,74 +250,62 @@ it, and the profile's own SQL limits apply on top. An earlier build put the rout
 outside the limiter to avoid the Origin bypass; that left SQL with no request-rate
 limit and no `User-Agent` tiering, and was corrected 2026-10-06.
 
-### The profiles file (one file, a section per profile)
+### Profiles: a credentials file and a rules file (decided 2026-10-06)
 
-- **Where it lives**: one file, path in `COMPANY_DNS_PROFILES_FILE`, one per
-  tier. It holds only token hashes, but it also carries each profile's grants
-  and limits, so it is still delivered as a secret and never committed:
-  - Kubernetes: a SealedSecret (controller already installed) mounted as a
-    file, one per tier, so staging and dev never hold prod's.
-  - Plain Docker / Compose / Swarm: a Docker secret (a file under
-    `/run/secrets/`).
-  - Local development: a gitignored file (pattern added to `.gitignore`).
-  - Never in the image, never in the repo. The repo ships only
-    `profiles.example.json` with obviously fake hashes.
-- **One section per profile.** A profile has an `id`, a `secret_sha256`, and optional
-  per-feature grants. Features not mentioned are not granted:
-  ```json
-  {"profiles": {
-    "mediumroast.io": {
-      "secret_sha256": "<hash of the token given to mediumroast.io>",
-      "rate_limit": {"bypass": true},
-      "sql": {"datasets": ["sic", "edgar"],
-              "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2, "requests_per_minute": 30}}},
-    "partner-example": {
-      "secret_sha256": "<...>",
-      "sql": {"datasets": ["sic"]}}
-  }}
-  ```
-  (Fake values, shape only. Real numbers are the operator's to set in the sealed
-  file.)
-- **Authentication: HTTP Basic Auth (decided 2026-10-05), general rather than
-  SQL-specific.** `Authorization: Basic base64(<profile id>:<token>)`. The
-  username is the profile id; the password is a high-entropy generated token
-  (never a human password). The file stores only a **SHA-256 hash** of each
-  token (`secret_sha256`), compared in constant time, so a leaked or dumped
-  file does not hand out working credentials. A fast hash is right for random
-  256-bit tokens; a slow password hash would add cost for no benefit. Operators
-  generate a token and its hash with standard tools (for example `openssl rand
-  -hex 32` and `shasum -a 256`), documented in the README; the token is given
-  to the client once and never stored in plain text on the server.
-  - Works with `curl -u id:token`, every HTTP client library and Swagger UI's
-    "Authorize" button; the OpenAPI document declares it as an HTTP Basic
-    security scheme.
-  - It authenticates a *profile*; each feature then asks what that profile is
-    granted. No header: the request is anonymous (lookups behave as today). A
-    present but wrong credential: `401` with `WWW-Authenticate: Basic`,
-    never silently treated as anonymous. SQL from an anonymous caller: `401`;
-    a profile without SQL: `403`; dataset not granted: `403`; a limit hit:
-    `429` with `Retry-After`.
-  - **Costs, stated openly:** the token travels with every request, so TLS is
-    required (enforced at the ingress; the hop inside the cluster is plain HTTP
-    as it is today), and a captured token stays valid until rotated rather than
-    expiring in hours. Failed attempts are throttled per source IP, so guessing
-    is not practical, and the audit log records them.
-  - Not chosen: a rolling hourly HMAC (needs custom client code, needs the raw
-    secret on the server, and mainly mattered when the value sat in
-    `User-Agent`), and HTTP Digest (same raw-secret problem, weak tooling).
-- **No legacy secret path.** mediumroast.io has nothing implemented against the old
-  hourly-HMAC-in-`User-Agent` secret, so Basic Auth replaces that secret outright (the
-  self-identifying `User-Agent` tiering stays, see the access levels above): no
-  compatibility mode. **Done 2026-10-05:** `secret_ua.rs`, the
-  `MEDIUMROAST_SHARED_SECRET` setting and the `hmac` dependency are removed from
-  the code (the self-identifying `User-Agent` tiering and the trusted-origin check
-  are untouched, with new tests). Authenticated access is the profiles mechanism;
-  mediumroast.io becomes a profile in phase 2.
-- **Fails closed**: flag on for a feature that needs profiles (SQL) but the
-  file is missing, empty or malformed means startup fails with a clear
-  message. It never starts open.
-- **Rotation and reload**: change the sealed secret and roll the pods. The file
-  is read at startup only; there is no reload without a restart (decided).
+An earlier build kept everything for a profile (hash, grants, limits) in one mixed JSON file.
+Decided 2026-10-06 to split by what each file holds, so the secret file is tiny and the
+policy file is not secret and can be reviewed, versioned and shipped like any config:
+
+1. **Credentials**, like `/etc/passwd`: `COMPANY_DNS_CREDENTIALS_FILE`, one
+   `profile:sha256-of-token` line per profile, `#` comments allowed
+   (`v4/credentials.example`). **The only secret file**, and it holds only hashes.
+   - Kubernetes: a SealedSecret mounted as a file, one per tier, so staging and dev never
+     hold prod's. Plain Docker/Compose/Swarm: a Docker secret (a file under
+     `/run/secrets/`). Local development: a gitignored file. Never in the image or the repo.
+2. **Rules**: `COMPANY_DNS_RULES_FILE`, optional JSON with **no secrets**, so it can live in
+   a ConfigMap or in git (`v4/rules.example.json`): a `defaults` section and per-profile
+   overrides. A profile starts from the defaults; an override changes only the settings it
+   names. Inheritance: objects merge key by key, a value or a list replaces, `null` removes an
+   inherited setting, and `bypass` and a quota (`requests_per_minute`/`burst`) are alternatives,
+   so naming one replaces an inherited other. A profile with no entry gets the defaults; an entry
+   with no credential is a startup error.
+   ```json
+   {"defaults": {"rate_limit": {"requests_per_minute": 300, "burst": 30}},
+    "profiles": {
+      "mediumroast.io": {"rate_limit": {"bypass": true},
+                         "sql": {"datasets": ["sic", "edgar"], "limits": {"max_rows": 500}}},
+      "partner":        {"rate_limit": {"requests_per_minute": 600}}}}
+   ```
+   (Fake values, shape only; real numbers are the operator's.)
+
+Order of precedence for any number: **server-wide limits** (env, protect the host) clamp the
+**rules** (defaults, then the profile's overrides), which apply to each profile. Both files are
+read once at startup; a change means a restart, and a bad file stops the server.
+
+- **Authentication: HTTP Basic Auth (decided 2026-10-05), general rather than SQL-specific.**
+  `Authorization: Basic base64(<profile id>:<token>)`. The password is a high-entropy generated
+  token (never a human password). The credentials file stores only a **SHA-256 hash** of each
+  token, compared in constant time, so a leaked or dumped file does not hand out working
+  credentials. A fast hash is right for random 256-bit tokens. Operators make a token and its hash
+  with standard tools (`openssl rand -hex 32`, `shasum -a 256`), documented in the README.
+  - Works with `curl -u id:token`, every HTTP client library and Swagger UI's "Authorize" button;
+    the OpenAPI document declares an HTTP Basic security scheme.
+  - It authenticates a *profile*; each feature then asks what that profile's rules grant. No
+    header: anonymous (lookups behave as today). A present but wrong credential: `401` with
+    `WWW-Authenticate: Basic`, never silently anonymous. SQL from an anonymous caller: `401`; a
+    profile without `sql`: `403`; dataset not granted: `403`; a limit hit: `429` with `Retry-After`.
+  - **Costs, stated openly:** the token travels with every request, so TLS is required (enforced
+    at the ingress; the hop inside the cluster is plain HTTP as today), and a captured token stays
+    valid until rotated. Failed attempts are throttled per source IP and logged.
+  - Not chosen: a rolling hourly HMAC (custom client code, raw secret on the server) and HTTP Digest.
+- **No legacy secret path.** mediumroast.io had nothing built against the old hourly-HMAC-in-
+  `User-Agent` secret, so Basic Auth replaced it outright. **Done 2026-10-05:** `secret_ua.rs`,
+  `MEDIUMROAST_SHARED_SECRET` and the `hmac` dependency are removed (the self-identifying
+  `User-Agent` tiering and the trusted-origin check are untouched, with tests). mediumroast.io is
+  a profile.
+- **Fails closed**: SQL on but no credentials file, or any invalid file, stops startup.
+- **Rotation and reload**: change the sealed secret (or the rules ConfigMap) and roll the pods.
+  Files are read at startup only; there is no reload without a restart (decided).
 
 ### Two sets of limits
 
@@ -338,7 +326,7 @@ limit and no `User-Agent` tiering, and was corrected 2026-10-06.
 2. **Per-profile limits: defaults plus per-profile override.** Defaults come
    from configuration; each profile's `sql.limits` may override: rows, timeout,
    concurrency, requests per minute, memory share. **A profile override is always
-   clamped by the server-wide limits**, so a mistake in the profiles file can
+   clamped by the server-wide limits**, so a mistake in the rules can
    restrict a profile but can never exceed what the hosting system can take.
 
 Enforcement order per request: authenticate the profile, check it is granted SQL and
@@ -367,16 +355,16 @@ logged with source IP and counted. Secrets and tokens are never logged.
 
 ## 5b. Where the other plans change (the general solution)
 
-- **`v4-deployment.md`**: section 2 (runtime secrets: one profiles file, may be
+- **`v4-deployment.md`**: section 2 (runtime secrets: credentials and rules files, may be
   mounted; Docker secrets named as the equivalent of the sealed K8s Secret;
-  `<NAME>_FILE` convention); section 3.4 (per-tier profiles file and per-tier
+  `<NAME>_FILE` convention); section 3.4 (per-tier credentials file, rules ConfigMap and per-tier
   server-wide limits in the ConfigMap; staging capacity test); Step G;
   open questions. **Updated.**
 - **`v4-security-hardening.md`**: 3.5 and 3.4 notes; the profiles mechanism
   replaces 3.5: HTTP Basic Auth against hashed profile tokens becomes the single
   credential mechanism, with no legacy secret-in-`User-Agent` path; the self-identifying `User-Agent` tiering stays. **Updated.**
 - **Code, phase 2**: a small `access` module that loads the
-  profiles file and answers "who is this request, and what are they granted";
+  credentials and rules and answers "who is this request, and what are they granted";
   the tiered limiter and the SQL handler both ask it (the limiter's old
   single-secret check is already gone). The origin-based trust in
   `trusted_origin.rs` stays for browser-driven lookups for now (browsers cannot
@@ -446,7 +434,7 @@ prod uses the same method on its 4-replica sizing.
 4. Access: off by default behind a config flag.
 5. Caps: 1,000 default / 10,000 max rows, 10 s, 256 MB, all configurable.
 
-6. Access (2026-10-05): credential-only; one general profiles file (a section
+6. Access (2026-10-05): credential-only; one general credentials file plus a rules file (defaults and overrides; a section
    per profile) delivered like the existing secret (sealed K8s Secret, Docker
    secret, or gitignored local file); mediumroast.io is one profile with strict
    limits set by the operator; open-source users create their own;
@@ -458,7 +446,7 @@ prod uses the same method on its 4-replica sizing.
    token; only the token's SHA-256 is stored). Rolling HMAC and Digest were
    considered and not chosen.
 9. General solution (2026-10-05): the `<NAME>_FILE` convention applies to any
-   secret env var, one profiles file serves every feature, and mediumroast.io's
+   secret env var, one credentials/rules pair serves every feature, and mediumroast.io's
    rate-limit trust becomes a profile grant. No legacy secret-in-`User-Agent` path (the self-identifying `User-Agent` tier stays),
    because nothing depends on it yet.
 
@@ -478,8 +466,8 @@ Decided 2026-10-05: **the endpoint first, per-profile limits afterwards.**
 **Phase 1: the SQL endpoint, with one global set of limits.**
 - Off by default behind `COMPANY_DNS_SQL_ENABLED`; experimental labelling
   (section 5a) from day one.
-- Profiles file (`COMPANY_DNS_PROFILES_FILE`) in its smallest form: a profile
-  id, a `secret_sha256`, and the datasets it may query. HTTP Basic Auth,
+- Profiles in their smallest form: a credentials file entry (`profile:hash`) and the
+  datasets it may query. HTTP Basic Auth,
   constant-time hash compare, failed-attempt throttling, audit log line. Flag on
   with no valid file fails startup. This is the minimum that keeps the endpoint
   closed; there is no anonymous SQL, even in phase 1.
@@ -497,20 +485,22 @@ Decided 2026-10-05: **the endpoint first, per-profile limits afterwards.**
 
 **Phase 2: profiles and limits.**
 - **Built 2026-10-06: the profile `rate_limit` grant** (`v4/crates/server/src/access.rs`,
-  `rate_limit.rs`). The profiles file is now general: `COMPANY_DNS_PROFILES_FILE`
-  loads with or without SQL, HTTP Basic Auth identifies a profile on every route, and a
+  `rate_limit.rs`). Profiles are now general: `COMPANY_DNS_CREDENTIALS_FILE` (and optional
+  `COMPANY_DNS_RULES_FILE`) load with or without SQL, HTTP Basic Auth identifies a profile on every route, and a
   profile may carry `rate_limit: {"bypass": true}` (no limit) or
   `{"requests_per_minute": N, "burst": M}` (its own quota, fleet-wide, divided across
   replicas like the tiers). A profile with no grant is an identified caller on the
   normal tier; a wrong credential is a 401. mediumroast.io is one profile (see
-  `v4/profiles.example.json`). The `User-Agent` tiers are unchanged for anonymous
+  `v4/credentials.example` and `v4/rules.example.json`). The `User-Agent` tiers are unchanged for anonymous
   callers. `Origin`/`Referer` are still never identity.
+- **Built 2026-10-06: the credentials/rules split with defaults and per-profile overrides**
+  (`access.rs`), replacing the single mixed file.
 - **Built 2026-10-06: per-profile SQL limits** (`sql.limits`: `max_rows`, `timeout_secs`,
   `concurrency`, `requests_per_minute`, `burst`), each clamped by the server-wide value,
   with the SQL route moved inside the rate limiter (no Origin bypass). Not built: a
   per-profile memory share (the pool is per query context, so concurrency is the control).
 - `<NAME>_FILE` convention for secret env vars.
-- Deployment wiring (`v4-deployment.md` Step G): per-tier sealed profiles file
+- Deployment wiring (`v4-deployment.md` Step G): per-tier sealed credentials file and rules ConfigMap
   and ConfigMap limits.
 - The staging capacity test (section 5c) that sets the real global values.
 - Hardening review and licensing check; the Origin finding in

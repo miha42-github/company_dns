@@ -181,29 +181,37 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Loading embedding models: {models_to_load:?}...");
     let embedders = Embedders::load(&models_to_load)?;
 
-    // docs/plans/v4-sql-endpoint.md section 5a: profiles (HTTP Basic Auth, grants such
-    // as a rate-limit treatment and SQL access) from one file, read once at startup.
-    // Optional; with it unset every caller is anonymous and tiered by User-Agent. A set
-    // but invalid file stops startup: it never comes up half-configured.
-    let access: Option<Arc<access::Access>> = match std::env::var("COMPANY_DNS_PROFILES_FILE")
-        .ok()
-        .filter(|p| !p.trim().is_empty())
-    {
-        None => None,
-        Some(path) => {
-            let profiles = access::Profiles::load(std::path::Path::new(&path))?;
-            tracing::info!("Profiles: {} loaded from {path}: {:?}", profiles.len(), profiles.ids());
+    // docs/plans/v4-sql-endpoint.md section 5a: profiles (HTTP Basic Auth). Two files, read
+    // once at startup: credentials (passwd-style, the only secret) and optional rules (JSON,
+    // defaults plus per-profile overrides). Both optional; with no credentials file every
+    // caller is anonymous and tiered by User-Agent. A set but invalid file stops startup: it
+    // never comes up half-configured.
+    let non_empty = |name: &str| std::env::var(name).ok().filter(|p| !p.trim().is_empty());
+    let access: Option<Arc<access::Access>> = match (non_empty("COMPANY_DNS_CREDENTIALS_FILE"), non_empty("COMPANY_DNS_RULES_FILE")) {
+        (None, None) => None,
+        (None, Some(_)) => anyhow::bail!("COMPANY_DNS_RULES_FILE is set but COMPANY_DNS_CREDENTIALS_FILE is not: rules need credentials to apply to"),
+        (Some(creds), rules) => {
+            let profiles = access::Profiles::load(
+                std::path::Path::new(&creds),
+                rules.as_deref().map(std::path::Path::new),
+            )?;
+            tracing::info!(
+                "Profiles: {} loaded from {creds}{}: {:?}",
+                profiles.len(),
+                rules.as_ref().map(|r| format!(" with rules from {r}")).unwrap_or_else(|| " (no rules file: no grants)".to_string()),
+                profiles.ids()
+            );
             Some(Arc::new(access::Access::new(profiles)))
         }
     };
 
-    // Off unless COMPANY_DNS_SQL_ENABLED. With it on, a bad setting or no profiles file
+    // Off unless COMPANY_DNS_SQL_ENABLED. With it on, a bad setting or no credentials file
     // stops startup: the endpoint never comes up open.
     let sql = match sql_endpoint::SqlConfig::from_lookup(&|k| std::env::var(k).ok())? {
         None => None,
         Some(config) => {
             let access = access.clone().ok_or_else(|| anyhow::anyhow!(
-                "COMPANY_DNS_SQL_ENABLED is set but COMPANY_DNS_PROFILES_FILE is not: the SQL endpoint will not start without credentials"
+                "COMPANY_DNS_SQL_ENABLED is set but COMPANY_DNS_CREDENTIALS_FILE is not: the SQL endpoint will not start without credentials"
             ))?;
             let sql = sql_endpoint::SqlState::build(config, access, &sic, edgar_catalog.as_ref()).await?;
             tracing::warn!("{}", sql.describe());
@@ -902,7 +910,7 @@ async fn sic_hybrid_global(
     ),
     tag = "experimental",
     summary = "Experimental: run one read-only SQL statement against a dataset",
-    description = "EXPERIMENTAL: may change or be removed without notice. Off unless the operator sets COMPANY_DNS_SQL_ENABLED. Needs HTTP Basic Auth (profile id and token) from the operator's profiles file. One read-only statement per request against dataset `sic` or `edgar`, in DataFusion's SQL dialect; embedding columns are not exposed; rows, time and memory are capped. `select * from information_schema.columns` lists tables and columns."
+    description = "EXPERIMENTAL: may change or be removed without notice. Off unless the operator sets COMPANY_DNS_SQL_ENABLED. Needs HTTP Basic Auth (profile id and token) from the operator's credentials file, and a profile with SQL access in the rules. One read-only statement per request against dataset `sic` or `edgar`, in DataFusion's SQL dialect; embedding columns are not exposed; rows, time and memory are capped. `select * from information_schema.columns` lists tables and columns."
 )]
 async fn sql_query(
     State(state): State<Arc<AppState>>,

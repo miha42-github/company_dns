@@ -79,7 +79,7 @@ pub struct TieredLimiterState {
     /// Whether a trusted `Origin`/`Referer` skips the limiter. True for the lookup routes;
     /// false for the SQL route, where a client-set header must never be a bypass.
     trust_origin: bool,
-    /// Profiles; `None` when no profiles file is configured (everyone is anonymous).
+    /// Profiles; `None` when no credentials file is configured (everyone is anonymous).
     access: Option<Arc<Access>>,
     /// One bucket per profile whose `rate_limit` grant is a quota (keyed by profile, not IP).
     profile_quotas: Arc<HashMap<String, DefaultDirectRateLimiter>>,
@@ -246,7 +246,7 @@ pub async fn tiered_rate_limit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::access::{tests::token_hash, Profiles};
+    use crate::access::tests::test_profiles;
     use axum::http::StatusCode;
     use axum::{extract::ConnectInfo, middleware, routing::get, Router};
     use base64::Engine;
@@ -255,17 +255,13 @@ mod tests {
     /// Profiles: `unlimited` (bypass), `capped` (20/min fleet-wide = 5 per pod), `plain` (no
     /// rate_limit grant). Every token is "tok".
     fn profiles() -> Arc<Access> {
-        let h = token_hash("tok");
-        Arc::new(Access::new(
-            Profiles::parse(&format!(
-                r#"{{"profiles": {{
-                    "unlimited": {{"secret_sha256": "{h}", "rate_limit": {{"bypass": true}}}},
-                    "capped":    {{"secret_sha256": "{h}", "rate_limit": {{"requests_per_minute": 20, "burst": 20}}}},
-                    "plain":     {{"secret_sha256": "{h}"}}
-                }}}}"#
-            ))
-            .unwrap(),
-        ))
+        Arc::new(Access::new(test_profiles(
+            &[("unlimited", "tok"), ("capped", "tok"), ("plain", "tok")],
+            Some(r#"{"profiles": {
+                "unlimited": {"rate_limit": {"bypass": true}},
+                "capped":    {"rate_limit": {"requests_per_minute": 20, "burst": 20}}
+            }}"#),
+        )))
     }
 
     fn app_with(access: Option<Arc<Access>>) -> Router {

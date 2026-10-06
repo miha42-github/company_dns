@@ -377,8 +377,8 @@ into the bypass, the other being §3.5's secret User-Agent.
 
 > **Note (2026-10-05): superseded in plan.** The experimental SQL endpoint
 > ([`v4-sql-endpoint.md`](v4-sql-endpoint.md) §5a) replaces this scheme with
-> one profiles file (a section per profile: a token hash and per-feature grants
-> such as rate-limit bypass and SQL), delivered as a mounted secret file, with
+> a credentials file (`profile:hash` lines, the only secret) and a rules file (defaults and
+> per-profile overrides: rate-limit treatment, SQL), delivered as mounted files, with
 > HTTP Basic Auth as the credential. Only the *secret carried in the User-Agent*
 > (the rolling HMAC below) is superseded: nothing on the mediumroast.io side was
 > built against it, so there is no legacy path, and when the profiles module is

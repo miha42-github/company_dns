@@ -9,9 +9,10 @@
 #   scripts/sql-try.sh q sic "select ..." [profile]    one query, pretty-printed
 #   scripts/sql-try.sh tables           list tables and columns for both datasets
 #
-# Everything private lives in v4/.local/sql/ (gitignored): the profiles file the
-# server reads (token HASHES only) and tokens.env (the tokens themselves, for
-# this script's curl calls). Nothing here is a real credential.
+# Everything private lives in v4/.local/sql/ (gitignored): `credentials` (profile:hash
+# lines, like /etc/passwd) and `rules.json` (defaults plus per-profile overrides), which
+# the server reads, and tokens.env (the tokens themselves, for this script's curl calls).
+# Nothing here is a real credential.
 set -u
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 DIR="$HERE/.local/sql"
@@ -23,40 +24,46 @@ need curl; need jq; need openssl; need shasum
 
 setup() {
   mkdir -p "$DIR"; chmod 700 "$DIR"
-  if [ -f "$DIR/profiles.json" ]; then
-    if grep -q '"sql-rpm"' "$DIR/profiles.json"; then echo "already set up: $DIR (delete it to start over)"; return; fi
-    echo "older setup without the newest test profiles: recreating it (tokens change; restart the server)"
-    rm -f "$DIR/profiles.json" "$DIR/tokens.env"
+  if [ -f "$DIR/profiles.json" ] || { [ -f "$DIR/rules.json" ] && ! grep -q '"sql-rpm"' "$DIR/rules.json"; }; then
+    echo "older setup layout: recreating it (tokens change; restart the server)"
+    rm -f "$DIR/profiles.json" "$DIR/credentials" "$DIR/rules.json" "$DIR/tokens.env"
   fi
-  t1=$(openssl rand -hex 32); t2=$(openssl rand -hex 32); t3=$(openssl rand -hex 32)
-  t4=$(openssl rand -hex 32); t5=$(openssl rand -hex 32); t6=$(openssl rand -hex 32); t7=$(openssl rand -hex 32)
+  if [ -f "$DIR/credentials" ] && [ -f "$DIR/rules.json" ]; then echo "already set up: $DIR (delete it to start over)"; return; fi
   h() { printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1; }
-  cat > "$DIR/profiles.json" <<EOF
-{"profiles": {
-  "tester":    {"secret_sha256": "$(h "$t1")", "rate_limit": {"bypass": true}, "sql": {"datasets": ["sic", "edgar"]}},
-  "sic-only":  {"secret_sha256": "$(h "$t2")", "rate_limit": {"bypass": true}, "sql": {"datasets": ["sic"]}},
-  "no-sql":    {"secret_sha256": "$(h "$t3")"},
-  "unlimited": {"secret_sha256": "$(h "$t4")", "rate_limit": {"bypass": true}},
-  "capped":    {"secret_sha256": "$(h "$t5")", "rate_limit": {"requests_per_minute": 20, "burst": 20}},
-  "sql-small": {"secret_sha256": "$(h "$t6")", "rate_limit": {"bypass": true},
-                "sql": {"datasets": ["sic"], "limits": {"max_rows": 5, "timeout_secs": 2, "concurrency": 1}}},
-  "sql-rpm":   {"secret_sha256": "$(h "$t7")", "rate_limit": {"bypass": true},
-                "sql": {"datasets": ["sic"], "limits": {"requests_per_minute": 20}}}
-}}
-EOF
-  printf 'TESTER_TOKEN=%s\nSICONLY_TOKEN=%s\nNOSQL_TOKEN=%s\nUNLIMITED_TOKEN=%s\nCAPPED_TOKEN=%s\nSQLSMALL_TOKEN=%s\nSQLRPM_TOKEN=%s\n' "$t1" "$t2" "$t3" "$t4" "$t5" "$t6" "$t7" > "$DIR/tokens.env"
-  chmod 600 "$DIR/profiles.json" "$DIR/tokens.env"
-  echo "created $DIR (profiles: tester, sic-only, no-sql, unlimited, capped, sql-small, sql-rpm)"
+  : > "$DIR/tokens.env"; : > "$DIR/credentials"
+  echo "# profile:sha256-of-token (test profiles; the tokens are in tokens.env)" >> "$DIR/credentials"
+  for p in tester sic-only no-sql unlimited capped sql-small sql-rpm; do
+    t=$(openssl rand -hex 32)
+    echo "$p:$(h "$t")" >> "$DIR/credentials"
+    echo "$(printf '%s' "$p" | tr 'a-z-' 'A-Z_')_TOKEN=$t" >> "$DIR/tokens.env"
+  done
+  # defaults: no rate limit (so the battery is not throttled); overrides inherit it and change one thing
+  cat > "$DIR/rules.json" <<'RULES'
+{
+  "defaults": {"rate_limit": {"bypass": true}},
+  "profiles": {
+    "tester":    {"sql": {"datasets": ["sic", "edgar"]}},
+    "sic-only":  {"sql": {"datasets": ["sic"]}},
+    "no-sql":    {"rate_limit": null},
+    "unlimited": {},
+    "capped":    {"rate_limit": {"requests_per_minute": 20, "burst": 20}},
+    "sql-small": {"sql": {"datasets": ["sic"], "limits": {"max_rows": 5, "timeout_secs": 2, "concurrency": 1}}},
+    "sql-rpm":   {"sql": {"datasets": ["sic"], "limits": {"requests_per_minute": 20}}}
+  }
+}
+RULES
+  chmod 600 "$DIR/credentials" "$DIR/rules.json" "$DIR/tokens.env"
+  echo "created $DIR: credentials (hashes), rules.json (defaults + overrides), tokens.env (the tokens)"
+  echo "profiles: tester, sic-only, no-sql, unlimited, capped, sql-small, sql-rpm"
 }
 
 tok() { # profile -> token
-  # shellcheck disable=SC1091
-  . "$DIR/tokens.env"
-  case "$1" in tester) echo "$TESTER_TOKEN";; sic-only) echo "$SICONLY_TOKEN";; no-sql) echo "$NOSQL_TOKEN";; unlimited) echo "$UNLIMITED_TOKEN";; capped) echo "$CAPPED_TOKEN";; sql-small) echo "$SQLSMALL_TOKEN";; sql-rpm) echo "$SQLRPM_TOKEN";; *) echo "";; esac
+  var="$(printf '%s' "$1" | tr 'a-z-' 'A-Z_')_TOKEN"
+  grep "^$var=" "$DIR/tokens.env" | cut -d= -f2
 }
 
 start() {
-  [ -f "$DIR/profiles.json" ] || setup
+  [ -f "$DIR/credentials" ] || setup
   cd "$HERE" || exit 1
   if [ "${1:-}" = "--off" ]; then
     echo "starting with SQL OFF (flag unset)"
@@ -64,7 +71,7 @@ start() {
   fi
   echo "starting with SQL ON, small limits so they are easy to hit:"
   echo "  default 50 rows, max 200 rows, 5 s timeout, 128 MB, 2 concurrent, parallelism 2"
-  exec env COMPANY_DNS_SQL_ENABLED=true COMPANY_DNS_PROFILES_FILE="$DIR/profiles.json" \
+  exec env COMPANY_DNS_SQL_ENABLED=true COMPANY_DNS_CREDENTIALS_FILE="$DIR/credentials" COMPANY_DNS_RULES_FILE="$DIR/rules.json" \
     COMPANY_DNS_SQL_DEFAULT_ROWS=50 COMPANY_DNS_SQL_MAX_ROWS=200 COMPANY_DNS_SQL_TIMEOUT_SECS=5 \
     COMPANY_DNS_SQL_MEMORY_MB=128 COMPANY_DNS_SQL_MAX_CONCURRENT=2 COMPANY_DNS_SQL_PARALLELISM=2 \
     cargo run -p company-dns-server

@@ -3,7 +3,7 @@
 //! `POST /V4.0/sql` runs one read-only SQL statement against one dataset
 //! (`sic` or `edgar`). It can use real CPU and memory, so it is closed by
 //! default: off unless `COMPANY_DNS_SQL_ENABLED` is set, and every request needs
-//! HTTP Basic Auth against the profiles file (`COMPANY_DNS_PROFILES_FILE`), which
+//! HTTP Basic Auth against the credentials file (`COMPANY_DNS_CREDENTIALS_FILE`, see `access.rs`), which
 //! holds only a SHA-256 of each profile's token. It deliberately ignores
 //! `Origin`/`Referer` (client-set, so no proof of identity) and sits outside the
 //! tiered rate limiter's bypasses.
@@ -462,7 +462,7 @@ mod tests {
     };
     use datafusion::datasource::MemTable;
 
-    use crate::access::{tests::token_hash, FAILED_AUTH_PER_MINUTE, Profiles};
+    use crate::access::{tests::test_profiles, FAILED_AUTH_PER_MINUTE, Profiles};
     use axum::http::{header, HeaderValue};
     use base64::Engine;
 
@@ -473,7 +473,7 @@ mod tests {
     }
 
     /// 50 rows with an id, a name and a `vector_demo` column, as `things`.
-    async fn demo_state(profiles_json: &str) -> SqlState {
+    async fn demo_state(profiles: Profiles) -> SqlState {
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int64, false),
             Field::new("name", DataType::Utf8, true),
@@ -494,14 +494,14 @@ mod tests {
         let ctx = build_query_context(&source, &["things".to_string()], &config).await.unwrap();
         let mut contexts = HashMap::new();
         contexts.insert("sic".to_string(), ctx);
-        SqlState::from_parts(config, Arc::new(Access::new(Profiles::parse(profiles_json).unwrap())), contexts)
+        SqlState::from_parts(config, Arc::new(Access::new(profiles)), contexts)
     }
 
-    fn profiles_json(token: &str, datasets: &str) -> String {
-        format!(
-            r#"{{"profiles": {{"tester": {{"secret_sha256": "{}", "sql": {{"datasets": {datasets}}}}}, "nosql": {{"secret_sha256": "{}"}}}}}}"#,
-            token_hash(token),
-            token_hash("other-token")
+    /// Profiles `tester` (token `token`, SQL on `datasets`) and `nosql` (no SQL grant).
+    fn profiles_json(token: &str, datasets: &str) -> Profiles {
+        test_profiles(
+            &[("tester", token), ("nosql", "other-token")],
+            Some(&format!(r#"{{"profiles": {{"tester": {{"sql": {{"datasets": {datasets}}}}}}}}}"#)),
         )
     }
 
@@ -567,7 +567,7 @@ mod tests {
 
     #[tokio::test]
     async fn no_credential_is_401_with_challenge() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let resp = s.handle(peer(), &HeaderMap::new(), req("select 1")).await;
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
         assert!(resp.headers().get(header::WWW_AUTHENTICATE).unwrap().to_str().unwrap().starts_with("Basic"));
@@ -575,7 +575,7 @@ mod tests {
 
     #[tokio::test]
     async fn forged_origin_is_accepted_for_nothing() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let mut h = HeaderMap::new();
         h.insert(header::ORIGIN, HeaderValue::from_static("https://mediumroast.io"));
         h.insert(header::REFERER, HeaderValue::from_static("https://mediumroast.io/"));
@@ -585,7 +585,7 @@ mod tests {
 
     #[tokio::test]
     async fn wrong_token_401_and_failures_are_throttled() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let bad = basic("tester", "wrong");
         for _ in 0..FAILED_AUTH_PER_MINUTE {
             assert_eq!(call(&s, &bad, req("select 1")).await.0, StatusCode::UNAUTHORIZED);
@@ -597,14 +597,14 @@ mod tests {
 
     #[tokio::test]
     async fn profile_without_sql_or_dataset_is_403() {
-        let s = demo_state(&profiles_json("tok", r#"["edgar"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["edgar"]"#)).await;
         assert_eq!(call(&s, &basic("nosql", "other-token"), req("select 1")).await.0, StatusCode::FORBIDDEN);
         assert_eq!(call(&s, &basic("tester", "tok"), req("select 1")).await.0, StatusCode::FORBIDDEN, "sic not granted");
     }
 
     #[tokio::test]
     async fn unknown_dataset_and_empty_sql_are_400() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let h = basic("tester", "tok");
         let mut r = req("select 1");
         r.dataset = "nope".into();
@@ -614,7 +614,7 @@ mod tests {
 
     #[tokio::test]
     async fn select_works_and_vectors_are_hidden() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let h = basic("tester", "tok");
         let (status, body) = call(&s, &h, req("select id, name from things where id < 5 order by id")).await;
         assert_eq!(status, StatusCode::OK);
@@ -635,7 +635,7 @@ mod tests {
 
     #[tokio::test]
     async fn empty_result_is_an_empty_list() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let (status, body) = call(&s, &basic("tester", "tok"), req("select id from things where id < 0")).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["data"]["rows"], json!([]));
@@ -644,7 +644,7 @@ mod tests {
 
     #[tokio::test]
     async fn row_cap_and_limit_clamp() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let h = basic("tester", "tok");
         let mut r = req("select id from things");
         r.limit = Some(10);
@@ -661,7 +661,7 @@ mod tests {
 
     #[tokio::test]
     async fn only_read_only_single_statements_run() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let h = basic("tester", "tok");
         for sql in [
             "insert into things values (1, 'x', 0.1)",
@@ -688,17 +688,18 @@ mod tests {
         assert!(matches!(out, Err(QueryError::Timeout)), "{out:?}", out = out.as_ref().err());
     }
 
-    fn limited_profiles(limits: &str) -> String {
-        format!(
-            r#"{{"profiles": {{"lim": {{"secret_sha256": "{}", "sql": {{"datasets": ["sic"], "limits": {limits}}}}}}}}}"#,
-            token_hash("tok")
+    /// One profile, `lim` (token `tok`), with SQL on `sic` and these limits.
+    fn limited_profiles(limits: &str) -> Profiles {
+        test_profiles(
+            &[("lim", "tok")],
+            Some(&format!(r#"{{"profiles": {{"lim": {{"sql": {{"datasets": ["sic"], "limits": {limits}}}}}}}}}"#)),
         )
     }
 
     #[tokio::test]
     async fn a_profile_can_lower_rows_and_is_clamped_by_the_server_wide_ceiling() {
         let h = basic("lim", "tok");
-        let s = demo_state(&limited_profiles(r#"{"max_rows": 7}"#)).await;
+        let s = demo_state(limited_profiles(r#"{"max_rows": 7}"#)).await;
         let (_, body) = call(&s, &h, req("select id from things")).await;
         assert_eq!(body["data"]["row_count"], 7, "default is cut to the profile's max");
         let mut r = req("select id from things");
@@ -706,7 +707,7 @@ mod tests {
         assert_eq!(call(&s, &h, r).await.1["data"]["limit"], 7, "a request cannot raise it");
 
         // above the server-wide ceiling (10000): clamped down to it, never exceeded
-        let s = demo_state(&limited_profiles(r#"{"max_rows": 99999999}"#)).await;
+        let s = demo_state(limited_profiles(r#"{"max_rows": 99999999}"#)).await;
         let mut r = req("select id from things");
         r.limit = Some(99_999_999);
         assert_eq!(call(&s, &h, r).await.1["data"]["limit"], 10000);
@@ -715,7 +716,7 @@ mod tests {
     #[tokio::test]
     async fn a_profile_request_rate_limit_gives_429_with_retry_after() {
         // 20/min fleet-wide = 5 per pod
-        let s = demo_state(&limited_profiles(r#"{"requests_per_minute": 20}"#)).await;
+        let s = demo_state(limited_profiles(r#"{"requests_per_minute": 20}"#)).await;
         let h = basic("lim", "tok");
         for i in 0..5 {
             assert_eq!(call(&s, &h, req("select 1")).await.0, StatusCode::OK, "request {i}");
@@ -727,7 +728,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_profile_concurrency_limit_is_its_own_gate() {
-        let s = demo_state(&limited_profiles(r#"{"concurrency": 1}"#)).await;
+        let s = demo_state(limited_profiles(r#"{"concurrency": 1}"#)).await;
         let h = basic("lim", "tok");
         let held = s.profile_limits["lim"].permits.clone().try_acquire_owned().unwrap();
         assert_eq!(call(&s, &h, req("select 1")).await.0, StatusCode::TOO_MANY_REQUESTS);
@@ -739,17 +740,17 @@ mod tests {
     #[test]
     fn profile_limits_never_exceed_the_server_wide_ones() {
         let c = cfg(); // 10000 rows, 10 s, 4 concurrent
-        let p = Profiles::parse(&limited_profiles(r#"{"max_rows": 99999, "timeout_secs": 999, "concurrency": 99}"#)).unwrap();
+        let p = limited_profiles(r#"{"max_rows": 99999, "timeout_secs": 999, "concurrency": 99}"#);
         let l = &build_profile_limits(&c, &Access::new(p))["lim"];
         assert_eq!((l.max_rows, l.timeout, l.permits.available_permits()), (10000, Duration::from_secs(10), 4));
-        let p = Profiles::parse(&limited_profiles(r#"{"max_rows": 5, "timeout_secs": 2, "concurrency": 1}"#)).unwrap();
+        let p = limited_profiles(r#"{"max_rows": 5, "timeout_secs": 2, "concurrency": 1}"#);
         let l = &build_profile_limits(&c, &Access::new(p))["lim"];
         assert_eq!((l.max_rows, l.timeout, l.permits.available_permits()), (5, Duration::from_secs(2), 1));
     }
 
     #[tokio::test]
     async fn concurrency_cap_refuses_instead_of_queueing() {
-        let s = demo_state(&profiles_json("tok", r#"["sic"]"#)).await;
+        let s = demo_state(profiles_json("tok", r#"["sic"]"#)).await;
         let held: Vec<_> = (0..s.config.max_concurrent).map(|_| s.permits.clone().try_acquire_owned().unwrap()).collect();
         let resp = s.handle(peer(), &basic("tester", "tok"), req("select 1")).await;
         assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);

@@ -83,108 +83,7 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 `EDGAR_CATALOG_PATH`, plus `SIC_MODELS`
 (`all_minilm_l6_v2` default, per `go-duckdb-rewrite.md` §7.8), `PORT`
 (default `4000`), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
-"## Profiles: authenticated access
-
-Set `COMPANY_DNS_PROFILES_FILE` to a JSON file with a section per profile
-(see [`profiles.example.json`](profiles.example.json)) and callers can authenticate
-with HTTP Basic Auth: the profile id as the user name, a generated token as the
-password. The file holds only a SHA-256 of each token, so a leaked file is not a
-working credential; keep it out of the repository and the image (a mounted
-Kubernetes or Docker secret in a deployment, a gitignored file locally). It is
-read once at startup, so changing it means a restart, and an invalid file stops
-the server. No file means everyone is anonymous. Unknown keys are an error.
-
-```json
-{"profiles": {
-  "my-app": {
-    "secret_sha256": "<sha256 of the token>",
-    "rate_limit": {"requests_per_minute": 600, "burst": 60},
-    "sql": {"datasets": ["sic", "edgar"]}
-  }
-}}
-```
-
-```sh
-TOKEN=$(openssl rand -hex 32)                           # give this to the client, once
-printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1    # put this in the file
-```
-
-What a profile may be granted (everything is optional; no grant means none):
-
-| Grant | Meaning |
-|---|---|
-| `rate_limit: {"bypass": true}` | No rate limit on the lookup routes. |
-| `rate_limit: {"requests_per_minute": N, "burst": M}` | A quota of the profile's own instead of the `User-Agent` tiers (burst defaults to N). Fleet-wide numbers, divided across replicas like the tier quotas (`rate_limit.rs`). |
-| no `rate_limit` | An identified caller gets the normal tier, whatever its `User-Agent`. |
-| `sql: {"datasets": [...]}` | May use the experimental SQL endpoint, on those datasets (below). |
-
-No credential is anonymous (the `User-Agent` tiers apply). A **wrong** credential
-is a `401`, never silently anonymous, and failed logins are throttled per source
-IP. `Origin` and `Referer` are ignored for identity. Use TLS: the token travels
-with every request.
-
-## Experimental: SQL endpoint
-
-> **Experimental.** `POST /V4.0/sql` may change or be removed without notice.
-> It is **off by default**, takes arbitrary SQL, and can use real CPU and memory,
-> so it is closed to everyone who does not hold a credential you issued. Design
-> and decisions: [`docs/plans/v4-sql-endpoint.md`](../docs/plans/v4-sql-endpoint.md).
-
-One read-only statement per request, against one dataset: `sic` (US SIC plus
-Japan SIC, EU NACE and ISIC when loaded) or `edgar` (the filings catalog), in
-DataFusion's SQL dialect. The embedding (`vector_*`) columns are not exposed.
-`select * from information_schema.columns` lists tables and columns.
-
-**Turn it on** (nothing below is set by default):
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `COMPANY_DNS_SQL_ENABLED` | off | `true` registers the route. Without it the route does not exist (404) and is absent from `/docs`. |
-| `COMPANY_DNS_PROFILES_FILE` | none, required when enabled | Path to the profiles file ("Profiles" above). The server refuses to start without a valid one; it never starts open. |
-| `COMPANY_DNS_SQL_DEFAULT_ROWS` / `_MAX_ROWS` | 1000 / 10000 | Rows returned by default / the ceiling a request's `limit` is clamped to. |
-| `COMPANY_DNS_SQL_TIMEOUT_SECS` | 10 | Statement timeout; the query is cancelled. |
-| `COMPANY_DNS_SQL_MEMORY_MB` | 256 | Memory pool per dataset's query context; no spilling to disk. |
-| `COMPANY_DNS_SQL_MAX_CONCURRENT` | 4 | Queries running at once on this process; more get a 429, not a queue. |
-| `COMPANY_DNS_SQL_PARALLELISM` | 2 | DataFusion partitions per query, so one query cannot take every core. |
-
-These are one global set of limits for every profile (per-profile limits are the
-next phase). Invalid values stop startup.
-
-**Credentials.** The route needs a profile granted `sql` (see "Profiles" above): no
-credential is a `401`, a profile without `sql` or without that dataset is a `403`.
-**Two layers of limits.** SQL goes through the same rate limiter as the lookups, so the
-`User-Agent` tiers and a profile's `rate_limit` grant apply to it, sharing the same buckets,
-**except that a trusted `Origin`/`Referer` is never a bypass here** (client-set headers). On
-top of that a profile can carry its own SQL limits, each clamped by the server-wide values
-above (a mistake in the file can restrict a profile, never exceed what the host allows):
-
-```json
-"sql": {"datasets": ["sic"],
-        "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2,
-                   "requests_per_minute": 30, "burst": 3}}
-```
-
-All five are optional. `requests_per_minute` and `burst` are fleet-wide numbers, divided
-across replicas like the other quotas; a profile's `concurrency` is its own gate on top of
-the server-wide one.
-
-```sh
-curl -u my-app:$TOKEN -H 'Content-Type: application/json' http://localhost:4000/V4.0/sql \
-  -d '{"dataset": "sic", "sql": "select count(*) as n from sic_data"}'
-```
-
-**Try and test it locally:** [`scripts/sql-try.sh`](scripts/sql-try.sh) creates
-throwaway profiles under `.local/sql/` (gitignored), starts the server with SQL on
-and small limits, and runs a battery of checks (access, read-only, hidden vectors,
-limits, throttling) against it:
-
-```sh
-scripts/sql-try.sh start          # in one terminal
-scripts/sql-try.sh check          # in another
-scripts/sql-try.sh q sic "select * from sic_data limit 3"
-```
-
-## Observability" below).
+"## Observability" below).
 
 ## API docs
 
@@ -226,6 +125,174 @@ design and live-verification record:
   client could pre-populate to spoof an earlier entry), since this
   deployment sits behind Traefik as its sole external edge
   (`k8s/prod/ingress.yaml`) and the Service is `ClusterIP`-only.
+
+## Profiles: authenticated access
+
+Callers can authenticate with HTTP Basic Auth: the profile id as the user name and a
+generated token as the password. Profiles live in **two files**, split by what they hold,
+both read once at startup (changing them means a restart; an invalid file stops the server;
+unknown keys are an error). With no credentials file everyone is anonymous.
+
+**1. Credentials** (`COMPANY_DNS_CREDENTIALS_FILE`), like `/etc/passwd`: one
+`profile:sha256-of-token` per line, `#` comments allowed
+([`credentials.example`](credentials.example)). This is the only secret file, and it holds
+only hashes, so a leaked copy is not a working credential. Keep it out of the repository and
+the image (a mounted Kubernetes or Docker secret in a deployment, a gitignored file locally).
+
+```sh
+TOKEN=$(openssl rand -hex 32)                           # give this to the client, once
+printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1    # put this after "profile:" in the file
+```
+
+**2. Rules** (`COMPANY_DNS_RULES_FILE`, optional), JSON with no secrets in it, so it can live
+in a ConfigMap or in git ([`rules.example.json`](rules.example.json)): a `defaults` section and
+per-profile overrides. A profile starts from the defaults and an override changes only the
+settings it names:
+
+```json
+{
+  "defaults": {"rate_limit": {"requests_per_minute": 300, "burst": 30}},
+  "profiles": {
+    "mediumroast.io": {"rate_limit": {"bypass": true},
+                       "sql": {"datasets": ["sic", "edgar"], "limits": {"max_rows": 500}}},
+    "partner":        {"rate_limit": {"requests_per_minute": 600}}
+  }
+}
+```
+
+How inheritance works: objects merge key by key (so `partner` above keeps the default `burst`),
+a value or a list replaces (a `datasets` list is replaced, not appended to), and `null` removes
+an inherited setting (`"sql": null` takes SQL away, `"max_rows": null` drops one limit).
+`bypass` and a quota are alternatives, so naming one in an override replaces an inherited other.
+A profile with no entry just gets the defaults; an entry for a profile with no credential is an
+error (it catches typos).
+
+The settings, all optional:
+
+| Setting | Meaning |
+|---|---|
+| `rate_limit: {"bypass": true}` | No rate limit on the lookup routes. |
+| `rate_limit: {"requests_per_minute": N, "burst": M}` | A quota of the profile's own instead of the `User-Agent` tiers (burst defaults to N). Fleet-wide numbers, divided across replicas like the tier quotas (`rate_limit.rs`). |
+| no `rate_limit` | An identified caller gets the normal tier, whatever its `User-Agent`. |
+| `sql: {"datasets": [...], "limits": {...}}` | May use the experimental SQL endpoint, on those datasets, with optional limits of its own (below). No `sql` means no SQL. |
+
+### Set it up, step by step
+
+Start from the two templates in this directory, [`credentials.example`](credentials.example) and
+[`rules.example.json`](rules.example.json), and keep your real copies **outside the repository**
+(or under a gitignored path):
+
+```sh
+mkdir -p ~/company_dns-access && cd ~/company_dns-access
+cp /path/to/company_dns/v4/credentials.example credentials
+cp /path/to/company_dns/v4/rules.example.json   rules.json
+```
+
+1. **Make a token per profile** and put its hash in `credentials` (replace the placeholder
+   zeros on that profile's line; rename or delete the example profiles):
+
+   ```sh
+   TOKEN=$(openssl rand -hex 32)                         # give this to the client, once; never store it here
+   printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1   # paste this after "my-app:" in credentials
+   ```
+
+2. **Describe what each profile may do** in `rules.json`: put anything most profiles share under
+   `defaults`, and only what differs under that profile in `profiles`. Profile names must match the
+   credentials file. Skip the rules file entirely and every profile is an identified caller with no
+   special grants.
+3. **Start the server pointing at both files** (add the SQL flag only if you want the experimental
+   SQL endpoint; it needs a profile with a `sql` setting):
+
+   ```sh
+   COMPANY_DNS_CREDENTIALS_FILE=$HOME/company_dns-access/credentials \
+   COMPANY_DNS_RULES_FILE=$HOME/company_dns-access/rules.json \
+   COMPANY_DNS_SQL_ENABLED=true \
+   cargo run --release -p company-dns-server
+   ```
+
+   Add `RUST_LOG=info` to see the profile names it loaded (the default level is `warn`; with SQL on
+   you always get one warning line saying the endpoint is experimental). A mistake in either file stops
+   the server with a message naming the profile and the problem.
+4. **Try it** with the token from step 1:
+
+   ```sh
+   curl -u my-app:$TOKEN http://localhost:4000/V4.0/na/sic/code/7372                   # a lookup, with the profile's rate limit
+   curl -u my-app:$TOKEN -H 'Content-Type: application/json' http://localhost:4000/V4.0/sql \
+     -d '{"dataset": "sic", "sql": "select count(*) as n from sic_data"}'              # SQL, if the profile has it
+   ```
+
+5. **Deploying**: mount `credentials` from a Kubernetes SealedSecret or a Docker secret, and `rules.json` from
+   a ConfigMap or the image's config, one pair per environment, then set the two env vars to the mounted
+   paths (see [`docs/plans/v4-deployment.md`](../docs/plans/v4-deployment.md)). To try everything locally with
+   throwaway profiles instead, use [`scripts/sql-try.sh`](scripts/sql-try.sh) (below).
+
+No credential is anonymous (the `User-Agent` tiers apply). A **wrong** credential is a `401`,
+never silently anonymous, and failed logins are throttled per source IP. `Origin` and `Referer`
+are ignored for identity. Whatever a profile ends up with is clamped by the server-wide limits,
+so these files can restrict a profile but never exceed what the host allows. Use TLS: the token
+travels with every request.
+
+## Experimental: SQL endpoint
+
+> **Experimental.** `POST /V4.0/sql` may change or be removed without notice.
+> It is **off by default**, takes arbitrary SQL, and can use real CPU and memory,
+> so it is closed to everyone who does not hold a credential you issued. Design
+> and decisions: [`docs/plans/v4-sql-endpoint.md`](../docs/plans/v4-sql-endpoint.md).
+
+One read-only statement per request, against one dataset: `sic` (US SIC plus
+Japan SIC, EU NACE and ISIC when loaded) or `edgar` (the filings catalog), in
+DataFusion's SQL dialect. The embedding (`vector_*`) columns are not exposed.
+`select * from information_schema.columns` lists tables and columns.
+
+**Turn it on** (nothing below is set by default):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `COMPANY_DNS_SQL_ENABLED` | off | `true` registers the route. Without it the route does not exist (404) and is absent from `/docs`. |
+| `COMPANY_DNS_CREDENTIALS_FILE` | none, required when enabled | Path to the credentials file ("Profiles" above), plus optionally `COMPANY_DNS_RULES_FILE`. The server refuses to start without a valid credentials file; it never starts open. |
+| `COMPANY_DNS_SQL_DEFAULT_ROWS` / `_MAX_ROWS` | 1000 / 10000 | Rows returned by default / the ceiling a request's `limit` is clamped to. |
+| `COMPANY_DNS_SQL_TIMEOUT_SECS` | 10 | Statement timeout; the query is cancelled. |
+| `COMPANY_DNS_SQL_MEMORY_MB` | 256 | Memory pool per dataset's query context; no spilling to disk. |
+| `COMPANY_DNS_SQL_MAX_CONCURRENT` | 4 | Queries running at once on this process; more get a 429, not a queue. |
+| `COMPANY_DNS_SQL_PARALLELISM` | 2 | DataFusion partitions per query, so one query cannot take every core. |
+
+These are one global set of limits for every profile (per-profile limits are the
+next phase). Invalid values stop startup.
+
+**Credentials.** The route needs a profile with a `sql` setting (see "Profiles" above): no
+credential is a `401`, a profile without `sql` or without that dataset is a `403`.
+**Two layers of limits.** SQL goes through the same rate limiter as the lookups, so the
+`User-Agent` tiers and a profile's `rate_limit` grant apply to it, sharing the same buckets,
+**except that a trusted `Origin`/`Referer` is never a bypass here** (client-set headers). On
+top of that a profile can carry its own SQL limits in the rules file, each clamped by the
+server-wide values above (a mistake in the file can restrict a profile, never exceed what the
+host allows):
+
+```json
+"sql": {"datasets": ["sic"],
+        "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2,
+                   "requests_per_minute": 30, "burst": 3}}
+```
+
+All five are optional. `requests_per_minute` and `burst` are fleet-wide numbers, divided
+across replicas like the other quotas; a profile's `concurrency` is its own gate on top of
+the server-wide one.
+
+```sh
+curl -u my-app:$TOKEN -H 'Content-Type: application/json' http://localhost:4000/V4.0/sql \
+  -d '{"dataset": "sic", "sql": "select count(*) as n from sic_data"}'
+```
+
+**Try and test it locally:** [`scripts/sql-try.sh`](scripts/sql-try.sh) creates
+throwaway profiles under `.local/sql/` (gitignored), starts the server with SQL on
+and small limits, and runs a battery of checks (access, read-only, hidden vectors,
+limits, throttling) against it:
+
+```sh
+scripts/sql-try.sh start          # in one terminal
+scripts/sql-try.sh check          # in another
+scripts/sql-try.sh q sic "select * from sic_data limit 3"
+```
 
 ## Observability
 
