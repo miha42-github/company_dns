@@ -1,0 +1,15 @@
+{"profiles": {
+  "mediumroast.io": {
+    "secret_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rate_limit": {"bypass": true},
+    "sql": {"datasets": ["sic", "edgar"]}
+  },
+  "partner-example": {
+    "secret_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "rate_limit": {"requests_per_minute": 600, "burst": 60},
+    "sql": {"datasets": ["sic"], "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2, "requests_per_minute": 30}}
+  },
+  "viewer-example": {
+    "secret_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  }
+}}

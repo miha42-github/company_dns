@@ -1,3 +1,4 @@
+mod access;
 mod envelope;
 mod logging;
 mod rate_limit;
@@ -180,21 +181,32 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Loading embedding models: {models_to_load:?}...");
     let embedders = Embedders::load(&models_to_load)?;
 
-    // docs/plans/v4-sql-endpoint.md: off unless COMPANY_DNS_SQL_ENABLED. With it
-    // on, a bad setting or a missing/invalid profiles file stops startup: the
-    // endpoint never comes up open.
+    // docs/plans/v4-sql-endpoint.md section 5a: profiles (HTTP Basic Auth, grants such
+    // as a rate-limit treatment and SQL access) from one file, read once at startup.
+    // Optional; with it unset every caller is anonymous and tiered by User-Agent. A set
+    // but invalid file stops startup: it never comes up half-configured.
+    let access: Option<Arc<access::Access>> = match std::env::var("COMPANY_DNS_PROFILES_FILE")
+        .ok()
+        .filter(|p| !p.trim().is_empty())
+    {
+        None => None,
+        Some(path) => {
+            let profiles = access::Profiles::load(std::path::Path::new(&path))?;
+            tracing::info!("Profiles: {} loaded from {path}: {:?}", profiles.len(), profiles.ids());
+            Some(Arc::new(access::Access::new(profiles)))
+        }
+    };
+
+    // Off unless COMPANY_DNS_SQL_ENABLED. With it on, a bad setting or no profiles file
+    // stops startup: the endpoint never comes up open.
     let sql = match sql_endpoint::SqlConfig::from_lookup(&|k| std::env::var(k).ok())? {
         None => None,
         Some(config) => {
-            let path = std::env::var("COMPANY_DNS_PROFILES_FILE")
-                .ok()
-                .filter(|p| !p.trim().is_empty())
-                .ok_or_else(|| anyhow::anyhow!(
-                    "COMPANY_DNS_SQL_ENABLED is set but COMPANY_DNS_PROFILES_FILE is not: the SQL endpoint will not start without credentials"
-                ))?;
-            let profiles = sql_endpoint::Profiles::load(std::path::Path::new(&path))?;
-            let sql = sql_endpoint::SqlState::build(config, profiles, &sic, edgar_catalog.as_ref()).await?;
-            tracing::warn!("{} (profiles from {path})", sql.describe());
+            let access = access.clone().ok_or_else(|| anyhow::anyhow!(
+                "COMPANY_DNS_SQL_ENABLED is set but COMPANY_DNS_PROFILES_FILE is not: the SQL endpoint will not start without credentials"
+            ))?;
+            let sql = sql_endpoint::SqlState::build(config, access, &sic, edgar_catalog.as_ref()).await?;
+            tracing::warn!("{}", sql.describe());
             Some(sql)
         }
     };
@@ -221,16 +233,21 @@ async fn main() -> anyhow::Result<()> {
     // `.layer(...)` was called (`OpenApiRouter::layer` is a pass-
     // through to `axum::Router::layer`, same "layer wraps what's
     // already there, not what's merged in after" semantics).
-    let tiered_limiter_state = TieredLimiterState::new();
+    let tiered_limiter_state = TieredLimiterState::new(access.clone());
     tiered_limiter_state.spawn_periodic_sweep(Duration::from_secs(5 * 60));
 
     let health_router = OpenApiRouter::new().routes(routes!(health));
 
-    // The experimental SQL route: only when enabled, and OUTSIDE the tiered
-    // rate limiter (its Origin/secret bypasses must never apply to SQL; the
-    // handler authenticates every request itself, sql_endpoint.rs).
+    // The experimental SQL route: only when enabled. It goes through the same rate limiter
+    // as the lookups (User-Agent tiers, a profile's rate_limit grant, the same buckets), but
+    // WITHOUT the trusted-Origin bypass, since that header is client-set. On top of that,
+    // the handler authenticates every request itself and applies the profile's own SQL
+    // limits (sql_endpoint.rs).
     let sql_router = if state.sql.is_some() {
-        OpenApiRouter::new().routes(routes!(sql_query))
+        OpenApiRouter::new().routes(routes!(sql_query)).layer(axum::middleware::from_fn_with_state(
+            tiered_limiter_state.without_origin_trust(),
+            tiered_rate_limit,
+        ))
     } else {
         OpenApiRouter::new()
     };

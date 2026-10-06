@@ -83,7 +83,47 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 `EDGAR_CATALOG_PATH`, plus `SIC_MODELS`
 (`all_minilm_l6_v2` default, per `go-duckdb-rewrite.md` §7.8), `PORT`
 (default `4000`), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
-"## Experimental: SQL endpoint
+"## Profiles: authenticated access
+
+Set `COMPANY_DNS_PROFILES_FILE` to a JSON file with a section per profile
+(see [`profiles.example.json`](profiles.example.json)) and callers can authenticate
+with HTTP Basic Auth: the profile id as the user name, a generated token as the
+password. The file holds only a SHA-256 of each token, so a leaked file is not a
+working credential; keep it out of the repository and the image (a mounted
+Kubernetes or Docker secret in a deployment, a gitignored file locally). It is
+read once at startup, so changing it means a restart, and an invalid file stops
+the server. No file means everyone is anonymous. Unknown keys are an error.
+
+```json
+{"profiles": {
+  "my-app": {
+    "secret_sha256": "<sha256 of the token>",
+    "rate_limit": {"requests_per_minute": 600, "burst": 60},
+    "sql": {"datasets": ["sic", "edgar"]}
+  }
+}}
+```
+
+```sh
+TOKEN=$(openssl rand -hex 32)                           # give this to the client, once
+printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1    # put this in the file
+```
+
+What a profile may be granted (everything is optional; no grant means none):
+
+| Grant | Meaning |
+|---|---|
+| `rate_limit: {"bypass": true}` | No rate limit on the lookup routes. |
+| `rate_limit: {"requests_per_minute": N, "burst": M}` | A quota of the profile's own instead of the `User-Agent` tiers (burst defaults to N). Fleet-wide numbers, divided across replicas like the tier quotas (`rate_limit.rs`). |
+| no `rate_limit` | An identified caller gets the normal tier, whatever its `User-Agent`. |
+| `sql: {"datasets": [...]}` | May use the experimental SQL endpoint, on those datasets (below). |
+
+No credential is anonymous (the `User-Agent` tiers apply). A **wrong** credential
+is a `401`, never silently anonymous, and failed logins are throttled per source
+IP. `Origin` and `Referer` are ignored for identity. Use TLS: the token travels
+with every request.
+
+## Experimental: SQL endpoint
 
 > **Experimental.** `POST /V4.0/sql` may change or be removed without notice.
 > It is **off by default**, takes arbitrary SQL, and can use real CPU and memory,
@@ -100,7 +140,7 @@ DataFusion's SQL dialect. The embedding (`vector_*`) columns are not exposed.
 | Variable | Default | Meaning |
 |---|---|---|
 | `COMPANY_DNS_SQL_ENABLED` | off | `true` registers the route. Without it the route does not exist (404) and is absent from `/docs`. |
-| `COMPANY_DNS_PROFILES_FILE` | none, required when enabled | Path to the profiles file (below). The server refuses to start without a valid one; it never starts open. |
+| `COMPANY_DNS_PROFILES_FILE` | none, required when enabled | Path to the profiles file ("Profiles" above). The server refuses to start without a valid one; it never starts open. |
 | `COMPANY_DNS_SQL_DEFAULT_ROWS` / `_MAX_ROWS` | 1000 / 10000 | Rows returned by default / the ceiling a request's `limit` is clamped to. |
 | `COMPANY_DNS_SQL_TIMEOUT_SECS` | 10 | Statement timeout; the query is cancelled. |
 | `COMPANY_DNS_SQL_MEMORY_MB` | 256 | Memory pool per dataset's query context; no spilling to disk. |
@@ -110,28 +150,23 @@ DataFusion's SQL dialect. The embedding (`vector_*`) columns are not exposed.
 These are one global set of limits for every profile (per-profile limits are the
 next phase). Invalid values stop startup.
 
-**Credentials.** Clients authenticate with HTTP Basic Auth: the profile id as the
-user name and a generated token as the password. The profiles file holds only a
-SHA-256 of each token, so a leaked file is not a working credential. `Origin` and
-`Referer` are ignored (a client can send any value), and this route sits outside the
-rate limiter's trusted-origin bypass. Failed logins are throttled per source IP.
-Use TLS: the token travels with every request.
-
-```sh
-TOKEN=$(openssl rand -hex 32)                      # give this to the client, once
-printf '%s' "$TOKEN" | shasum -a 256 | cut -d' ' -f1   # put this in the file
-```
+**Credentials.** The route needs a profile granted `sql` (see "Profiles" above): no
+credential is a `401`, a profile without `sql` or without that dataset is a `403`.
+**Two layers of limits.** SQL goes through the same rate limiter as the lookups, so the
+`User-Agent` tiers and a profile's `rate_limit` grant apply to it, sharing the same buckets,
+**except that a trusted `Origin`/`Referer` is never a bypass here** (client-set headers). On
+top of that a profile can carry its own SQL limits, each clamped by the server-wide values
+above (a mistake in the file can restrict a profile, never exceed what the host allows):
 
 ```json
-{"profiles": {
-  "my-app": {"secret_sha256": "<the hash>", "sql": {"datasets": ["sic", "edgar"]}},
-  "viewer": {"secret_sha256": "<another hash>", "sql": {"datasets": ["sic"]}}
-}}
+"sql": {"datasets": ["sic"],
+        "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2,
+                   "requests_per_minute": 30, "burst": 3}}
 ```
 
-Keep the file out of the repository and the image: a mounted secret (a Kubernetes
-Secret or a Docker secret) in a deployment, a gitignored file locally. A profile
-without a `sql` section is not granted SQL; unknown keys are an error.
+All five are optional. `requests_per_minute` and `burst` are fleet-wide numbers, divided
+across replicas like the other quotas; a profile's `concurrency` is its own gate on top of
+the server-wide one.
 
 ```sh
 curl -u my-app:$TOKEN -H 'Content-Type: application/json' http://localhost:4000/V4.0/sql \
@@ -181,11 +216,11 @@ design and live-verification record:
   convenience for browsers, not proof of identity, and it is never
   honoured by the SQL endpoint. The earlier hourly-HMAC `User-Agent`
   secret (`MEDIUMROAST_SHARED_SECRET`) was removed; authenticated access
-  is the profiles mechanism (HTTP Basic Auth), so far used only by the
-  experimental SQL endpoint below. Access is a ladder: no or generic
-  `User-Agent` gets the draconian tier, a self-identifying one
-  (`YourApp/1.0 (contact@example.com)`) the normal tier, and a Basic-Auth
-  profile whatever its grants allow.
+  is the profiles mechanism (HTTP Basic Auth, see "Profiles" below).
+  Access is a ladder: no or generic `User-Agent` gets the draconian tier,
+  a self-identifying one (`YourApp/1.0 (contact@example.com)`) the normal
+  tier, and a Basic-Auth profile whatever its grants allow: no rate limit,
+  a quota of its own, and/or SQL.
 - Client IP for rate-limit keying is read from `X-Forwarded-For`
   (rightmost entry — the one Traefik itself appended, not anything a
   client could pre-populate to spoof an earlier entry), since this

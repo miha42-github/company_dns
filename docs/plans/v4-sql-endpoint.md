@@ -171,8 +171,10 @@ the DataFusion version mismatch today.
    endpoint does. Timeout wraps collection with `tokio::time::timeout`. The
    memory pool is set on the query context's runtime. Max SQL text length
    comes from the existing request-body limit layer.
-6. **Rate limiting**: SQL does **not** use the tiered limiter's bypasses and
-   has its own, stricter, per-profile limits. See section 5a.
+6. **Rate limiting, in two layers (decided 2026-10-06)**: SQL goes through the same
+   limiter as the lookups (the `User-Agent` tiers and a profile's `rate_limit`
+   grant, the same buckets) but **without the trusted-`Origin` bypass**, and the
+   profile's own SQL limits apply on top. See section 5a.
 7. **Response**: V3 envelope with `columns` (name and Arrow type), `rows`,
    `row_count`, `truncated`, and a limitation naming the DataFusion SQL
    dialect/version.
@@ -241,8 +243,12 @@ limiter, and two bypasses that skip the limiter (`rate_limit.rs`,
   replaced by the profiles mechanism below (nothing is implemented against it on the
   mediumroast.io side yet).
 
-For SQL: Origin/Referer are ignored entirely, and the route sits behind its
-own gate, not the tiered limiter's bypasses.
+For SQL: Origin/Referer are ignored entirely. The route is **inside** the same rate
+limiter as the lookups (so the `User-Agent` tiers and a profile's `rate_limit` grant
+apply, sharing the same buckets) with the trusted-`Origin` bypass switched off for
+it, and the profile's own SQL limits apply on top. An earlier build put the route
+outside the limiter to avoid the Origin bypass; that left SQL with no request-rate
+limit and no `User-Agent` tiering, and was corrected 2026-10-06.
 
 ### The profiles file (one file, a section per profile)
 
@@ -489,10 +495,20 @@ Decided 2026-10-05: **the endpoint first, per-profile limits afterwards.**
   how to create a profile.
 - Measure the extra memory of the two query contexts.
 
-**Phase 2: profiles and limits (discussed after phase 1 exists).**
-- Per-profile limit overrides, clamped by the global set (the two-set design in
-  section 5a), and the `rate_limit` grant so mediumroast.io's trust moves into
-  the profiles file (the old `secret_ua.rs` check is already removed).
+**Phase 2: profiles and limits.**
+- **Built 2026-10-06: the profile `rate_limit` grant** (`v4/crates/server/src/access.rs`,
+  `rate_limit.rs`). The profiles file is now general: `COMPANY_DNS_PROFILES_FILE`
+  loads with or without SQL, HTTP Basic Auth identifies a profile on every route, and a
+  profile may carry `rate_limit: {"bypass": true}` (no limit) or
+  `{"requests_per_minute": N, "burst": M}` (its own quota, fleet-wide, divided across
+  replicas like the tiers). A profile with no grant is an identified caller on the
+  normal tier; a wrong credential is a 401. mediumroast.io is one profile (see
+  `v4/profiles.example.json`). The `User-Agent` tiers are unchanged for anonymous
+  callers. `Origin`/`Referer` are still never identity.
+- **Built 2026-10-06: per-profile SQL limits** (`sql.limits`: `max_rows`, `timeout_secs`,
+  `concurrency`, `requests_per_minute`, `burst`), each clamped by the server-wide value,
+  with the SQL route moved inside the rate limiter (no Origin bypass). Not built: a
+  per-profile memory share (the pool is per query context, so concurrency is the control).
 - `<NAME>_FILE` convention for secret env vars.
 - Deployment wiring (`v4-deployment.md` Step G): per-tier sealed profiles file
   and ConfigMap limits.

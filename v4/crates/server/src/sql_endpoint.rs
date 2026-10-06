@@ -17,11 +17,10 @@
 //! parallelism is capped so one query cannot take every core.
 
 use axum::{
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Json,
 };
-use base64::Engine;
 use company_dns_edgar::EdgarCatalog;
 use company_dns_sic::SicCatalog;
 use datafusion::{
@@ -33,28 +32,24 @@ use datafusion::{
     },
     prelude::{SQLOptions, SessionConfig, SessionContext},
 };
-use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
+use governor::{DefaultDirectRateLimiter, Quota, RateLimiter};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeSet, HashMap},
-    net::{IpAddr, SocketAddr},
-    num::NonZeroU32,
-    path::Path,
+    collections::HashMap,
+    net::SocketAddr,
     sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::Semaphore;
 
+use crate::access::{unauthorized, Access, Identity, SqlLimits};
 use crate::envelope::{envelope, too_many_requests};
 
 pub const MODULE: &str = "SqlEndpoint->query";
-const REALM: &str = "company_dns sql (experimental)";
 /// The only datasets there are. A profile naming anything else is a config error.
 pub const DATASETS: [&str; 2] = ["sic", "edgar"];
-/// Failed logins allowed per source IP per minute before further failures get a 429.
-const FAILED_AUTH_PER_MINUTE: u32 = 10;
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -122,126 +117,6 @@ impl SqlConfig {
             parallelism: parse_num(get, "COMPANY_DNS_SQL_PARALLELISM", 2, 1)? as usize,
         }))
     }
-}
-
-// ---------------------------------------------------------------------------
-// Profiles file and HTTP Basic Auth
-// ---------------------------------------------------------------------------
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProfilesFile {
-    profiles: HashMap<String, ProfileEntry>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ProfileEntry {
-    secret_sha256: String,
-    #[serde(default)]
-    sql: Option<SqlGrant>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SqlGrant {
-    datasets: Vec<String>,
-}
-
-struct Profile {
-    hash: [u8; 32],
-    /// `None`: the profile exists but is not granted SQL.
-    sql_datasets: Option<BTreeSet<String>>,
-}
-
-pub struct Profiles {
-    by_id: HashMap<String, Profile>,
-}
-
-fn decode_hex_32(s: &str) -> Option<[u8; 32]> {
-    let s = s.trim();
-    if s.len() != 64 || !s.is_ascii() {
-        return None;
-    }
-    let mut out = [0u8; 32];
-    for (i, byte) in out.iter_mut().enumerate() {
-        *byte = u8::from_str_radix(&s[2 * i..2 * i + 2], 16).ok()?;
-    }
-    Some(out)
-}
-
-/// Constant-time comparison of two digests.
-fn digests_equal(a: &[u8; 32], b: &[u8; 32]) -> bool {
-    let mut diff = 0u8;
-    for i in 0..32 {
-        diff |= a[i] ^ b[i];
-    }
-    diff == 0
-}
-
-impl Profiles {
-    pub fn parse(text: &str) -> anyhow::Result<Self> {
-        let file: ProfilesFile = serde_json::from_str(text)
-            .map_err(|e| anyhow::anyhow!("profiles file is not valid: {e}"))?;
-        anyhow::ensure!(!file.profiles.is_empty(), "profiles file has no profiles");
-        let mut by_id = HashMap::new();
-        for (id, entry) in file.profiles {
-            anyhow::ensure!(!id.is_empty() && !id.contains(':'), "profile id {id:?} must be non-empty and contain no ':'");
-            let hash = decode_hex_32(&entry.secret_sha256)
-                .ok_or_else(|| anyhow::anyhow!("profile {id:?}: secret_sha256 must be 64 hex characters (a SHA-256 of the token)"))?;
-            let sql_datasets = match entry.sql {
-                None => None,
-                Some(grant) => {
-                    for d in &grant.datasets {
-                        anyhow::ensure!(
-                            DATASETS.contains(&d.as_str()),
-                            "profile {id:?}: unknown dataset {d:?} (known: {})",
-                            DATASETS.join(", ")
-                        );
-                    }
-                    Some(grant.datasets.into_iter().collect())
-                }
-            };
-            by_id.insert(id, Profile { hash, sql_datasets });
-        }
-        Ok(Self { by_id })
-    }
-
-    pub fn load(path: &Path) -> anyhow::Result<Self> {
-        let text = std::fs::read_to_string(path)
-            .map_err(|e| anyhow::anyhow!("cannot read profiles file {}: {e}", path.display()))?;
-        Self::parse(&text).map_err(|e| anyhow::anyhow!("{} ({})", e, path.display()))
-    }
-
-    /// Checks `token` against the profile's stored hash in constant time. An
-    /// unknown id does the same work against a dummy hash, so response timing does
-    /// not say which ids exist.
-    fn authenticate(&self, id: &str, token: &str) -> Option<&Profile> {
-        let given: [u8; 32] = Sha256::digest(token.as_bytes()).into();
-        match self.by_id.get(id) {
-            Some(p) => digests_equal(&given, &p.hash).then_some(p),
-            None => {
-                let _ = digests_equal(&given, &[0u8; 32]);
-                None
-            }
-        }
-    }
-
-    pub fn len(&self) -> usize {
-        self.by_id.len()
-    }
-}
-
-/// `Authorization: Basic base64(id:token)` -> `(id, token)`.
-fn parse_basic(value: &str) -> Option<(String, String)> {
-    let (scheme, rest) = value.trim().split_once(' ')?;
-    if !scheme.eq_ignore_ascii_case("basic") {
-        return None;
-    }
-    let bytes = base64::engine::general_purpose::STANDARD.decode(rest.trim()).ok()?;
-    let text = String::from_utf8(bytes).ok()?;
-    let (id, token) = text.split_once(':')?;
-    Some((id.to_string(), token.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -373,33 +248,57 @@ pub struct SqlRequest {
 
 pub struct SqlState {
     config: SqlConfig,
-    profiles: Profiles,
+    access: Arc<Access>,
     contexts: HashMap<String, SessionContext>,
     permits: Arc<Semaphore>,
-    failures: DefaultKeyedRateLimiter<IpAddr>,
+    /// Per-profile caps, for the profiles whose `sql.limits` set any. The others use the
+    /// server-wide values as they are.
+    profile_limits: HashMap<String, ProfileLimits>,
+}
+
+/// A profile's effective SQL limits: its own values, each clamped by the server-wide ones.
+struct ProfileLimits {
+    max_rows: usize,
+    timeout: Duration,
+    /// Its own concurrency gate, on top of the server-wide one.
+    permits: Arc<Semaphore>,
+    /// Its own request rate (fleet-wide number divided across replicas).
+    rate: Option<DefaultDirectRateLimiter>,
+}
+
+fn build_profile_limits(config: &SqlConfig, access: &Access) -> HashMap<String, ProfileLimits> {
+    let mut out = HashMap::new();
+    for (id, grant) in access.profiles().sql_grants() {
+        let l = grant.limits;
+        if l == SqlLimits::default() {
+            continue;
+        }
+        let rate = l.requests_per_minute.map(|rpm| {
+            let per_pod = crate::rate_limit::per_pod;
+            let quota = Quota::per_minute(per_pod(rpm)).allow_burst(per_pod(l.burst.unwrap_or(rpm)));
+            RateLimiter::direct(quota)
+        });
+        out.insert(
+            id.to_string(),
+            ProfileLimits {
+                max_rows: l.max_rows.unwrap_or(config.max_rows).min(config.max_rows),
+                timeout: Duration::from_secs(l.timeout_secs.unwrap_or(config.timeout_secs).min(config.timeout_secs)),
+                permits: Arc::new(Semaphore::new(l.concurrency.unwrap_or(config.max_concurrent).min(config.max_concurrent))),
+                rate,
+            },
+        );
+    }
+    out
 }
 
 fn json_response(status: StatusCode, message: &str, data: Value) -> Response {
     (status, Json(envelope(status.as_u16(), message, MODULE, data))).into_response()
 }
 
-fn unauthorized() -> Response {
-    let mut response = json_response(
-        StatusCode::UNAUTHORIZED,
-        "Authentication required: HTTP Basic Auth with a profile id and token.",
-        Value::Null,
-    );
-    response.headers_mut().insert(
-        header::WWW_AUTHENTICATE,
-        HeaderValue::from_str(&format!("Basic realm=\"{REALM}\", charset=\"UTF-8\"")).expect("static header value"),
-    );
-    response
-}
-
 impl SqlState {
     pub async fn build(
         config: SqlConfig,
-        profiles: Profiles,
+        access: Arc<Access>,
         sic: &SicCatalog,
         edgar: Option<&EdgarCatalog>,
     ) -> anyhow::Result<Self> {
@@ -413,25 +312,19 @@ impl SqlState {
             }
             None => tracing::warn!("SQL endpoint: the EDGAR catalog is not loaded, so dataset \"edgar\" is unavailable"),
         }
-        Ok(Self::from_parts(config, profiles, contexts))
+        Ok(Self::from_parts(config, access, contexts))
     }
 
-    fn from_parts(config: SqlConfig, profiles: Profiles, contexts: HashMap<String, SessionContext>) -> Self {
-        let quota = Quota::per_minute(NonZeroU32::new(FAILED_AUTH_PER_MINUTE).expect("non-zero"));
-        Self {
-            permits: Arc::new(Semaphore::new(config.max_concurrent)),
-            failures: RateLimiter::keyed(quota),
-            config,
-            profiles,
-            contexts,
-        }
+    fn from_parts(config: SqlConfig, access: Arc<Access>, contexts: HashMap<String, SessionContext>) -> Self {
+        let profile_limits = build_profile_limits(&config, &access);
+        Self { permits: Arc::new(Semaphore::new(config.max_concurrent)), config, access, contexts, profile_limits }
     }
 
     /// What the startup log says, never including a secret.
     pub fn describe(&self) -> String {
         format!(
             "EXPERIMENTAL SQL endpoint enabled: {} profile(s), datasets {:?}, default {} / max {} rows, {}s timeout, {} MB memory pool, {} concurrent, parallelism {}",
-            self.profiles.len(),
+            self.access.profiles().len(),
             { let mut d: Vec<_> = self.contexts.keys().cloned().collect(); d.sort(); d },
             self.config.default_rows,
             self.config.max_rows,
@@ -442,31 +335,18 @@ impl SqlState {
         )
     }
 
-    fn failed_login(&self, ip: IpAddr, id: &str, why: &str) -> Response {
-        tracing::warn!(target: "sql_audit", ip = %ip, profile = id, outcome = why, "SQL authentication failed");
-        if let Err(not_until) = self.failures.check_key(&ip) {
-            let wait = not_until.wait_time_from(governor::clock::Clock::now(&governor::clock::DefaultClock::default()));
-            return too_many_requests(MODULE, "Too many failed authentication attempts.", wait.as_secs().max(1));
-        }
-        unauthorized()
-    }
-
     pub async fn handle(&self, peer: SocketAddr, headers: &HeaderMap, req: SqlRequest) -> Response {
         let ip = crate::rate_limit::client_ip(headers, peer);
 
         // 1. Who is this? No credential is a plain 401; a wrong one is counted.
-        let Some(auth) = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()) else {
-            return unauthorized();
-        };
-        let Some((id, token)) = parse_basic(auth) else {
-            return self.failed_login(ip, "-", "malformed");
-        };
-        let Some(profile) = self.profiles.authenticate(&id, &token) else {
-            return self.failed_login(ip, &id, "bad_credentials");
+        let (id, profile) = match self.access.identify(headers, ip) {
+            Identity::Anonymous => return unauthorized(),
+            Identity::Rejected(response) => return response,
+            Identity::Profile { id, profile } => (id, profile),
         };
 
         // 2. May they use SQL, and on this dataset?
-        let Some(granted) = &profile.sql_datasets else {
+        let Some(sql_grant) = &profile.sql else {
             return json_response(StatusCode::FORBIDDEN, "This profile is not granted SQL access.", Value::Null);
         };
         if !DATASETS.contains(&req.dataset.as_str()) {
@@ -476,7 +356,7 @@ impl SqlState {
                 Value::Null,
             );
         }
-        if !granted.contains(&req.dataset) {
+        if !sql_grant.datasets.contains(&req.dataset) {
             return json_response(StatusCode::FORBIDDEN, "This profile is not granted that dataset.", Value::Null);
         }
         let Some(ctx) = self.contexts.get(&req.dataset) else {
@@ -490,14 +370,30 @@ impl SqlState {
             return json_response(StatusCode::BAD_REQUEST, "sql is empty.", Value::Null);
         }
 
-        // 3. Room on this pod? Refuse rather than queue.
+        // 3. This profile's own limits, then room on this pod. Refuse rather than queue.
+        let pl = self.profile_limits.get(&id);
+        if let Some(rate) = pl.and_then(|p| p.rate.as_ref()) {
+            if let Err(not_until) = rate.check() {
+                let wait = not_until.wait_time_from(governor::clock::Clock::now(&governor::clock::DefaultClock::default()));
+                return too_many_requests(MODULE, "This profile's SQL request limit was exceeded.", wait.as_secs().max(1));
+            }
+        }
+        let _profile_permit = match pl {
+            Some(p) => match p.permits.clone().try_acquire_owned() {
+                Ok(permit) => Some(permit),
+                Err(_) => return too_many_requests(MODULE, "This profile is running its maximum number of SQL queries; retry shortly.", 1),
+            },
+            None => None,
+        };
         let Ok(_permit) = self.permits.clone().try_acquire_owned() else {
             return too_many_requests(MODULE, "The server is running its maximum number of SQL queries; retry shortly.", 1);
         };
 
-        let limit = req.limit.unwrap_or(self.config.default_rows).clamp(1, self.config.max_rows);
+        let max_rows = pl.map_or(self.config.max_rows, |p| p.max_rows);
+        let timeout = pl.map_or(Duration::from_secs(self.config.timeout_secs), |p| p.timeout);
+        let limit = req.limit.unwrap_or(self.config.default_rows.min(max_rows)).clamp(1, max_rows);
         let started = Instant::now();
-        let outcome = execute(ctx, &req.sql, limit, Duration::from_secs(self.config.timeout_secs)).await;
+        let outcome = execute(ctx, &req.sql, limit, timeout).await;
         let ms = started.elapsed().as_millis() as u64;
         let sql_hash: String = Sha256::digest(req.sql.as_bytes()).iter().take(6).map(|b| format!("{b:02x}")).collect();
         let audit = |outcome: &str, rows: usize| {
@@ -537,7 +433,7 @@ impl SqlState {
                 audit("timeout", 0);
                 json_response(
                     StatusCode::GATEWAY_TIMEOUT,
-                    &format!("The statement ran longer than {} seconds and was cancelled.", self.config.timeout_secs),
+                    &format!("The statement ran longer than {} seconds and was cancelled.", timeout.as_secs()),
                     Value::Null,
                 )
             }
@@ -566,9 +462,9 @@ mod tests {
     };
     use datafusion::datasource::MemTable;
 
-    fn token_hash(token: &str) -> String {
-        Sha256::digest(token.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
-    }
+    use crate::access::{tests::token_hash, FAILED_AUTH_PER_MINUTE, Profiles};
+    use axum::http::{header, HeaderValue};
+    use base64::Engine;
 
     fn cfg() -> SqlConfig {
         SqlConfig::from_lookup(&|k| (k == "COMPANY_DNS_SQL_ENABLED").then(|| "true".to_string()))
@@ -598,7 +494,7 @@ mod tests {
         let ctx = build_query_context(&source, &["things".to_string()], &config).await.unwrap();
         let mut contexts = HashMap::new();
         contexts.insert("sic".to_string(), ctx);
-        SqlState::from_parts(config, Profiles::parse(profiles_json).unwrap(), contexts)
+        SqlState::from_parts(config, Arc::new(Access::new(Profiles::parse(profiles_json).unwrap())), contexts)
     }
 
     fn profiles_json(token: &str, datasets: &str) -> String {
@@ -665,37 +561,6 @@ mod tests {
             let pairs: &'static [(&'static str, &'static str)] = Box::leak(bad.to_vec().into_boxed_slice());
             assert!(SqlConfig::from_lookup(&lookup(pairs)).is_err(), "{bad:?}");
         }
-    }
-
-    // --- profiles and Basic Auth ---
-
-    #[test]
-    fn profiles_parse_and_reject() {
-        assert!(Profiles::parse(&profiles_json("t", r#"["sic","edgar"]"#)).is_ok());
-        assert!(Profiles::parse("{}").is_err());
-        assert!(Profiles::parse(r#"{"profiles": {}}"#).is_err());
-        assert!(Profiles::parse(r#"{"profiles": {"a": {"secret_sha256": "short"}}}"#).is_err());
-        assert!(Profiles::parse(&profiles_json("t", r#"["nope"]"#)).is_err(), "unknown dataset");
-        let typo = format!(r#"{{"profiles": {{"a": {{"secret_sha256": "{}", "limits": {{}}}}}}}}"#, token_hash("t"));
-        assert!(Profiles::parse(&typo).is_err(), "unknown keys are errors, not silently ignored");
-    }
-
-    #[test]
-    fn basic_header_parsing() {
-        let h = base64::engine::general_purpose::STANDARD.encode("id:to:ken");
-        assert_eq!(parse_basic(&format!("Basic {h}")), Some(("id".into(), "to:ken".into())));
-        assert_eq!(parse_basic(&format!("basic {h}")), Some(("id".into(), "to:ken".into())));
-        assert_eq!(parse_basic("Bearer abc"), None);
-        assert_eq!(parse_basic("Basic !!!"), None);
-        assert_eq!(parse_basic(&format!("Basic {}", base64::engine::general_purpose::STANDARD.encode("nocolon"))), None);
-    }
-
-    #[test]
-    fn authenticate_checks_the_hash() {
-        let p = Profiles::parse(&profiles_json("good-token", r#"["sic"]"#)).unwrap();
-        assert!(p.authenticate("tester", "good-token").is_some());
-        assert!(p.authenticate("tester", "bad-token").is_none());
-        assert!(p.authenticate("nobody", "good-token").is_none());
     }
 
     // --- the handler ---
@@ -821,6 +686,65 @@ mod tests {
         let ctx = SessionContext::new();
         let out = execute(&ctx, "select count(*) from generate_series(1, 5000000000) t1 cross join generate_series(1, 5000000000) t2", 10, Duration::from_millis(300)).await;
         assert!(matches!(out, Err(QueryError::Timeout)), "{out:?}", out = out.as_ref().err());
+    }
+
+    fn limited_profiles(limits: &str) -> String {
+        format!(
+            r#"{{"profiles": {{"lim": {{"secret_sha256": "{}", "sql": {{"datasets": ["sic"], "limits": {limits}}}}}}}}}"#,
+            token_hash("tok")
+        )
+    }
+
+    #[tokio::test]
+    async fn a_profile_can_lower_rows_and_is_clamped_by_the_server_wide_ceiling() {
+        let h = basic("lim", "tok");
+        let s = demo_state(&limited_profiles(r#"{"max_rows": 7}"#)).await;
+        let (_, body) = call(&s, &h, req("select id from things")).await;
+        assert_eq!(body["data"]["row_count"], 7, "default is cut to the profile's max");
+        let mut r = req("select id from things");
+        r.limit = Some(1000);
+        assert_eq!(call(&s, &h, r).await.1["data"]["limit"], 7, "a request cannot raise it");
+
+        // above the server-wide ceiling (10000): clamped down to it, never exceeded
+        let s = demo_state(&limited_profiles(r#"{"max_rows": 99999999}"#)).await;
+        let mut r = req("select id from things");
+        r.limit = Some(99_999_999);
+        assert_eq!(call(&s, &h, r).await.1["data"]["limit"], 10000);
+    }
+
+    #[tokio::test]
+    async fn a_profile_request_rate_limit_gives_429_with_retry_after() {
+        // 20/min fleet-wide = 5 per pod
+        let s = demo_state(&limited_profiles(r#"{"requests_per_minute": 20}"#)).await;
+        let h = basic("lim", "tok");
+        for i in 0..5 {
+            assert_eq!(call(&s, &h, req("select 1")).await.0, StatusCode::OK, "request {i}");
+        }
+        let resp = s.handle(peer(), &h, req("select 1")).await;
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert!(resp.headers().get(header::RETRY_AFTER).is_some());
+    }
+
+    #[tokio::test]
+    async fn a_profile_concurrency_limit_is_its_own_gate() {
+        let s = demo_state(&limited_profiles(r#"{"concurrency": 1}"#)).await;
+        let h = basic("lim", "tok");
+        let held = s.profile_limits["lim"].permits.clone().try_acquire_owned().unwrap();
+        assert_eq!(call(&s, &h, req("select 1")).await.0, StatusCode::TOO_MANY_REQUESTS);
+        assert!(s.permits.available_permits() > 0, "the server-wide gate was not the one that refused");
+        drop(held);
+        assert_eq!(call(&s, &h, req("select 1")).await.0, StatusCode::OK);
+    }
+
+    #[test]
+    fn profile_limits_never_exceed_the_server_wide_ones() {
+        let c = cfg(); // 10000 rows, 10 s, 4 concurrent
+        let p = Profiles::parse(&limited_profiles(r#"{"max_rows": 99999, "timeout_secs": 999, "concurrency": 99}"#)).unwrap();
+        let l = &build_profile_limits(&c, &Access::new(p))["lim"];
+        assert_eq!((l.max_rows, l.timeout, l.permits.available_permits()), (10000, Duration::from_secs(10), 4));
+        let p = Profiles::parse(&limited_profiles(r#"{"max_rows": 5, "timeout_secs": 2, "concurrency": 1}"#)).unwrap();
+        let l = &build_profile_limits(&c, &Access::new(p))["lim"];
+        assert_eq!((l.max_rows, l.timeout, l.permits.available_permits()), (5, Duration::from_secs(2), 1));
     }
 
     #[tokio::test]

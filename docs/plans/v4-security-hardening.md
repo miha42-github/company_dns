@@ -390,6 +390,9 @@ into the bypass, the other being §3.5's secret User-Agent.
 > stay**: they are the "identify yourself for a better experience" rung. The
 > ladder is anonymous (draconian), self-identifying `User-Agent` (normal), then
 > Basic-Auth profile (lower or no rate limit plus enhanced access such as SQL).
+> **Built 2026-10-06:** the profile `rate_limit` grant (bypass, or a quota of its own) is
+> live in `rate_limit.rs`/`access.rs`, the SQL route goes through this limiter (without the
+> Origin bypass), and profiles carry their own SQL limits; see `v4-sql-endpoint.md` §8.
 > Kept below as the record of what was decided and built first.
 
 **Decided (raised directly, superseding an earlier static-secret-hash

@@ -23,25 +23,36 @@ need curl; need jq; need openssl; need shasum
 
 setup() {
   mkdir -p "$DIR"; chmod 700 "$DIR"
-  if [ -f "$DIR/profiles.json" ]; then echo "already set up: $DIR (delete it to start over)"; return; fi
+  if [ -f "$DIR/profiles.json" ]; then
+    if grep -q '"sql-rpm"' "$DIR/profiles.json"; then echo "already set up: $DIR (delete it to start over)"; return; fi
+    echo "older setup without the newest test profiles: recreating it (tokens change; restart the server)"
+    rm -f "$DIR/profiles.json" "$DIR/tokens.env"
+  fi
   t1=$(openssl rand -hex 32); t2=$(openssl rand -hex 32); t3=$(openssl rand -hex 32)
+  t4=$(openssl rand -hex 32); t5=$(openssl rand -hex 32); t6=$(openssl rand -hex 32); t7=$(openssl rand -hex 32)
   h() { printf '%s' "$1" | shasum -a 256 | cut -d' ' -f1; }
   cat > "$DIR/profiles.json" <<EOF
 {"profiles": {
-  "tester":   {"secret_sha256": "$(h "$t1")", "sql": {"datasets": ["sic", "edgar"]}},
-  "sic-only": {"secret_sha256": "$(h "$t2")", "sql": {"datasets": ["sic"]}},
-  "no-sql":   {"secret_sha256": "$(h "$t3")"}
+  "tester":    {"secret_sha256": "$(h "$t1")", "rate_limit": {"bypass": true}, "sql": {"datasets": ["sic", "edgar"]}},
+  "sic-only":  {"secret_sha256": "$(h "$t2")", "rate_limit": {"bypass": true}, "sql": {"datasets": ["sic"]}},
+  "no-sql":    {"secret_sha256": "$(h "$t3")"},
+  "unlimited": {"secret_sha256": "$(h "$t4")", "rate_limit": {"bypass": true}},
+  "capped":    {"secret_sha256": "$(h "$t5")", "rate_limit": {"requests_per_minute": 20, "burst": 20}},
+  "sql-small": {"secret_sha256": "$(h "$t6")", "rate_limit": {"bypass": true},
+                "sql": {"datasets": ["sic"], "limits": {"max_rows": 5, "timeout_secs": 2, "concurrency": 1}}},
+  "sql-rpm":   {"secret_sha256": "$(h "$t7")", "rate_limit": {"bypass": true},
+                "sql": {"datasets": ["sic"], "limits": {"requests_per_minute": 20}}}
 }}
 EOF
-  printf 'TESTER_TOKEN=%s\nSICONLY_TOKEN=%s\nNOSQL_TOKEN=%s\n' "$t1" "$t2" "$t3" > "$DIR/tokens.env"
+  printf 'TESTER_TOKEN=%s\nSICONLY_TOKEN=%s\nNOSQL_TOKEN=%s\nUNLIMITED_TOKEN=%s\nCAPPED_TOKEN=%s\nSQLSMALL_TOKEN=%s\nSQLRPM_TOKEN=%s\n' "$t1" "$t2" "$t3" "$t4" "$t5" "$t6" "$t7" > "$DIR/tokens.env"
   chmod 600 "$DIR/profiles.json" "$DIR/tokens.env"
-  echo "created $DIR (profiles: tester, sic-only, no-sql)"
+  echo "created $DIR (profiles: tester, sic-only, no-sql, unlimited, capped, sql-small, sql-rpm)"
 }
 
 tok() { # profile -> token
   # shellcheck disable=SC1091
   . "$DIR/tokens.env"
-  case "$1" in tester) echo "$TESTER_TOKEN";; sic-only) echo "$SICONLY_TOKEN";; no-sql) echo "$NOSQL_TOKEN";; *) echo "";; esac
+  case "$1" in tester) echo "$TESTER_TOKEN";; sic-only) echo "$SICONLY_TOKEN";; no-sql) echo "$NOSQL_TOKEN";; unlimited) echo "$UNLIMITED_TOKEN";; capped) echo "$CAPPED_TOKEN";; sql-small) echo "$SQLSMALL_TOKEN";; sql-rpm) echo "$SQLRPM_TOKEN";; *) echo "";; esac
 }
 
 start() {
@@ -95,11 +106,20 @@ check() {
   [ -f "$DIR/tokens.env" ] || { echo "run: scripts/sql-try.sh setup, then start"; exit 2; }
   curl -s -o /dev/null "$BASE/health" || { echo "server not reachable at $BASE (scripts/sql-try.sh start)"; exit 2; }
 
+  want() { # name, "codes", regex every code must match, [regex at least one must match]
+    name="$1"; got="$2"; each="$3"; some="${4:-}"
+    if printf '%s' "$got" | tr ' ' '\n' | grep -v '^$' | grep -qvE "^($each)$"; then FAIL=$((FAIL+1)); echo "FAIL  $name  (got: $got)"; return; fi
+    if [ -n "$some" ] && ! printf '%s' "$got" | tr ' ' '\n' | grep -qE "^($some)$"; then FAIL=$((FAIL+1)); echo "FAIL  $name  (got: $got)"; return; fi
+    PASS=$((PASS+1)); echo "ok    $name"
+  }
   echo "== access =="
-  expect "no credentials -> 401"                         401 "$(post - "$(q sic 'select 1')")"
+  # SQL goes through the normal rate limiter too, so each anonymous call comes from a fresh
+  # source address (X-Forwarded-For) to get a fresh draconian burst
+  xff() { echo "X-Forwarded-For: 10.$((RANDOM % 250)).$((RANDOM % 250)).$((RANDOM % 250))"; }
+  expect "no credentials -> 401"                         401 "$(post - "$(q sic 'select 1')" -H "$(xff)")"
   expect "wrong token -> 401"                            401 "$(post raw:tester:not-the-token "$(q sic 'select 1')")"
   expect "unknown profile -> 401"                        401 "$(post raw:nobody:x "$(q sic 'select 1')")"
-  expect "forged Origin/Referer -> still 401"            401 "$(post - "$(q sic 'select 1')" -H 'Origin: https://mediumroast.io' -H 'Referer: https://mediumroast.io/')"
+  expect "forged Origin/Referer -> still 401"            401 "$(post - "$(q sic 'select 1')" -H 'Origin: https://mediumroast.io' -H 'Referer: https://mediumroast.io/' -H "$(xff)")"
   expect "profile without SQL -> 403"                    403 "$(post no-sql "$(q sic 'select 1')")"
   expect "sic-only profile on edgar -> 403"              403 "$(post sic-only "$(q edgar 'select 1')")"
   expect "sic-only profile on sic -> 200"                200 "$(post sic-only "$(q sic 'select 1 as one')")" '.data.rows[0].one == 1'
@@ -142,10 +162,46 @@ check() {
   if printf '%s' "$codes" | grep -q '429'; then PASS=$((PASS+1)); echo "ok    concurrency cap refuses the excess ($codes)"; else FAIL=$((FAIL+1)); echo "FAIL  expected some 429s, got: $codes"; fi
   expect "server still answers after the abuse"          200 "$(post tester "$(q sic 'select 1')")"
 
+  echo "== per-profile SQL limits, and the normal limits still apply to SQL =="
+  expect "sql-small: 100 rows requested, profile cap is 5"   200 "$(post sql-small "$(jq -n '{dataset:"sic",sql:"select * from generate_series(1, 1000)",limit:100}')")" '.data.row_count == 5 and .data.limit == 5 and .data.truncated == true'
+  t0=$(date +%s)
+  expect "sql-small: its 2 s timeout, not the server's 5 s"  504 "$(post sql-small "$(q sic "$slow")")"
+  t1=$(date +%s); [ $((t1 - t0)) -le 4 ] && { PASS=$((PASS+1)); echo "ok    ...cancelled in $((t1 - t0)) s"; } || { FAIL=$((FAIL+1)); echo "FAIL  profile timeout took $((t1 - t0)) s"; }
+  rm -f /tmp/sql-try-par.*
+  for i in 1 2 3; do ( post sql-small "$(q sic "$slow")" | cut -f1 > /tmp/sql-try-par.$i ) & done; wait
+  codes=$(cat /tmp/sql-try-par.* | sort | uniq -c | tr -s ' ' | tr '\n' ';'); rm -f /tmp/sql-try-par.*
+  if printf '%s' "$codes" | grep -q '429'; then PASS=$((PASS+1)); echo "ok    sql-small: concurrency 1 refuses the extra queries ($codes)"; else FAIL=$((FAIL+1)); echo "FAIL  expected 429s from the profile's concurrency limit, got: $codes"; fi
+  rpm=""; for i in $(seq 1 12); do rpm="$rpm $(post sql-rpm "$(q sic 'select 1')" | cut -f1)"; done
+  want "sql-rpm: 20 requests/min is its own SQL limit" "$rpm" '200|429' 429
+  anonc=""; fx="$(xff)"; for i in 1 2 3; do anonc="$anonc $(post - "$(q sic 'select 1')" -H 'Origin: https://mediumroast.io' -H "$fx" | cut -f1)"; done
+  want "anonymous + forged Origin on SQL: no bypass, limited like anyone (401, then 429)" "$anonc" '401|429' 429
+  want "wrong credential on SQL still 401 (never silently anonymous)" "$(post raw:tester:wrong "$(q sic 'select 1')" -H "$(xff)" | cut -f1)" 401
+
   echo "== failed logins are throttled =="
   for i in $(seq 1 12); do post raw:tester:wrong "$(q sic 'select 1')" > /dev/null; done
   expect "after 10 failures: 429 for bad credentials"    429 "$(post raw:tester:wrong "$(q sic 'select 1')")"
   expect "...but the right credential still works"       200 "$(post tester "$(q sic 'select 1')")"
+
+  echo "== profiles and rate limits on the lookup routes =="
+  # a fresh source address per run, so earlier runs' buckets do not interfere (the server
+  # keys on X-Forwarded-For; locally nothing else sets it)
+  newip() { xff="10.$((RANDOM % 250)).$((RANDOM % 250)).$((RANDOM % 250))"; }
+  newip
+  L="$BASE/V4.0/na/sic/code/7372"
+  look() { curl -s -o /dev/null -w '%{http_code}' -H "X-Forwarded-For: $xff" "$@" "$L"; }
+  codes() { n="$1"; shift; for _ in $(seq 1 "$n"); do look "$@"; printf ' '; done; }
+  newip; g=$(look -A 'curl/8.4.0'); g2=$(look -A 'curl/8.4.0')
+  if [ "$g" = 200 ] && [ "$g2" = 429 ]; then PASS=$((PASS+1)); echo "ok    anonymous, generic User-Agent: draconian (one request, then 429)"; else FAIL=$((FAIL+1)); echo "FAIL  anonymous draconian: got $g $g2"; fi
+  newip
+  want "self-identifying User-Agent: normal tier (5 in a row)" "$(codes 5 -A 'sql-try/1.0 (contact@example.com)')" 200
+  newip
+  want "profile with no rate_limit grant: normal tier even with a generic User-Agent" "$(codes 4 -A 'curl/8.4.0' -u "no-sql:$(tok no-sql)")" 200
+  newip
+  want "'unlimited' profile (bypass): 25 requests, none limited" "$(codes 25 -A 'curl/8.4.0' -u "unlimited:$(tok unlimited)")" 200
+  newip
+  want "'capped' profile (20/min): limited, with its own bucket" "$(codes 12 -A 'curl/8.4.0' -u "capped:$(tok capped)")" '200|429' 429
+  newip
+  want "wrong credential on a lookup route -> 401, not silently anonymous" "$(look -A 'curl/8.4.0' -u 'capped:wrong')" 401
 
   echo "== documentation =="
   curl -s "$BASE/openapi.json" -A "$UA" > /tmp/sql-try-openapi.$$
