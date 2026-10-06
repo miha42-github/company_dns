@@ -206,7 +206,7 @@ mediumroast.io's existing rate-limit trust is expressed in the same mechanism.
 | Today | General mechanism |
 |---|---|
 | one secret, one identity (mediumroast.io), trust = skip the limiter | **one file** with a section per profile: secret plus what that profile may do |
-| env var from a sealed K8s Secret | the same secret store, delivered as a mounted file; any secret env var may also be given as `<NAME>_FILE` |
+| env var from a sealed K8s Secret | the same secret store, delivered as a mounted file (the credentials file) |
 | a bypass only | per-feature grants: rate-limit treatment, SQL access, and whatever comes later |
 
 mediumroast.io is one profile. Open-source users define their own.
@@ -356,8 +356,8 @@ logged with source IP and counted. Secrets and tokens are never logged.
 ## 5b. Where the other plans change (the general solution)
 
 - **`v4-deployment.md`**: section 2 (runtime secrets: credentials and rules files, may be
-  mounted; Docker secrets named as the equivalent of the sealed K8s Secret;
-  `<NAME>_FILE` convention); section 3.4 (per-tier credentials file, rules ConfigMap and per-tier
+  mounted; Docker secrets named as the equivalent of the sealed K8s Secret);
+  section 3.4 (per-tier credentials file, rules ConfigMap and per-tier
   server-wide limits in the ConfigMap; staging capacity test); Step G;
   open questions. **Updated.**
 - **`v4-security-hardening.md`**: 3.5 and 3.4 notes; the profiles mechanism
@@ -445,8 +445,7 @@ prod uses the same method on its 4-replica sizing.
 8. Credential (2026-10-05): **HTTP Basic Auth** (profile id and a generated
    token; only the token's SHA-256 is stored). Rolling HMAC and Digest were
    considered and not chosen.
-9. General solution (2026-10-05): the `<NAME>_FILE` convention applies to any
-   secret env var, one credentials/rules pair serves every feature, and mediumroast.io's
+9. General solution (2026-10-05): one credentials/rules pair serves every feature, and mediumroast.io's
    rate-limit trust becomes a profile grant. No legacy secret-in-`User-Agent` path (the self-identifying `User-Agent` tier stays),
    because nothing depends on it yet.
 
@@ -455,6 +454,9 @@ prod uses the same method on its 4-replica sizing.
 11. Reload (2026-10-05): profiles are read at startup only; changing them means
     a restart (rolling the pods). Simplicity, as this is an open-source example.
 12. Capacity test pass criteria (2026-10-05): as listed in section 5c.
+13. `<NAME>_FILE` convention (2026-10-06): **dropped.** It was designed when the one secret was
+    an env var; now the only secret is the credentials file, which is already a mounted file,
+    and no secret env var remains. Revisit only if one appears.
 
 Still open: only the real server-wide limit values, which come from running the
 capacity test on staging (section 5c).
@@ -499,7 +501,6 @@ Decided 2026-10-05: **the endpoint first, per-profile limits afterwards.**
   `concurrency`, `requests_per_minute`, `burst`), each clamped by the server-wide value,
   with the SQL route moved inside the rate limiter (no Origin bypass). Not built: a
   per-profile memory share (the pool is per query context, so concurrency is the control).
-- `<NAME>_FILE` convention for secret env vars.
 - Deployment wiring (`v4-deployment.md` Step G): per-tier sealed credentials file and rules ConfigMap
   and ConfigMap limits.
 - The staging capacity test (section 5c) that sets the real global values.

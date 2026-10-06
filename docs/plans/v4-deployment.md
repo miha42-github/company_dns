@@ -266,9 +266,9 @@ mechanism for V4, not an SQL-only one. It follows the same rule as above: a runt
 secret, never baked into the image, never in the repo, one per tier. It is
 delivered as a **mounted file**, which fits a SealedSecret mounted as a volume
 on the cluster and a Docker secret (`/run/secrets/...`) for plain-Docker runs,
-and a gitignored file for local development. Decided convention: any secret
-env var may also be given as `<NAME>_FILE` pointing at a mounted file (so
-`MEDIUMROAST_SHARED_SECRET_FILE` too), the Docker-secrets convention.
+and a gitignored file for local development. (A general `<NAME>_FILE`
+convention for secret env vars was considered and dropped 2026-10-06: the only secret
+is the credentials file, which is already a mounted file, and no secret env var remains.)
 The credentials file holds token hashes, clients authenticate with HTTP Basic
 Auth (`v4-sql-endpoint.md` 5a), and the old `MEDIUMROAST_SHARED_SECRET` is
 **removed from the code (2026-10-05)**, replaced by the `mediumroast.io`
