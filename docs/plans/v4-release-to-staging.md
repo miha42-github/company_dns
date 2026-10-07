@@ -29,7 +29,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 
 | Item | State | What exists | Next action |
 |---|---|---|---|
-| **1. API docs include SQL, marked experimental** | **Partly done** | The SQL operation is tagged `experimental`, has an "Experimental:" summary, states its access rules and declares the HTTP Basic scheme (`v4-sql-endpoint.md` §5a). | Everything else in step 1 (spec `info.description`, 429 responses, tag descriptions, examples, the spec test). Nothing else is done. |
+| **1. API docs include SQL, marked experimental** | **Done (2026-10-07)** | Spec description (access ladder, rate limits, experimental), 401 and 429 on every operation but `/health`, all 17 tags described, request examples for `/match`, `/map`, `/sql`, the empty licence fixed; seven new spec checks in the live battery (58 total), shown to fail on the old spec. | The spec checks move into the step 3 suite when it exists. |
 | **2. Swagger look and feel** | **Done (2026-10-07)** | `/docs`: base layout (no top bar or logo), Basic credential persists, request duration shown. `/redoc`: our own template pinned to a light scheme, **the Redoc 2.5.4 bundle vendored and served by the server (MIT, licences and notices alongside, SHA-256 pinned by a test), and no web fonts**. **Decided: both documentation sites stay light.** Verified in the browser with the system theme forced to dark: both light and readable, and every request the `/redoc` page makes goes to `localhost` (nothing to a CDN or a font host). | Nothing open. Branding stays deferred. |
 | **New E. 15 non-US endpoints and two `/v2/` aliases** | **Not started** | The data (NACE, ISIC, Japan) is loaded; the endpoints do not exist. | Map V3's level names to the flat columns and capture V3's real responses as fixtures. |
 | **3. Python test suite** | **Not started** | `perf_tests/` (performance, covers about seven endpoints with a V4 path) and `v4/scripts/sql-try.sh check` (51 live cases, shell). No `api_tests/`. | Create `api_tests/` with the L0 and L1 layers first. |
@@ -46,7 +46,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 **Out of order, and what that means.** Step 5 ran before step 4, so the "no regression" half of its acceptance rule (against a step 4 baseline) has not been applied
 yet. The measurements and the two profiles stand on their own; what waits is the regression check, the Linux numbers and the choice between the options.
 
-**Suggested next, in order of cost:** step 1's remaining items, then New E and the first layers of step 3 in parallel.
+**Suggested next:** New E (the 15 non-US endpoints and the two `/v2/` aliases) and the first layers of step 3 (L0 smoke and L1 contract) in parallel.
 
 ---
 
@@ -95,7 +95,7 @@ These are the reason the steps below differ from the original seven.
 
 | # | Original step | Verdict | Change |
 |---|---|---|---|
-| 1 | API doc includes SQL, marked experimental | Mostly done; keep, widen | The SQL operation is already tagged `experimental` with a Basic-auth scheme (it appears only when SQL is enabled). Remaining: decide how SQL shows in docs when the flag is off, document profiles and the access ladder, and close roadmap §2 (429s, User-Agent text). |
+| 1 | API doc includes SQL, marked experimental | Keep, widen; **done 2026-10-07** | The SQL operation was already tagged `experimental` with a Basic-auth scheme. Added: how SQL shows when the flag is off (nothing), the access ladder and rate limits in the spec, 401 and 429 on every operation, tag descriptions, examples, and roadmap §2 closed. |
 | 2 | Reskin Swagger | Keep; small | Most of the "ugliness" is Swagger's standalone top bar. One setting removes it. **Decided (Q4): top bar now, branding later.** **Done 2026-10-07**, including pinning `/redoc` to a light theme (it was unreadable under a dark system theme); both sites stay light. |
 | 3 | Extend the perf suite, V3 core then V4, in Python | Keep; reshape | Build a **functional layer beside** the perf suite, as `v4-deployment.md` §3.9 already designs, with stdlib plus `requests` only. Port the SQL shell battery into it. |
 | 4 | Run against live V3 and V4 for parity | Keep; define parity | Parity needs classes (identical, equivalent, absent by decision), normalisation of live data, and a politeness policy for live V3. Run it **before** thinning so it is the baseline. |
@@ -135,29 +135,27 @@ staging manifests.
 
 ### Step 1: API documentation includes SQL, marked experimental
 
-**Status: partly done (2026-10-07).** The SQL operation itself is covered (below); the rest of the "To do" list has not been started.
+**Status: done (2026-10-07).**
 
-**Done already:** the SQL operation is tagged `experimental`, its summary starts with "Experimental:", its
-description states the access rules, it declares an HTTP Basic security scheme, and every response carries an
-`experimental` limitation (`v4-sql-endpoint.md` §5a).
+**What was done**, all in `v4/crates/server/src/` (`main.rs`, `sql_endpoint.rs`, `api_description.md`):
+- **The spec's own description** (`info.description`, `api_description.md`, rendered as Markdown by both `/docs` and `/redoc`): the access ladder as a table (nothing or a generic `User-Agent`, a
+  self-identifying `User-Agent`, an authenticated profile), the rate-limit behaviour (`429` with `Retry-After`, a wrong Basic credential is a `401`, `Origin` and `Referer` are not identity, the exempt routes),
+  an **Experimental** section about `POST /V4.0/sql`, and links to the README's Security, Profiles and Experimental SQL sections.
+- **401 and 429 responses on every operation except `/health`** (30 annotations edited; `/V4.0/sql` already had them). Before: 30 of 32 operations documented neither.
+- **Tag descriptions:** all 17 tags are declared with a description (V4 groups first, then the `/V3.0/` aliases, `experimental` and `System`), so groups read as explanations.
+- **Examples** for the three V4-only request bodies: `/match`, `/map`, `/sql` (the Swagger "Example Value").
+- **The empty licence fixed:** the spec's licence name was blank (ReDoc showed "License:" with nothing after it); it is now Apache-2.0 (the repository's licence), with a contact link to the project.
 
-**To do:**
-- **How docs behave when the flag is off.** SQL is registered only when enabled, so `/docs` omits it on a
-  server where it is off. For staging that is right if SQL is on there. Decide whether production docs
-  should show nothing, or a stub entry. Recommendation: show nothing when off (an endpoint that does not exist
-  should not be documented), and document SQL in the README and a short "Experimental features" page.
-- **Document access and limits in the spec itself.** Expand `info.description` with the access ladder
-  (anonymous, self-identifying `User-Agent`, authenticated profile), the rate-limit behaviour, and a link to the
-  README "Profiles" and "Experimental: SQL endpoint" sections. This closes roadmap §2's three boxes.
-- **429 (and 401/403 where relevant) responses** on every data endpoint's `#[utoipa::path]`, per roadmap §2.
-- **Tag descriptions.** Give the `experimental` tag and the V4-only tags (global SIC, Industry Match) a
-  description, so Swagger groups read as explanations, not bare names.
-- **Examples** for the V4-only endpoints (`/match`, `/map`, `/sql`) in the spec, not only schemas.
-- **A spec check in the test suite** (step 3): every route the server registers appears in `/openapi.json`,
-  and the experimental tag is present on SQL when SQL is on.
+**Decisions made while doing it:**
+- **When SQL is off, the docs show nothing** (as recommended): the route is not registered, so `/docs` and `/redoc` never mention an endpoint that does not exist. The spec's description still explains the
+  experimental endpoint in general terms ("appears here only on servers where it is enabled"), and the README documents it.
+- **No separate "Experimental features" page**: the README's "Experimental: SQL endpoint" section is the page, and the spec links to it. Revisit if a second experimental feature appears.
 
-**Exit:** `/docs` and `/redoc` on a local server with SQL on show SQL clearly as experimental with its access
-rules; roadmap §2 boxes can be checked; a spec test passes.
+**The spec check** (the plan's "spec test") is in the live battery for now: `v4/scripts/sql-try.sh check` gained seven spec checks (every operation except `/health` documents 429 and 401; every tag in use is
+declared with a description; the description explains the ladder and marks SQL experimental; the licence is filled in; the three request bodies have examples), on top of the two that were there (SQL is tagged
+`experimental`; the Basic scheme is declared). **Verified they have teeth:** six of the seven fail against the spec as it was before these changes. The battery is now 58 checks. They move into the step 3 suite (L1 contract) when that exists.
+
+**Exit met:** `/docs` and `/redoc` on a local server with SQL on show SQL clearly as experimental with its access rules; the roadmap §2 boxes are checked (`v4-initial-release-roadmap.md`); the spec checks pass.
 
 ### Step 2: Swagger look and feel
 
@@ -534,7 +532,7 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 ## 6. Definition of done for "released to staging"
 
 - [x] Step 2: `/docs` and `/redoc` both light and readable, reviewed in the browser (2026-10-07).
-- [ ] Step 1 merged. *(partly done; the remaining items are listed under step 1)*
+- [x] Step 1: API documentation includes SQL, marked experimental, with the access and rate-limit text, 401 and 429 on every operation, tag descriptions and examples; spec checks in the live battery (2026-10-07).
 - [ ] New E: the 15 per-system endpoints and the two `/v2/` aliases merged, tested, and in the spec.
 - [ ] Step 3 suite merged, green in CI for its fast layers.
 - [ ] Step 4 parity report with no unexplained mismatch, and the unthinned baseline saved.

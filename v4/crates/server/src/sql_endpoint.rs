@@ -236,6 +236,11 @@ pub async fn execute(
 // ---------------------------------------------------------------------------
 
 #[derive(Deserialize, utoipa::ToSchema)]
+#[schema(example = json!({
+    "dataset": "sic",
+    "sql": "select class_id, class_desc from sic_data where lower(class_desc) like '%software%' limit 10",
+    "limit": 10
+}))]
 pub struct SqlRequest {
     /// `sic` (US SIC plus Japan SIC, EU NACE and ISIC when loaded) or `edgar` (the filings catalog).
     pub dataset: String,

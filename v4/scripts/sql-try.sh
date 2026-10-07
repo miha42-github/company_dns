@@ -214,6 +214,16 @@ check() {
   curl -s "$BASE/openapi.json" -A "$UA" > /tmp/sql-try-openapi.$$
   jq -e '.paths["/V4.0/sql"].post.tags | index("experimental")' /tmp/sql-try-openapi.$$ >/dev/null && { PASS=$((PASS+1)); echo "ok    OpenAPI: operation is tagged experimental"; } || { FAIL=$((FAIL+1)); echo "FAIL  OpenAPI tag"; }
   jq -e '.components.securitySchemes.basic_auth.scheme == "basic"' /tmp/sql-try-openapi.$$ >/dev/null && { PASS=$((PASS+1)); echo "ok    OpenAPI: HTTP Basic security scheme declared"; } || { FAIL=$((FAIL+1)); echo "FAIL  OpenAPI security scheme"; }
+  spec() { # name, jq expression that must be true over the spec
+    if jq -e "$2" /tmp/sql-try-openapi.$$ >/dev/null 2>&1; then PASS=$((PASS+1)); echo "ok    OpenAPI: $1"; else FAIL=$((FAIL+1)); echo "FAIL  OpenAPI: $1"; fi
+  }
+  spec "every operation except /health documents 429 (rate limit)"          '[.paths | to_entries[] | select(.key != "/health") | .value[] | select(.responses | has("429") | not)] | length == 0'
+  spec "every operation except /health documents 401 (wrong credential)"   '[.paths | to_entries[] | select(.key != "/health") | .value[] | select(.responses | has("401") | not)] | length == 0'
+  spec "every tag in use is declared, with a description"                   '([.paths[][] | .tags[]?] | unique) as $used | ([.tags[]? | select((.description // "") != "") | .name]) as $declared | ($used - $declared) | length == 0'
+  spec "the description explains the access ladder and the rate limit"      '.info.description | (contains("User-Agent") and contains("Retry-After") and contains("429"))'
+  spec "the description marks the SQL endpoint experimental"                '.info.description | (ascii_downcase | contains("experimental"))'
+  spec "the licence is filled in"                                           '(.info.license.name // "") != ""'
+  spec "the V4-only request bodies have examples (match, map, sql)"         '[.components.schemas.MatchRequest, .components.schemas.MapRequest, .components.schemas.SqlRequest] | all(has("example"))'
   rm -f /tmp/sql-try-openapi.$$
 
   printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"; [ "$FAIL" = 0 ]

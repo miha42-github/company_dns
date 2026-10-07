@@ -82,18 +82,21 @@ work through.
 §5 step 4 — explicitly flagged and skipped as "optional polish" when
 rate limiting shipped. Time to close it.
 
-- [ ] Add 429 `ApiEnvelope` responses to every data endpoint's
+- [x] Add 429 `ApiEnvelope` responses to every data endpoint's
       `#[utoipa::path(...)]` `responses(...)` block, so `/openapi.json`
       (and `/docs`/`/redoc`) actually document the rate-limit behavior
       a caller will hit, not just the happy path.
-- [ ] Document the User-Agent gate itself in the OpenAPI spec's `info`/
+- [x] Document the User-Agent gate itself in the OpenAPI spec's `info`/
       `description` (currently only in `v4/README.md`'s "## Security"
       section, not discoverable from `/docs` itself — someone exploring
       the API via Swagger UI has no way to learn *why* they're getting
       429s without already knowing to read the README first).
-- [ ] Cross-link `v4/README.md`'s "## Security" section from the
+- [x] Cross-link `v4/README.md`'s "## Security" section from the
       OpenAPI `info.description` (or vice versa) so both surfaces point
       at each other instead of drifting independently.
+
+**Done 2026-10-07** (`v4-release-to-staging.md` step 1): every operation except `/health` documents 429 and 401; the spec's `info.description` explains the User-Agent ladder, the
+rate limits and the experimental SQL endpoint, and links to the README's Security and Profiles sections (the README links back to `/docs`).
 
 ## 3. SIC and company data: full V3 parity for US scope, plus semantic search
 
