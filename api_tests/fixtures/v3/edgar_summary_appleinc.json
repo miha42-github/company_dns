@@ -1,0 +1,73 @@
+{
+  "code": 200,
+  "data": {
+    "companies": {
+      "APPLE INC": {
+        "cik": "320193",
+        "companyName": "APPLE INC",
+        "forms": {
+          "2024-11-1-000032019324000123": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+            "formType": "10-K"
+          },
+          "2024-2-2-000032019324000006": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000006/0000320193-24-000006-index.html",
+            "formType": "10-Q"
+          },
+          "2024-5-3-000032019324000069": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000069/0000320193-24-000069-index.html",
+            "formType": "10-Q"
+          },
+          "2024-8-2-000032019324000081": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000081/0000320193-24-000081-index.html",
+            "formType": "10-Q"
+          },
+          "2025-1-31-000032019325000008": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/0000320193-25-000008-index.html",
+            "formType": "10-Q"
+          },
+          "2025-10-31-000032019325000079": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+            "formType": "10-K"
+          },
+          "2025-5-2-000032019325000057": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/0000320193-25-000057-index.html",
+            "formType": "10-Q"
+          },
+          "2025-8-1-000032019325000073": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/0000320193-25-000073-index.html",
+            "formType": "10-Q"
+          },
+          "2026-1-30-000032019326000006": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000006/0000320193-26-000006-index.html",
+            "formType": "10-Q"
+          },
+          "2026-5-1-000032019326000013": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000013/0000320193-26-000013-index.html",
+            "formType": "10-Q"
+          },
+          "2026-7-31-000032019326000020": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/0000320193-26-000020-index.html",
+            "formType": "10-Q"
+          }
+        }
+      }
+    },
+    "totalCompanies": 1
+  },
+  "dependencies": {
+    "data": {
+      "edgarFacts": "https://data.sec.gov/api/xbrl/companyfacts/",
+      "edgarSubmissions": "https://data.sec.gov/submissions/",
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "pyedgarRoot": "https://www.sec.gov/Archives/edgar/data",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {
+      "pyedgar": "https://github.com/gaulinmp/pyedgar",
+      "sic": "https://github.com/miha42-github/company_dns"
+    }
+  },
+  "message": "Company data has been returned for query [Apple Inc.].",
+  "module": "EdgarQueries-> get_all_details"
+}

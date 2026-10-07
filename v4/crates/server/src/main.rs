@@ -1,6 +1,7 @@
 mod access;
 mod docs;
 mod envelope;
+mod errors;
 mod logging;
 mod rate_limit;
 mod sic_endpoints;
@@ -466,7 +467,9 @@ async fn main() -> anyhow::Result<()> {
             Duration::from_secs(30),
         ))
         .layer(RequestBodyLimitLayer::new(64 * 1024))
-        .layer(CorsLayer::permissive());
+        .layer(CorsLayer::permissive())
+        // outermost: every error, including axum's own rejections, is the JSON envelope (errors.rs)
+        .layer(axum::middleware::from_fn(errors::json_errors));
 
     let port: u16 = std::env::var("PORT")
         .ok()
@@ -533,6 +536,7 @@ async fn sic_description_impl(state: &AppState, sic_desc: &str) -> axum::respons
     path = "/V4.0/na/sic/description/{sic_desc}",
     params(("sic_desc" = String, Path, description = "SIC description search term")),
     responses((status = 200, description = "SIC matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -550,6 +554,7 @@ async fn sic_description(
     path = "/V3.0/na/sic/description/{sic_desc}",
     params(("sic_desc" = String, Path, description = "SIC description search term")),
     responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -584,6 +589,7 @@ async fn sic_code_impl(state: &AppState, sic_code: &str) -> axum::response::Resp
     path = "/V4.0/na/sic/code/{sic_code}",
     params(("sic_code" = String, Path, description = "SIC numeric code")),
     responses((status = 200, description = "SIC matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -601,6 +607,7 @@ async fn sic_code(
     path = "/V3.0/na/sic/code/{sic_code}",
     params(("sic_code" = String, Path, description = "SIC numeric code")),
     responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -635,6 +642,7 @@ async fn sic_division_impl(state: &AppState, division_code: &str) -> axum::respo
     path = "/V4.0/na/sic/division/{division_code}",
     params(("division_code" = String, Path, description = "SIC division code")),
     responses((status = 200, description = "Division matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -652,6 +660,7 @@ async fn sic_division(
     path = "/V3.0/na/sic/division/{division_code}",
     params(("division_code" = String, Path, description = "SIC division code")),
     responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -689,6 +698,7 @@ async fn sic_industry_impl(state: &AppState, industry_code: &str) -> axum::respo
     path = "/V4.0/na/sic/industry/{industry_code}",
     params(("industry_code" = String, Path, description = "SIC industry-group code")),
     responses((status = 200, description = "Industry-group matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -706,6 +716,7 @@ async fn sic_industry(
     path = "/V3.0/na/sic/industry/{industry_code}",
     params(("industry_code" = String, Path, description = "SIC industry-group code")),
     responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -740,6 +751,7 @@ async fn sic_major_impl(state: &AppState, major_code: &str) -> axum::response::R
     path = "/V4.0/na/sic/major/{major_code}",
     params(("major_code" = String, Path, description = "SIC major-group code")),
     responses((status = 200, description = "Major-group matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -757,6 +769,7 @@ async fn sic_major(
     path = "/V3.0/na/sic/major/{major_code}",
     params(("major_code" = String, Path, description = "SIC major-group code")),
     responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -802,6 +815,7 @@ async fn sic_description_global_impl(state: &AppState, query: &str) -> axum::res
     path = "/V4.0/global/sic/description/{query}",
     params(("query" = String, Path, description = "SIC description search term, matched across every registered classification system")),
     responses((status = 200, description = "SIC matches across all systems, each tagged with source_type", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -819,6 +833,7 @@ async fn sic_description_global(
     path = "/V3.0/global/sic/description/{query_string}",
     params(("query_string" = String, Path, description = "SIC description search term, matched across every registered classification system")),
     responses((status = 200, description = "SIC matches across all systems, each tagged with source_type", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -859,6 +874,7 @@ fn default_model() -> String {
         ("model" = Option<String>, Query, description = "Embedding model (default all_minilm_l6_v2)"),
     ),
     responses((status = 200, description = "Nearest SIC entries by embedding distance", body = ApiEnvelope),
+        (status = 400, description = "An unknown model, or a parameter that does not parse (for example k)", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -870,7 +886,7 @@ async fn sic_similarity(
     Query(params): Query<SimilarityParams>,
 ) -> impl IntoResponse {
     if model_info(&params.model).is_none() {
-        return server_error(
+        return bad_request(
             "SicCatalog->search_similar",
             format!("unknown model: {}", params.model),
         )
@@ -915,6 +931,7 @@ async fn sic_similarity(
         ("model" = Option<String>, Query, description = "Embedding model (default all_minilm_l6_v2)"),
     ),
     responses((status = 200, description = "Nearest SIC entries by embedding distance across all systems, each tagged with source_type", body = ApiEnvelope),
+        (status = 400, description = "An unknown model, or a parameter that does not parse (for example k)", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -926,7 +943,7 @@ async fn sic_similarity_global(
     Query(params): Query<SimilarityParams>,
 ) -> impl IntoResponse {
     if model_info(&params.model).is_none() {
-        return server_error(
+        return bad_request(
             "SicCatalog->search_similar_global",
             format!("unknown model: {}", params.model),
         )
@@ -974,6 +991,7 @@ async fn sic_similarity_global(
         ("model" = Option<String>, Query, description = "Embedding model (default all_minilm_l6_v2)"),
     ),
     responses((status = 200, description = "Fused SIC entries across all systems, each tagged with source_type, keyword_rank / semantic_rank (null when that engine did not find it), rrf_score and, when found semantically, the raw cosine similarity", body = ApiEnvelope),
+        (status = 400, description = "An unknown model, or a parameter that does not parse (for example k)", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -985,7 +1003,7 @@ async fn sic_hybrid_global(
     Query(params): Query<SimilarityParams>,
 ) -> impl IntoResponse {
     if model_info(&params.model).is_none() {
-        return server_error(
+        return bad_request(
             "SicCatalog->search_hybrid_global",
             format!("unknown model: {}", params.model),
         )
@@ -1094,7 +1112,7 @@ const MATCH_MAX_CHARS: usize = 30_000;
     request_body = MatchRequest,
     responses(
         (status = 200, description = "For every registered classification system: 2-5 recommended codes with their hierarchy and the chunk that supports each, plus alternatives; the chunks; and stated limitations", body = ApiEnvelope),
-        (status = 400, description = "Empty or too-long text, or unknown model", body = ApiEnvelope),
+        (status = 400, description = "Empty or too-long text, an unknown model, or an empty or unknown systems list", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1107,6 +1125,12 @@ async fn sic_match(
     const MODULE: &str = "SicCatalog->match_company";
     if model_info(&req.model).is_none() {
         return bad_request(MODULE, format!("unknown model: {}", req.model)).into_response();
+    }
+    if req.systems.is_empty() {
+        return bad_request(MODULE, format!("systems is empty (use one or more of {})", KNOWN_SYSTEMS.join(", "))).into_response();
+    }
+    if let Some(bad) = req.systems.iter().find(|s| !KNOWN_SYSTEMS.contains(&s.as_str())) {
+        return bad_request(MODULE, format!("unknown system: {bad} (use one or more of {})", KNOWN_SYSTEMS.join(", "))).into_response();
     }
     if req.chunks.is_empty() && req.text.trim().is_empty() {
         return bad_request(MODULE, "text is empty").into_response();
@@ -1363,6 +1387,7 @@ struct TokenCountParams {
         ("model" = Option<String>, Query, description = "Embedding model (default all_minilm_l6_v2)"),
     ),
     responses((status = 200, description = "Real token count against the model's own tokenizer", body = ApiEnvelope),
+        (status = 400, description = "An unknown model, or a parameter that does not parse (for example k)", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1373,7 +1398,7 @@ async fn sic_similarity_check(
     Query(params): Query<TokenCountParams>,
 ) -> impl IntoResponse {
     if model_info(&params.model).is_none() {
-        return server_error(
+        return bad_request(
             "SicCatalog->token_info",
             format!("unknown model: {}", params.model),
         )
@@ -1434,6 +1459,7 @@ async fn edgar_ciks_impl(state: &AppState, company_name: &str) -> axum::response
     path = "/V4.0/na/companies/edgar/ciks/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
     responses((status = 200, description = "CIK matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1451,6 +1477,7 @@ async fn edgar_ciks(
     path = "/V3.0/na/companies/edgar/ciks/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
     responses((status = 200, description = "CIK matches", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1479,6 +1506,7 @@ async fn edgar_ciks_v3(
     path = "/V4.0/na/companies/edgar/detail/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
     responses((status = 200, description = "Grouped filings with live firmographics", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1496,6 +1524,7 @@ async fn edgar_detail(
     path = "/V3.0/na/companies/edgar/detail/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
     responses((status = 200, description = "Grouped filings with live firmographics", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1517,6 +1546,7 @@ async fn edgar_detail_v3(
     path = "/V4.0/na/companies/edgar/summary/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
     responses((status = 200, description = "Grouped filings, catalog-only", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1534,6 +1564,7 @@ async fn edgar_summary(
     path = "/V3.0/na/companies/edgar/summary/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
     responses((status = 200, description = "Grouped filings, catalog-only", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1638,6 +1669,7 @@ async fn edgar_firmographics_impl(state: &AppState, cik_no: &str) -> axum::respo
     path = "/V4.0/na/company/edgar/firmographics/{cik_no}",
     params(("cik_no" = String, Path, description = "SEC EDGAR Central Index Key")),
     responses((status = 200, description = "Live EDGAR firmographics", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1655,6 +1687,7 @@ async fn edgar_firmographics(
     path = "/V3.0/na/company/edgar/firmographics/{cik_no}",
     params(("cik_no" = String, Path, description = "SEC EDGAR Central Index Key")),
     responses((status = 200, description = "Live EDGAR firmographics", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1696,6 +1729,7 @@ async fn wikipedia_firmographics_impl(
     path = "/V4.0/global/company/wikipedia/firmographics/{company_name}",
     params(("company_name" = String, Path, description = "Company name (near-exact Wikipedia page title, or V3's corporate-suffix hint)")),
     responses((status = 200, description = "Wikipedia/Wikidata firmographics", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -1713,6 +1747,7 @@ async fn wikipedia_firmographics(
     path = "/V3.0/global/company/wikipedia/firmographics/{company_name}",
     params(("company_name" = String, Path, description = "Company name (near-exact Wikipedia page title, or V3's corporate-suffix hint)")),
     responses((status = 200, description = "Wikipedia/Wikidata firmographics", body = ApiEnvelope),
+        (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),

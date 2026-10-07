@@ -35,18 +35,47 @@ def _headers():
     return h
 
 
-def get(path):
-    """GET `path` on the server under test; returns (status, parsed JSON or None, headers)."""
-    req = urllib.request.Request(BASE_URL + path, headers=_headers())
+def request(method, path, body=None, headers=None, timeout=60):
+    """Send a request to the server under test; returns (status, parsed JSON or None, headers)."""
+    h = _headers()
+    h.update(headers or {})
+    data = None
+    if body is not None:
+        data = body.encode() if isinstance(body, str) else json.dumps(body).encode()
+        h.setdefault("Content-Type", "application/json")
+    req = urllib.request.Request(BASE_URL + path, data=data, headers=h, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:
-            body, status, hdrs = r.read(), r.status, r.headers
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw, status, hdrs = r.read(), r.status, r.headers
     except urllib.error.HTTPError as e:
-        body, status, hdrs = e.read(), e.code, e.headers
+        raw, status, hdrs = e.read(), e.code, e.headers
     try:
-        return status, json.loads(body), hdrs
+        return status, json.loads(raw), hdrs
     except ValueError:
         return status, None, hdrs
+
+
+def get(path, headers=None):
+    """GET `path` on the server under test; returns (status, parsed JSON or None, headers)."""
+    return request("GET", path, headers=headers)
+
+
+def post(path, body, headers=None):
+    """POST a JSON body (or a raw string) to `path`; returns (status, parsed JSON or None, headers)."""
+    return request("POST", path, body=body, headers=headers)
+
+
+ENVELOPE_KEYS = {"code", "message", "module", "data", "dependencies"}
+
+
+def shape(value, depth=0):
+    """A value's structure with the data stripped out: dict keys and types, the first list element. Stops three levels down,
+    where dictionaries are keyed by data (a filing's date, a company's name) rather than by field name."""
+    if isinstance(value, dict):
+        return {k: shape(v, depth + 1) for k, v in sorted(value.items())} if depth < 3 else "object"
+    if isinstance(value, list):
+        return [shape(value[0], depth + 1)] if value else []
+    return type(value).__name__
 
 
 def fixture(name):

@@ -1,9 +1,10 @@
 # V4.0.0: the remaining steps from "feature complete" to running on staging
 
 Status: **In progress (updated 2026-10-07).** Seven steps proposed by the owner, reviewed here, with changes, additions and the
-remaining open questions. **Done so far: step 5's size measurements and the two release profiles, step 1 (API docs), step 2 (Swagger and ReDoc), and New E (the 15 non-US
-endpoints, the two `/v2/` aliases, and, added back by the owner on 2026-10-07, V3's limited V2.0 set), with the first layer of the step 3 suite (`api_tests/`).**
-Not started: the rest of the test suite, the parity run, the containers and staging. See "Progress" below for the item-by-item state.
+remaining open questions. **Done so far: step 5's size measurements and the two release profiles, step 1 (API docs), step 2 (Swagger and ReDoc), New E (the 15 non-US
+endpoints, the two `/v2/` aliases, and, added back by the owner, V3's limited V2.0 set), and step 3's suite (`api_tests/`, 87 tests across layers L0 to L5), which
+found and fixed several defects and measured four remaining gaps in the V3 aliases.** Not started: the parity run itself, CI wiring, the containers and staging.
+See "Progress" below for the item-by-item state.
 Owner: michael.hay@mediumroast.io
 Scope: the work between "V4 is feature complete" and "V4 runs on staging and has been
 verified against V3". Out of scope: promotion to production, the dev tier, and anything
@@ -32,8 +33,8 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 | **1. API docs include SQL, marked experimental** | **Done (2026-10-07)** | Spec description (access ladder, rate limits, experimental), 401 and 429 on every operation but `/health`, all 17 tags described, request examples for `/match`, `/map`, `/sql`, the empty licence fixed; seven new spec checks in the live battery (58 total), shown to fail on the old spec. | The spec checks move into the step 3 suite when it exists. |
 | **2. Swagger look and feel** | **Done (2026-10-07)** | `/docs`: base layout (no top bar or logo), Basic credential persists, request duration shown. `/redoc`: our own template pinned to a light scheme, **the Redoc 2.5.4 bundle vendored and served by the server (MIT, licences and notices alongside, SHA-256 pinned by a test), and no web fonts**. **Decided: both documentation sites stay light.** Verified in the browser with the system theme forced to dark: both light and readable, and every request the `/redoc` page makes goes to `localhost` (nothing to a CDN or a font host). | Nothing open. Branding stays deferred. |
 | **New E. 15 non-US endpoints, two `/v2/` aliases, and the V2.0 set** | **Done (2026-10-07)** | The 15 EU NACE, ISIC and Japan lookups, each at `/V4.0/` (a list) and `/V3.0/` (V3's exact shape); the two `/v2/` Wikipedia and merged aliases; **V3's limited V2.0 set added back (11 paths)**; the five US `/V3.0/na/sic/` aliases switched to V3's shape; About page and README updated. 15 of 19 captured V3 production responses are matched exactly, the other 4 differ only in data. | The EDGAR, Wikipedia and merged `/V3.0/` aliases still need comparing with V3 (step 4); an item in step 4 below. |
-| **3. Python test suite** | **Started (2026-10-07)** | `api_tests/` (stdlib only, runner `api_tests/run.py`) with 9 tests for New E: contract for all 15 endpoints in both shapes, parity with 19 V3 production fixtures, the V2.0 aliases against their twins, and the spec. Also `perf_tests/` and `v4/scripts/sql-try.sh check` (58 live cases, shell). | The L0 smoke and the rest of L1, then L2, L4, L5; port the SQL battery. |
-| **4. Parity run on live V3 and V4** | **Inputs started** | `perf_tests/shadow_compare.py`, the earlier `v3-vs-v4-*.json` results, and now 19 captured V3 responses and the parity method proven on New E. No parity matrix yet. | Needs the rest of step 3. **Finding to carry in:** V4's `/V3.0/` aliases for EDGAR, Wikipedia and merged returned V4-shaped data, not V3's, and have not been compared with V3 yet (see step 4). |
+| **3. Python test suite** | **Done except CI wiring (2026-10-07)** | `api_tests/`: 87 tests in layers L0 smoke, L1 contract (every one of the 75 operations, table-checked against the live spec), L2 data readiness, L3 parity with V3 (25 V3 production fixtures), L4 V4-only functions, L5 limits and profiles (the shell battery ported; starts its own server). `run.py --layers --report` and `compare.py`. Found and fixed 4 defects (below). | Wire the fast layers into CI (item D); decide the four V3-shape gaps (Q14). |
+| **4. Parity run on live V3 and V4** | **Inputs ready** | The suite and 25 V3 fixtures; the parity method proven on New E (15 of 19 identical) and measured on EDGAR, Wikipedia and merged: **summary and Wikipedia match V3's shape; `ciks`, `detail`, firmographics-by-CIK and merged do not** (Q14). No parity matrix yet. | Decide Q14, then write the matrix and run it. |
 | **5. Thin the binary** | **Measurement and options done; acceptance pending** | The size spike (component map, nine variants, latency, memory, the 51-case battery); two named profiles `release-lean` (89.2 MiB) and `release-small` (62.3 MiB) and the DataFusion feature trim in `v4/Cargo.toml`, built and verified; results in this doc. | Linux amd64 sizes, the regression check against the step 4 baseline, the model's packaging decision, and the lean-or-small choice (after step 6). |
 | **6. Docker builds, V3 and V4** | **Not started** | V3 has a `Dockerfile`; **V4 has none**. | Write the V4 Dockerfile (a build argument selects the profile), with the data gate. |
 | **7. Staging** | **Not started** | `k8s/prod/` only; no `k8s/staging/`. | Needs step 6. |
@@ -46,7 +47,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 **Out of order, and what that means.** Step 5 ran before step 4, so the "no regression" half of its acceptance rule (against a step 4 baseline) has not been applied
 yet. The measurements and the two profiles stand on their own; what waits is the regression check, the Linux numbers and the choice between the options.
 
-**Suggested next:** the rest of the step 3 suite (L0 smoke and L1 contract for every route, then L2 data readiness and L4 V4-only), and compare the EDGAR, Wikipedia and merged `/V3.0/` aliases with V3 (they returned V4-shaped data). Then the parity run (step 4).
+**Suggested next:** decide Q14 (the four V3-shape gaps), then write the parity matrix and run the parity run (step 4); wire the fast test layers into CI (item D).
 
 ---
 
@@ -260,8 +261,33 @@ perf results.
 (this is also what makes "tests run automatically" true for V4, roadmap §6). L3 and L6 need live upstreams and a
 stable environment and are run on demand and at the staging gate.
 
-**Exit:** the suite passes against a local V4; L1 and L2 pass against live V3 for the V3 side; the report format is
-stable and `compare.py` can diff two runs of it.
+**Status: done except CI wiring (2026-10-07).**
+
+**What was built** (`api_tests/`, standard library only; `api_tests/README.md` has the run options):
+
+| Layer | File | Tests |
+|---|---|---|
+| L0 smoke | `test_smoke.py` | health, the spec, the docs pages (and that `/redoc` loads nothing third-party), one lookup per family, Industry Match |
+| L1 contract | `test_contract.py`, `test_non_us_sic.py` | a table of **every route in the live spec** that fails if a route has no entry; a match is a 200 envelope; a no-match a 404 envelope **that the spec documents**; every error is the JSON envelope; 400s for bad input; the spec documents what the server returns |
+| L2 data readiness | `test_data_readiness.py` | all four systems loaded with at least the classes they shipped with, hierarchies complete, parents correct, the embedding model loaded, the EDGAR catalog spanning at least 5 quarters for Apple, Microsoft and IBM, merged firmographics finding EDGAR data (network) |
+| L3 parity with V3 | `test_non_us_sic.py`, `test_edgar_wikipedia_parity.py` | 25 production V3 fixtures: the non-US, US and V2.0 shapes identical, EDGAR summary and Wikipedia matching, and **four known gaps marked `expectedFailure`** |
+| L4 V4-only | `test_v4_functions.py` | global keyword, semantic and hybrid search, the tokeniser check, Industry Match (2 to 5 codes per system with evidence, chunking, the default system, re-matching kept segments) and map |
+| L5 limits and profiles | `test_limits_and_profiles.py`, `server.py` | 32 tests: access, the User-Agent ladder, profile grants and quotas, the SQL guard and caps, per-profile limits, throttling. Starts its own server with throwaway credentials and small limits; skipped without a built binary |
+
+87 tests: all pass against a local V4 (7 need `--network`, which also exercises the Wikipedia, SEC and merged routes). `run.py --report` writes a JSON report stamped with the commit and
+`compare.py` diffs two of them (it exits 1 on a regression or when a known gap unexpectedly passes). `v4/scripts/sql-try.sh` stays as the developer's playground; its 58-check `check` and L5 cover the same behaviour.
+
+**Defects the contract tests found, all fixed 2026-10-07:**
+1. **An unknown `model` on `similarity`, `global similarity`, `hybrid` and `similarity-check` returned 500**; it is now a 400 (the match endpoint already did this).
+2. **`match` with an unknown or empty `systems` list returned 200 with zero systems**; it is now a 400 naming the valid systems (as `map` already did).
+3. **Axum's own rejections returned an empty, non-JSON body** (a bad `k`, a wrong method, a wrong content type); a small outermost layer (`v4/crates/server/src/errors.rs`, 5 tests) turns every such error into the JSON envelope and keeps the status and headers (`Allow`, `Retry-After`).
+4. **The spec did not document the 404s and 400s the server really returns**: 22 operations now document their 404 and four their 400 (the contract test checks that every status the server returns is documented).
+
+**What it measured and left open (decision Q14, step 4):** four V3-shape gaps in the EDGAR and merged aliases, marked `expectedFailure`, listed under step 4.
+
+**Deviations from the design above, stated plainly:** (1) the V3 side of L1 and L2 is covered by fixtures captured from V3, not by running the suite against live V3 (running it live is the parity run, step 4); (2) the layers are test files, selected by `--layers`, rather than separate programs; (3) CI wiring (item D) is not done yet.
+
+**Exit:** met: the suite passes against a local V4; the report format is stable and `compare.py` diffs two runs. Not met: running L1 and L2 against live V3 (moved to step 4), and green in CI (item D).
 
 ### Step 4: Parity run against live V3 and V4
 
@@ -277,6 +303,19 @@ whole V3-parity surface and states what "parity" means.
 | Equivalent | Same meaning, expected differences | compare a defined set of fields; tolerate listed differences |
 | Absent by decision | V4 intentionally does not serve it: the 2 UK paths and the legacy `/v1/` wptools backends (the 11 `/V2.0/` paths were on this list until 2026-10-07 and are served again) | assert V4 returns the documented 404, and that the spec does not list it |
 | Intentionally different | V4 behaves differently on purpose | assert the V4 behaviour and name the reason |
+
+**Measured 2026-10-07 for the EDGAR, Wikipedia and merged `/V3.0/` aliases** (V3 production responses in `api_tests/fixtures/v3/`, tests in `test_edgar_wikipedia_parity.py`):
+
+| Route | Against V3 | Detail |
+|---|---|---|
+| EDGAR `summary` | **matches** (shape) | message and module text differ |
+| Wikipedia firmographics | **matches** (shape and stable fields) | V3's message text differs |
+| EDGAR `ciks` | **gap** | V3 wraps the result in `{"companies": {name: cik}, "totalCompanies": N}` with the CIK as a string; V4 returns `{name: cik}` directly with the CIK as a number |
+| EDGAR `detail` | **gap** | V3 nests a response per company (`code`, `data`, `dependencies`, `forms`, `message`, `module`); V4 flattens the firmographics into the company |
+| EDGAR firmographics by CIK | **gap** | V3 adds `division`, `divisionDescription`, `majorGroup`, `majorGroupDescription`, `industryGroup`, `industryGroupDescription`; V4 has none of them (V4 holds the SIC data, so it could fill them) |
+| Merged firmographics | **gap, the largest** | V3 returns one flat 41-field record (address, coordinates, Google links, SIC hierarchy, and so on); V4 returns `{edgar, edgar_match, query, source, wikipedia}`. (V3's coordinates and map links came from ArcGIS geocoding, which V4 does not do: an intentional difference already on this list) |
+
+These are the `/V3.0/` and `/V2.0/` aliases only; the `/V4.0/` paths keep V4's shape, which the UI uses. Whether to close the gaps is **Q14**.
 
 **Known intentional differences recorded from New E (2026-10-07), against V3 production:** a no-match is a JSON 404 envelope (V3 answered with an HTML page); the `dependencies` block is V4's; V3's US `division` answer
 carries a `full_description` narrative that V4's data does not have (returned as an empty string, so V3 readers do not fail); V4's Japan file is the corrected one, so Japan division and group descriptions are upper-case
@@ -535,6 +574,7 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 | Q8 | Which hardware, and what counts as "production degraded"? | **Two amd64 nodes (each over 20 cores, at least 384GB) and a Mac Studio (128GB)**; run the images on the Mac and on the nodes. The owner controls everything, so the degradation rule is a courtesy, not a gate. |
 | Q9 | A quiet window? | **None needed**; run whenever. |
 | Q12 | Should V3's limited V2.0 endpoints be served by V4 (excluded since 2026-09-28)? | **Yes, added back (2026-10-07)**, and the About page updated. 11 paths, aliases of their `/V3.0/` twins. |
+| Q14 | Open: should the four gaps above (EDGAR `ciks`, `detail`, firmographics-by-CIK, and merged) be closed with V3-shaped answers on the `/V3.0/` and `/V2.0/` paths, or recorded as intentional differences? | Close `ciks` and the firmographics SIC fields (small) and `detail` (medium); for merged, decide separately because V3's flat record is the largest piece of work |
 | Q13 | What data shape should the V3.0 and V2.0 paths return? | **V3's exact shape** on `/V3.0/` and `/V2.0/`, V4's list shape on `/V4.0/` (2026-10-07). Done for the US SIC and non-US aliases; EDGAR, Wikipedia and merged still to check in step 4. |
 
 **Still open (my defaults apply unless changed):**
@@ -551,7 +591,8 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 - [x] Step 2: `/docs` and `/redoc` both light and readable, reviewed in the browser (2026-10-07).
 - [x] Step 1: API documentation includes SQL, marked experimental, with the access and rate-limit text, 401 and 429 on every operation, tag descriptions and examples; spec checks in the live battery (2026-10-07).
 - [x] New E: the 15 per-system endpoints, the two `/v2/` aliases and the V2.0 set built, tested against V3 fixtures, in the spec, on the About page (2026-10-07).
-- [ ] Step 3 suite merged, green in CI for its fast layers.
+- [x] Step 3 suite built: 87 tests, layers L0 to L5, with a report and a diff tool (2026-10-07).
+- [ ] Step 3 fast layers (L0, L1, L2, L4) green in CI (item D).
 - [ ] Step 4 parity report with no unexplained mismatch, and the unthinned baseline saved.
 - [x] Step 5 measurement, the two release profiles and the DataFusion feature trim, built and verified (2026-10-06).
 - [ ] Step 5 remainder: sizes measured on Linux amd64 and recorded in `v4-deployment.md`; the no-regression check against the step 4 baseline; the model's packaging decided; the lean-or-small choice recorded after step 6.

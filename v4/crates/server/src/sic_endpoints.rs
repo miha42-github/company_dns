@@ -121,6 +121,31 @@ macro_rules! alias {
             params(($param = String, Path, description = $param_doc)),
             responses(
                 (status = 200, description = "Identical to the current-version endpoint it aliases", body = ApiEnvelope),
+                (status = 404, description = "No match, as for the endpoint it aliases", body = ApiEnvelope),
+                (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
+                (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
+            ),
+            tag = $tag,
+            summary = $summary
+        )]
+        pub async fn $fn(State($state): State<Arc<AppState>>, Path($q): Path<String>) -> Response {
+            $body
+        }
+    };
+}
+
+/// An alias of an endpoint that always answers 200 (the merged firmographics: it falls back to whichever source has the company).
+macro_rules! alias_always_200 {
+    (
+        $fn:ident, $path:literal, $tag:literal, $summary:literal, ($param:literal, $param_doc:literal),
+        |$state:ident, $q:ident| $body:expr
+    ) => {
+        #[utoipa::path(
+            get,
+            path = $path,
+            params(($param = String, Path, description = $param_doc)),
+            responses(
+                (status = 200, description = "Identical to the current-version endpoint it aliases", body = ApiEnvelope),
                 (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
                 (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
             ),
@@ -262,10 +287,10 @@ alias!(edgar_firmographics_v2, "/V2.0/company/edgar/firmographics/{cik_no}", "ED
     |state, q| crate::edgar_firmographics_impl(&state, &q).await);
 alias!(wikipedia_firmographics_v2_legacy, "/V2.0/company/wikipedia/firmographics/{company_name}", "Wikipedia (V2.0, alias)", "Firmographics from Wikipedia", ("company_name", "Company name"),
     |state, q| crate::wikipedia_firmographics_impl(&state, &q).await.into_response());
-alias!(merged_firmographics_v2_legacy, "/V2.0/company/merged/firmographics/{company_name}", "Merged (V2.0, alias)", "Merged firmographics from all sources", ("company_name", "Company name"),
+alias_always_200!(merged_firmographics_v2_legacy, "/V2.0/company/merged/firmographics/{company_name}", "Merged (V2.0, alias)", "Merged firmographics from all sources", ("company_name", "Company name"),
     |state, q| crate::merged_firmographics_impl(&state, &q).await.into_response());
 // ---- the explicit /v2/ URLs: V3 documents them as "same as default" ----
 alias!(wikipedia_firmographics_v2_url, "/V3.0/global/company/wikipedia/v2/firmographics/{company_name}", "Wikipedia (V3.0, alias)", "Firmographics from Wikipedia (the v2 backend, same as the default path)", ("company_name", "Company name"),
     |state, q| crate::wikipedia_firmographics_impl(&state, &q).await.into_response());
-alias!(merged_firmographics_v2_url, "/V3.0/global/company/merged/v2/firmographics/{company_name}", "Merged (V3.0, alias)", "Merged firmographics (the v2 Wikipedia backend, same as the default path)", ("company_name", "Company name"),
+alias_always_200!(merged_firmographics_v2_url, "/V3.0/global/company/merged/v2/firmographics/{company_name}", "Merged (V3.0, alias)", "Merged firmographics (the v2 Wikipedia backend, same as the default path)", ("company_name", "Company name"),
     |state, q| crate::merged_firmographics_impl(&state, &q).await.into_response());

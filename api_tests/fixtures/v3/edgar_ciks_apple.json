@@ -1,0 +1,31 @@
+{
+  "code": 200,
+  "data": {
+    "companies": {
+      "Apple Hospitality REIT, Inc.": "1418121",
+      "Apple Inc.": "320193",
+      "Apple iSports Group, Inc.": "1134982",
+      "MAUI LAND & PINEAPPLE CO INC": "63330",
+      "PINEAPPLE EXPRESS CANNABIS Co": "1710495",
+      "PINEAPPLE, INC.": "1654672",
+      "Pineapple Energy Inc.": "22701",
+      "Pineapple Financial Inc.": "1938109"
+    },
+    "totalCompanies": 8
+  },
+  "dependencies": {
+    "data": {
+      "edgarFacts": "https://data.sec.gov/api/xbrl/companyfacts/",
+      "edgarSubmissions": "https://data.sec.gov/submissions/",
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "pyedgarRoot": "https://www.sec.gov/Archives/edgar/data",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {
+      "pyedgar": "https://github.com/gaulinmp/pyedgar",
+      "sic": "https://github.com/miha42-github/company_dns"
+    }
+  },
+  "message": "Company CIK data has been returned for query [Apple].",
+  "module": "EdgarQueries-> get_all_ciks"
+}
