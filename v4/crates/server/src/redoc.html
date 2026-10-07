@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>company_dns API (V4)</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Both API documentation pages (/docs and /redoc) stay in a light theme: this pins the page to
+         light so a dark system preference cannot turn the canvas dark under ReDoc's light colours.
+         Otherwise this is utoipa-redoc's default template; $spec and $config are filled in by it. -->
+    <meta name="color-scheme" content="light" />
+    <link
+      href="https://fonts.googleapis.com/css?family=Montserrat:300,400,700|Roboto:300,400,700"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root { color-scheme: light; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #333333;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="redoc-container"></div>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <script>
+      Redoc.init(
+        $spec,
+        $config,
+        document.getElementById("redoc-container")
+      );
+    </script>
+  </body>
+</html>

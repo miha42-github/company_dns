@@ -30,7 +30,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 | Item | State | What exists | Next action |
 |---|---|---|---|
 | **1. API docs include SQL, marked experimental** | **Partly done** | The SQL operation is tagged `experimental`, has an "Experimental:" summary, states its access rules and declares the HTTP Basic scheme (`v4-sql-endpoint.md` §5a). | Everything else in step 1 (spec `info.description`, 429 responses, tag descriptions, examples, the spec test). Nothing else is done. |
-| **2. Swagger look and feel** | **Swagger done; ReDoc dark-mode fix open** | Done 2026-10-07: `/docs` uses the base layout (no top bar or logo), `persistAuthorization` and `displayRequestDuration` on; checked in the browser, the white theme and the Authorize button intact, and the SQL operation shows under an "experimental" group with its lock icon. | **Found while checking `/redoc`:** in a **dark system theme** the main panel is near-black with very low-contrast text beside a light sidebar (unreadable); in light mode it is fine. Fix that (pin `/redoc` to a light scheme or give it a readable dark theme), and note that `/redoc` loads its script from `cdn.redoc.ly`, so it needs internet access in the reader's browser. |
+| **2. Swagger look and feel** | **Done (2026-10-07)** | `/docs`: base layout (no top bar or logo), Basic credential persists, request duration shown. `/redoc`: served from our own copy of the template (`v4/crates/server/src/redoc.html`) pinned to a light colour scheme. **Decided: both documentation sites stay light.** Verified in the browser with the system theme forced to dark: both render light and readable. | Open, small: `/redoc` loads its script and fonts from `cdn.redoc.ly` and Google Fonts, so the reader's browser needs internet access (on-prem or air-gapped readers would see a blank page); decide whether to bundle them. Branding stays deferred. |
 | **New E. 15 non-US endpoints and two `/v2/` aliases** | **Not started** | The data (NACE, ISIC, Japan) is loaded; the endpoints do not exist. | Map V3's level names to the flat columns and capture V3's real responses as fixtures. |
 | **3. Python test suite** | **Not started** | `perf_tests/` (performance, covers about seven endpoints with a V4 path) and `v4/scripts/sql-try.sh check` (51 live cases, shell). No `api_tests/`. | Create `api_tests/` with the L0 and L1 layers first. |
 | **4. Parity run on live V3 and V4** | **Not started** | `perf_tests/shadow_compare.py` and the earlier `v3-vs-v4-*.json` results exist. No parity matrix. | Needs step 3 and New E. |
@@ -46,7 +46,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 **Out of order, and what that means.** Step 5 ran before step 4, so the "no regression" half of its acceptance rule (against a step 4 baseline) has not been applied
 yet. The measurements and the two profiles stand on their own; what waits is the regression check, the Linux numbers and the choice between the options.
 
-**Suggested next, in order of cost:** the ReDoc dark-mode fix (step 2), then step 1's remaining items, then New E and the first layers of step 3 in parallel.
+**Suggested next, in order of cost:** step 1's remaining items, then New E and the first layers of step 3 in parallel.
 
 ---
 
@@ -96,7 +96,7 @@ These are the reason the steps below differ from the original seven.
 | # | Original step | Verdict | Change |
 |---|---|---|---|
 | 1 | API doc includes SQL, marked experimental | Mostly done; keep, widen | The SQL operation is already tagged `experimental` with a Basic-auth scheme (it appears only when SQL is enabled). Remaining: decide how SQL shows in docs when the flag is off, document profiles and the access ladder, and close roadmap §2 (429s, User-Agent text). |
-| 2 | Reskin Swagger | Keep; small | Most of the "ugliness" is Swagger's standalone top bar. One setting removes it (**done 2026-10-07**). **Decided (Q4): top bar now, branding later.** Found on the way: `/redoc` is unreadable in a dark system theme. |
+| 2 | Reskin Swagger | Keep; small | Most of the "ugliness" is Swagger's standalone top bar. One setting removes it. **Decided (Q4): top bar now, branding later.** **Done 2026-10-07**, including pinning `/redoc` to a light theme (it was unreadable under a dark system theme); both sites stay light. |
 | 3 | Extend the perf suite, V3 core then V4, in Python | Keep; reshape | Build a **functional layer beside** the perf suite, as `v4-deployment.md` §3.9 already designs, with stdlib plus `requests` only. Port the SQL shell battery into it. |
 | 4 | Run against live V3 and V4 for parity | Keep; define parity | Parity needs classes (identical, equivalent, absent by decision), normalisation of live data, and a politeness policy for live V3. Run it **before** thinning so it is the baseline. |
 | 5 | Thin the binary | Keep; measured, two options preserved | Follow `v4-deployment.md` §3.3 and §4. **Measured 2026-10-06:** 50MB raw is not reachable at acceptable speed; two named profiles (lean about 89 MiB, small about 62 MiB) are kept and the choice is confirmed after testing. Still open: the model and ONNX packaging question, Linux sizes, and the regression check. |
@@ -161,17 +161,21 @@ rules; roadmap §2 boxes can be checked; a spec test passes.
 
 ### Step 2: Swagger look and feel
 
-**Status: Swagger done (2026-10-07); ReDoc dark-mode readability still open.**
+**Status: done (2026-10-07). Decided: both documentation sites stay in a light theme.**
 
-*Done:* `SwaggerUi::new("/docs").url("/openapi.json", api).config(Config::default().use_base_layout().persist_authorization(true).display_request_duration(true))`
+*Swagger (`/docs`):* `SwaggerUi::new("/docs").url("/openapi.json", api).config(Config::default().use_base_layout().persist_authorization(true).display_request_duration(true))`
 in `v4/crates/server/src/main.rs` (the crate's own pattern: `.url()` registers the spec, so the config does not repeat it). Verified in the browser: no top bar or logo,
 the white theme and the Authorize button intact, the generated config serves `"layout": "BaseLayout"`, and the experimental SQL operation appears with its lock icon.
 
-*Found, not fixed:* **`/redoc` is unreadable in a dark system theme** (a near-black main panel with low-contrast text beside a light sidebar; fine in light mode), and it loads its script
-from `https://cdn.redoc.ly`, so the reader's browser needs internet access (relevant to on-prem or air-gapped use). Next: pin the page to a light colour scheme or theme it properly, and decide
-whether to bundle the script.
+*ReDoc (`/redoc`):* the default page turned unreadable under a dark system theme (a near-black main panel with low-contrast text beside a light sidebar; fine in light mode), because the
+template sets no colour scheme. It is now served from our own copy of the template, `v4/crates/server/src/redoc.html` (utoipa-redoc's default plus `color-scheme: light` and a white
+background; `$spec` and `$config` kept), through `Redoc::with_url("/redoc", api).custom_html(include_str!("redoc.html"))`. Verified with the browser forced to dark: **both `/docs` and
+`/redoc` render light and readable.**
 
-*Also visible and belonging to step 1:* the group is the bare tag name "experimental" with no description.
+*Still open (small):* `/redoc` loads `redoc.standalone.js` from `https://cdn.redoc.ly` and its fonts from Google Fonts, so the reader's browser needs internet access (relevant to on-prem or
+air-gapped readers). Decide whether to bundle them; not needed for staging.
+
+*Also visible and belonging to step 1:* the SQL group is the bare tag name "experimental" with no description.
 
 The white theme stays. The part that looks poor is the **top bar with the Swagger logo**.
 
@@ -523,7 +527,8 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 
 ## 6. Definition of done for "released to staging"
 
-- [ ] Steps 1 and 2 merged; `/docs` and `/redoc` reviewed. *(step 2: Swagger done 2026-10-07, ReDoc dark mode open; step 1 partly done)*
+- [x] Step 2: `/docs` and `/redoc` both light and readable, reviewed in the browser (2026-10-07).
+- [ ] Step 1 merged. *(partly done; the remaining items are listed under step 1)*
 - [ ] New E: the 15 per-system endpoints and the two `/v2/` aliases merged, tested, and in the spec.
 - [ ] Step 3 suite merged, green in CI for its fast layers.
 - [ ] Step 4 parity report with no unexplained mismatch, and the unthinned baseline saved.

@@ -329,7 +329,9 @@ async fn main() -> anyhow::Result<()> {
                 .persist_authorization(true)
                 .display_request_duration(true),
         ))
-        .merge(Redoc::with_url("/redoc", api))
+        // Our copy of utoipa-redoc's template, pinned to a light colour scheme (redoc.html): the
+        // default page turned unreadable under a dark system theme. Both /docs and /redoc stay light.
+        .merge(Redoc::with_url("/redoc", api).custom_html(include_str!("redoc.html")))
         // docs/plans/company-dns-ux.md §7/§10: the UX spike - V3's
         // `html/` app plus the similarity-search UI ported forward from
         // `experiments/ic-similarity-service`, served at /ui/ so it
