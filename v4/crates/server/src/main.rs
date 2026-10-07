@@ -30,7 +30,7 @@ use tower_http::{
 use utoipa::OpenApi;
 use utoipa_axum::{router::OpenApiRouter, routes};
 use utoipa_redoc::{Redoc, Servable};
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_swagger_ui::{Config, SwaggerUi};
 
 struct AppState {
     sic: SicCatalog,
@@ -320,7 +320,15 @@ async fn main() -> anyhow::Result<()> {
         .split_for_parts();
 
     let app = router
-        .merge(SwaggerUi::new("/docs").url("/openapi.json", api.clone()))
+        // docs/plans/v4-release-to-staging.md step 2: the base layout drops Swagger's standalone top
+        // bar and logo (the white theme stays). persist_authorization keeps a pasted Basic credential
+        // across a reload, which makes the experimental SQL endpoint easy to try from /docs.
+        .merge(SwaggerUi::new("/docs").url("/openapi.json", api.clone()).config(
+            Config::default()
+                .use_base_layout()
+                .persist_authorization(true)
+                .display_request_duration(true),
+        ))
         .merge(Redoc::with_url("/redoc", api))
         // docs/plans/company-dns-ux.md §7/§10: the UX spike - V3's
         // `html/` app plus the similarity-search UI ported forward from
