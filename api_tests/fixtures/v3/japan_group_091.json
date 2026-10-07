@@ -1,0 +1,21 @@
+{
+  "code": 200,
+  "data": {
+    "groups": {
+      "091": {
+        "description": "Livestock products",
+        "division_code": "E",
+        "major_group_code": "09"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "japanSicData": "https://www.stat.go.jp/english/data/e-census/2021/industry.html"
+    },
+    "modules": {}
+  },
+  "message": "Japan SIC group data has been returned for query [091].",
+  "module": "JapanSICQueries-> get_group_by_code"
+}

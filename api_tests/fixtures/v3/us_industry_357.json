@@ -1,0 +1,22 @@
+{
+  "code": 200,
+  "data": {
+    "industry_groups": {
+      "357": {
+        "description": "Computer And Office Equipment",
+        "division": "D",
+        "major_group": "35"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {}
+  },
+  "message": "Industry group data has been returned for query [357].",
+  "module": "SICQueries-> get_all_industry_group_by_no"
+}

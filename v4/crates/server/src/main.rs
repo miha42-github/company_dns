@@ -3,6 +3,7 @@ mod docs;
 mod envelope;
 mod logging;
 mod rate_limit;
+mod sic_endpoints;
 mod sql_endpoint;
 mod trusted_origin;
 mod user_agent;
@@ -12,7 +13,7 @@ use axum::{
     response::IntoResponse,
 };
 use company_dns_edgar::{EdgarCatalog, EdgarClient};
-use company_dns_sic::{company_match, model_info, Embedders, SicCatalog};
+use company_dns_sic::{company_match, model_info, systems::{Level, System}, Embedders, SicCatalog};
 use company_dns_wikipedia::{WikipediaClient, WikipediaError};
 use envelope::{bad_request, not_found, ok, server_error, ApiEnvelope};
 use rate_limit::{tiered_rate_limit, TieredLimiterState};
@@ -79,7 +80,17 @@ struct AppState {
         (name = "EDGAR (V4.0)", description = "SEC EDGAR filings catalog: company CIKs, filing detail and summary, and firmographics by CIK."),
         (name = "Wikipedia (V4.0)", description = "Company firmographics from Wikipedia and Wikidata."),
         (name = "Merged (V4.0)", description = "EDGAR and Wikipedia firmographics merged into one record."),
-        (name = "SIC (V3.0, alias)", description = "The US SIC lookups at their original /V3.0/ paths, kept for backward compatibility."),
+        (name = "SIC EU NACE (V4.0)", description = "EU NACE Rev. 2 lookups by section, division, group and class code, and by class description (V4 shape: a list of matches with their parents)."),
+        (name = "SIC ISIC (V4.0)", description = "ISIC Rev. 4 lookups by section, division, group and class code, and by class description (V4 shape: a list of matches with their parents)."),
+        (name = "SIC Japan (V4.0)", description = "Japan SIC (JSIC Rev. 13) lookups by division, major group, group and industry group code, and by industry description (V4 shape: a list of matches with their parents)."),
+        (name = "SIC (V3.0, alias)", description = "The US SIC lookups at their original /V3.0/ paths, answered in V3's exact response shape for existing V3 integrations."),
+        (name = "SIC EU NACE (V3.0, alias)", description = "The EU NACE lookups at their original /V3.0/ paths, in V3's exact response shape."),
+        (name = "SIC ISIC (V3.0, alias)", description = "The ISIC lookups at their original /V3.0/ paths, in V3's exact response shape."),
+        (name = "SIC Japan (V3.0, alias)", description = "The Japan SIC lookups at their original /V3.0/ paths, in V3's exact response shape."),
+        (name = "SIC (V2.0, alias)", description = "V3's limited legacy /V2.0/ paths for US SIC, answered exactly as their /V3.0/na/sic/ twins."),
+        (name = "EDGAR (V2.0, alias)", description = "V3's limited legacy /V2.0/ EDGAR paths, answered exactly as their /V3.0/ twins."),
+        (name = "Wikipedia (V2.0, alias)", description = "V3's legacy /V2.0/ Wikipedia path, answered exactly as its /V3.0/ twin."),
+        (name = "Merged (V2.0, alias)", description = "V3's legacy /V2.0/ merged-firmographics path, answered exactly as its /V3.0/ twin."),
         (name = "SIC Global (V3.0, alias)", description = "Global SIC keyword search at its original /V3.0/ path."),
         (name = "EDGAR (V3.0, alias)", description = "The EDGAR lookups at their original /V3.0/ paths."),
         (name = "Wikipedia (V3.0, alias)", description = "Wikipedia firmographics at its original /V3.0/ path."),
@@ -303,6 +314,49 @@ async fn main() -> anyhow::Result<()> {
         .routes(routes!(sic_industry_v3))
         .routes(routes!(sic_major))
         .routes(routes!(sic_major_v3))
+        .routes(routes!(sic_endpoints::eu_section))
+        .routes(routes!(sic_endpoints::eu_section_v3))
+        .routes(routes!(sic_endpoints::eu_division))
+        .routes(routes!(sic_endpoints::eu_division_v3))
+        .routes(routes!(sic_endpoints::eu_group))
+        .routes(routes!(sic_endpoints::eu_group_v3))
+        .routes(routes!(sic_endpoints::eu_class))
+        .routes(routes!(sic_endpoints::eu_class_v3))
+        .routes(routes!(sic_endpoints::eu_description))
+        .routes(routes!(sic_endpoints::eu_description_v3))
+        .routes(routes!(sic_endpoints::international_section))
+        .routes(routes!(sic_endpoints::international_section_v3))
+        .routes(routes!(sic_endpoints::international_division))
+        .routes(routes!(sic_endpoints::international_division_v3))
+        .routes(routes!(sic_endpoints::international_group))
+        .routes(routes!(sic_endpoints::international_group_v3))
+        .routes(routes!(sic_endpoints::international_class))
+        .routes(routes!(sic_endpoints::international_class_v3))
+        .routes(routes!(sic_endpoints::international_description))
+        .routes(routes!(sic_endpoints::international_description_v3))
+        .routes(routes!(sic_endpoints::japan_division))
+        .routes(routes!(sic_endpoints::japan_division_v3))
+        .routes(routes!(sic_endpoints::japan_major_group))
+        .routes(routes!(sic_endpoints::japan_major_group_v3))
+        .routes(routes!(sic_endpoints::japan_group))
+        .routes(routes!(sic_endpoints::japan_group_v3))
+        .routes(routes!(sic_endpoints::japan_industry_group))
+        .routes(routes!(sic_endpoints::japan_industry_group_v3))
+        .routes(routes!(sic_endpoints::japan_description))
+        .routes(routes!(sic_endpoints::japan_description_v3))
+        .routes(routes!(sic_endpoints::sic_description_v2))
+        .routes(routes!(sic_endpoints::sic_code_v2))
+        .routes(routes!(sic_endpoints::sic_division_v2))
+        .routes(routes!(sic_endpoints::sic_industry_v2))
+        .routes(routes!(sic_endpoints::sic_major_v2))
+        .routes(routes!(sic_endpoints::edgar_ciks_v2))
+        .routes(routes!(sic_endpoints::edgar_detail_v2))
+        .routes(routes!(sic_endpoints::edgar_summary_v2))
+        .routes(routes!(sic_endpoints::edgar_firmographics_v2))
+        .routes(routes!(sic_endpoints::wikipedia_firmographics_v2_legacy))
+        .routes(routes!(sic_endpoints::merged_firmographics_v2_legacy))
+        .routes(routes!(sic_endpoints::wikipedia_firmographics_v2_url))
+        .routes(routes!(sic_endpoints::merged_firmographics_v2_url))
         // Global/unified SIC search (sic-global-search.md) - fans out
         // across every registered classification system
         .routes(routes!(sic_description_global))
@@ -495,7 +549,7 @@ async fn sic_description(
     get,
     path = "/V3.0/na/sic/description/{sic_desc}",
     params(("sic_desc" = String, Path, description = "SIC description search term")),
-    responses((status = 200, description = "SIC matches", body = ApiEnvelope),
+    responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -505,7 +559,7 @@ async fn sic_description_v3(
     State(state): State<Arc<AppState>>,
     Path(sic_desc): Path<String>,
 ) -> impl IntoResponse {
-    sic_description_impl(&state, &sic_desc).await
+    sic_endpoints::v3_lookup(&state, System::Us, Level::Class, true, &sic_desc).await
 }
 
 async fn sic_code_impl(state: &AppState, sic_code: &str) -> axum::response::Response {
@@ -546,7 +600,7 @@ async fn sic_code(
     get,
     path = "/V3.0/na/sic/code/{sic_code}",
     params(("sic_code" = String, Path, description = "SIC numeric code")),
-    responses((status = 200, description = "SIC matches", body = ApiEnvelope),
+    responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -556,7 +610,7 @@ async fn sic_code_v3(
     State(state): State<Arc<AppState>>,
     Path(sic_code): Path<String>,
 ) -> impl IntoResponse {
-    sic_code_impl(&state, &sic_code).await
+    sic_endpoints::v3_lookup(&state, System::Us, Level::Class, false, &sic_code).await
 }
 
 async fn sic_division_impl(state: &AppState, division_code: &str) -> axum::response::Response {
@@ -597,7 +651,7 @@ async fn sic_division(
     get,
     path = "/V3.0/na/sic/division/{division_code}",
     params(("division_code" = String, Path, description = "SIC division code")),
-    responses((status = 200, description = "Division matches", body = ApiEnvelope),
+    responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -607,7 +661,7 @@ async fn sic_division_v3(
     State(state): State<Arc<AppState>>,
     Path(division_code): Path<String>,
 ) -> impl IntoResponse {
-    sic_division_impl(&state, &division_code).await
+    sic_endpoints::v3_lookup(&state, System::Us, Level::Section, false, &division_code).await
 }
 
 async fn sic_industry_impl(state: &AppState, industry_code: &str) -> axum::response::Response {
@@ -651,7 +705,7 @@ async fn sic_industry(
     get,
     path = "/V3.0/na/sic/industry/{industry_code}",
     params(("industry_code" = String, Path, description = "SIC industry-group code")),
-    responses((status = 200, description = "Industry-group matches", body = ApiEnvelope),
+    responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -661,7 +715,7 @@ async fn sic_industry_v3(
     State(state): State<Arc<AppState>>,
     Path(industry_code): Path<String>,
 ) -> impl IntoResponse {
-    sic_industry_impl(&state, &industry_code).await
+    sic_endpoints::v3_lookup(&state, System::Us, Level::Group, false, &industry_code).await
 }
 
 async fn sic_major_impl(state: &AppState, major_code: &str) -> axum::response::Response {
@@ -702,7 +756,7 @@ async fn sic_major(
     get,
     path = "/V3.0/na/sic/major/{major_code}",
     params(("major_code" = String, Path, description = "SIC major-group code")),
-    responses((status = 200, description = "Major-group matches", body = ApiEnvelope),
+    responses((status = 200, description = "V3's exact response shape: a dictionary keyed by code (or description) with a total, and V3's field names", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
     ),
@@ -712,7 +766,7 @@ async fn sic_major_v3(
     State(state): State<Arc<AppState>>,
     Path(major_code): Path<String>,
 ) -> impl IntoResponse {
-    sic_major_impl(&state, &major_code).await
+    sic_endpoints::v3_lookup(&state, System::Us, Level::Division, false, &major_code).await
 }
 
 // -------------------------------------------------------------- //

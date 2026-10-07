@@ -1,9 +1,9 @@
 # V4.0.0: the remaining steps from "feature complete" to running on staging
 
 Status: **In progress (updated 2026-10-07).** Seven steps proposed by the owner, reviewed here, with changes, additions and the
-remaining open questions. **Only step 5 has been worked so far** (the size measurements and the two release build profiles, 2026-10-06);
-**steps 1 and 2 (API docs and the Swagger fixes), the non-US endpoints, the test suite, the parity run, the containers and staging are not started.**
-See "Progress" below for the item-by-item state.
+remaining open questions. **Done so far: step 5's size measurements and the two release profiles, step 1 (API docs), step 2 (Swagger and ReDoc), and New E (the 15 non-US
+endpoints, the two `/v2/` aliases, and, added back by the owner on 2026-10-07, V3's limited V2.0 set), with the first layer of the step 3 suite (`api_tests/`).**
+Not started: the rest of the test suite, the parity run, the containers and staging. See "Progress" below for the item-by-item state.
 Owner: michael.hay@mediumroast.io
 Scope: the work between "V4 is feature complete" and "V4 runs on staging and has been
 verified against V3". Out of scope: promotion to production, the dev tier, and anything
@@ -31,9 +31,9 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 |---|---|---|---|
 | **1. API docs include SQL, marked experimental** | **Done (2026-10-07)** | Spec description (access ladder, rate limits, experimental), 401 and 429 on every operation but `/health`, all 17 tags described, request examples for `/match`, `/map`, `/sql`, the empty licence fixed; seven new spec checks in the live battery (58 total), shown to fail on the old spec. | The spec checks move into the step 3 suite when it exists. |
 | **2. Swagger look and feel** | **Done (2026-10-07)** | `/docs`: base layout (no top bar or logo), Basic credential persists, request duration shown. `/redoc`: our own template pinned to a light scheme, **the Redoc 2.5.4 bundle vendored and served by the server (MIT, licences and notices alongside, SHA-256 pinned by a test), and no web fonts**. **Decided: both documentation sites stay light.** Verified in the browser with the system theme forced to dark: both light and readable, and every request the `/redoc` page makes goes to `localhost` (nothing to a CDN or a font host). | Nothing open. Branding stays deferred. |
-| **New E. 15 non-US endpoints and two `/v2/` aliases** | **Not started** | The data (NACE, ISIC, Japan) is loaded; the endpoints do not exist. | Map V3's level names to the flat columns and capture V3's real responses as fixtures. |
-| **3. Python test suite** | **Not started** | `perf_tests/` (performance, covers about seven endpoints with a V4 path) and `v4/scripts/sql-try.sh check` (51 live cases, shell). No `api_tests/`. | Create `api_tests/` with the L0 and L1 layers first. |
-| **4. Parity run on live V3 and V4** | **Not started** | `perf_tests/shadow_compare.py` and the earlier `v3-vs-v4-*.json` results exist. No parity matrix. | Needs step 3 and New E. |
+| **New E. 15 non-US endpoints, two `/v2/` aliases, and the V2.0 set** | **Done (2026-10-07)** | The 15 EU NACE, ISIC and Japan lookups, each at `/V4.0/` (a list) and `/V3.0/` (V3's exact shape); the two `/v2/` Wikipedia and merged aliases; **V3's limited V2.0 set added back (11 paths)**; the five US `/V3.0/na/sic/` aliases switched to V3's shape; About page and README updated. 15 of 19 captured V3 production responses are matched exactly, the other 4 differ only in data. | The EDGAR, Wikipedia and merged `/V3.0/` aliases still need comparing with V3 (step 4); an item in step 4 below. |
+| **3. Python test suite** | **Started (2026-10-07)** | `api_tests/` (stdlib only, runner `api_tests/run.py`) with 9 tests for New E: contract for all 15 endpoints in both shapes, parity with 19 V3 production fixtures, the V2.0 aliases against their twins, and the spec. Also `perf_tests/` and `v4/scripts/sql-try.sh check` (58 live cases, shell). | The L0 smoke and the rest of L1, then L2, L4, L5; port the SQL battery. |
+| **4. Parity run on live V3 and V4** | **Inputs started** | `perf_tests/shadow_compare.py`, the earlier `v3-vs-v4-*.json` results, and now 19 captured V3 responses and the parity method proven on New E. No parity matrix yet. | Needs the rest of step 3. **Finding to carry in:** V4's `/V3.0/` aliases for EDGAR, Wikipedia and merged returned V4-shaped data, not V3's, and have not been compared with V3 yet (see step 4). |
 | **5. Thin the binary** | **Measurement and options done; acceptance pending** | The size spike (component map, nine variants, latency, memory, the 51-case battery); two named profiles `release-lean` (89.2 MiB) and `release-small` (62.3 MiB) and the DataFusion feature trim in `v4/Cargo.toml`, built and verified; results in this doc. | Linux amd64 sizes, the regression check against the step 4 baseline, the model's packaging decision, and the lean-or-small choice (after step 6). |
 | **6. Docker builds, V3 and V4** | **Not started** | V3 has a `Dockerfile`; **V4 has none**. | Write the V4 Dockerfile (a build argument selects the profile), with the data gate. |
 | **7. Staging** | **Not started** | `k8s/prod/` only; no `k8s/staging/`. | Needs step 6. |
@@ -46,7 +46,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 **Out of order, and what that means.** Step 5 ran before step 4, so the "no regression" half of its acceptance rule (against a step 4 baseline) has not been applied
 yet. The measurements and the two profiles stand on their own; what waits is the regression check, the Linux numbers and the choice between the options.
 
-**Suggested next:** New E (the 15 non-US endpoints and the two `/v2/` aliases) and the first layers of step 3 (L0 smoke and L1 contract) in parallel.
+**Suggested next:** the rest of the step 3 suite (L0 smoke and L1 contract for every route, then L2 data readiness and L4 V4-only), and compare the EDGAR, Wikipedia and merged `/V3.0/` aliases with V3 (they returned V4-shaped data). Then the parity run (step 4).
 
 ---
 
@@ -63,16 +63,14 @@ These are the reason the steps below differ from the original seven.
    17MB of data"; the real runtime payload is the binary, the data, **and the model**, and the
    ONNX runtime has to work on the chosen base image (this is also the real constraint behind the
    open static-musl-versus-glibc question in §6 of that doc). This must be settled before step 5 or 6.
-2. **Parity scope has a gap, and the roadmap's count of it is off.** Counted from `company_dns.py`, V3 has 46
+2. **Parity scope had a gap, and the roadmap's count of it was off.** Counted from `company_dns.py`, V3 has 46
    routes (45 in the public spec; `/` is hidden): 11 under `/V2.0/`, 9 US (`/V3.0/na/`: SIC five, EDGAR four),
    **15 non-US per-system endpoints** (EU 5, International 5, Japan 5), **2 UK**, 7 under `/V3.0/global/`
    (global SIC description, and Wikipedia and merged firmographics each as default, `/v1/` and `/v2/`), and
-   `/health`. (The roadmap says 22 non-US endpoints; the code says 17 including UK.) V4 serves 12 of these
-   under `/V3.0/`. Not in V4: the `/V2.0/` paths (excluded by decision), the UK pair (excluded by
-   decision), the `/v1/` legacy backends (excluded by decision), the `/v2/` aliases (small, open in roadmap §3),
-   and the **15 per-system non-US endpoints**. Roadmap §3a says non-US coverage "gates V4.0.0".
-   **Decided (Q3, 2026-10-06): build the 15 per-system endpoints before release** (UK stays excluded). That adds
-   a build step ahead of the test suite; see "New E" in §4.
+   `/health`. (The roadmap said 22 non-US endpoints; the code says 17 including UK.) V4 served 12 of these under `/V3.0/`.
+   **Resolved 2026-10-07:** the 15 per-system endpoints (Q3, built before release) and the two `/v2/` aliases are built, and **the owner added the
+   limited V2.0 set back** (see "The V2.0 set is back" below). Still not in V4, by decision: the UK pair and the `/v1/` wptools backends.
+   **Found while building: V4's existing "V3 aliases" did not answer in V3's shape** (see below).
 3. **The OpenAPI documentation items from roadmap §2 are still unchecked**, and they belong in step 1:
    429 responses on every data endpoint, and the `User-Agent` and rate-limit behaviour in the spec's
    own `info.description` (today it is one line, "Company firmographics and SIC code lookup service").
@@ -90,6 +88,20 @@ These are the reason the steps below differ from the original seven.
 7. **`CorsLayer::permissive()` is on for every route** (`v4/crates/server/src/main.rs`). With HTTP Basic
    Auth and an SQL endpoint now present, CORS should be a deliberate decision before staging, not a
    default. Roadmap §8 already lists CORS and the secrets audit as "before release".
+
+### The V2.0 set is back, and what the V3 aliases now are (decided 2026-10-07)
+
+**V2.0.** V4 had excluded V3's `/V2.0/` paths (decided 2026-09-28: "`/V3.0/` only"). The owner reversed that on 2026-10-07: the **limited V2.0 set is served again**, and the
+About page says so. "Limited" is what V3 itself has: 11 paths, US and global only (no regional prefix): `/V2.0/sic/{description,code,division,industry,major}/...`,
+`/V2.0/companies/edgar/{detail,summary,ciks}/...`, `/V2.0/company/edgar/firmographics/...`, `/V2.0/company/wikipedia/firmographics/...`, `/V2.0/company/merged/firmographics/...`.
+V3 serves each with the **same handler as its `/V3.0/` twin** (confirmed against a production call: the two answers are byte-identical), so in V4 each is an alias of its twin. They are in
+the OpenAPI document (tags "... (V2.0, alias)"), on the About page (a "V2.0 (Limited Legacy)" tab beside V4.0 and V3.0), and in the README. The decision records in `v4-openapi-docs.md` and
+`v4-initial-release-roadmap.md` carry a dated reversal note.
+
+**The V3 aliases and the data shape (a finding, then a decision).** Comparing V4 with V3 production for the same US lookup showed that V4's `/V3.0/na/sic/...` aliases returned V4's shape (a list with flat
+field names) while V3 answers with a dictionary keyed by code, a `total`, and V3's own field names, messages and module strings. The envelope matched; the data, message and module did not, so a V3
+integration pointed at V4 would have broken. **Decided (owner, 2026-10-07): the `/V3.0/` and `/V2.0/` paths answer in V3's exact shape, and `/V4.0/` answers in V4's.** Done for the US SIC
+aliases and for all the new non-US ones. **Not yet checked against V3: the `/V3.0/` aliases for EDGAR, Wikipedia and merged firmographics**; they are a step 4 item.
 
 ## 1. The seven steps, reviewed
 
@@ -263,10 +275,14 @@ whole V3-parity surface and states what "parity" means.
 |---|---|---|
 | Identical | Same envelope and same data | exact field comparison after dropping volatile fields (timestamps, version) |
 | Equivalent | Same meaning, expected differences | compare a defined set of fields; tolerate listed differences |
-| Absent by decision | V4 intentionally does not serve it: the 11 `/V2.0/` paths, the 2 UK paths, the legacy `/v1/` backends | assert V4 returns the documented 404, and that the spec does not list it |
+| Absent by decision | V4 intentionally does not serve it: the 2 UK paths and the legacy `/v1/` wptools backends (the 11 `/V2.0/` paths were on this list until 2026-10-07 and are served again) | assert V4 returns the documented 404, and that the spec does not list it |
 | Intentionally different | V4 behaves differently on purpose | assert the V4 behaviour and name the reason |
 
-**Known intentional differences to record up front** (all from existing plans, not new decisions): the merged
+**Known intentional differences recorded from New E (2026-10-07), against V3 production:** a no-match is a JSON 404 envelope (V3 answered with an HTML page); the `dependencies` block is V4's; V3's US `division` answer
+carries a `full_description` narrative that V4's data does not have (returned as an empty string, so V3 readers do not fail); V4's Japan file is the corrected one, so Japan division and group descriptions are upper-case
+and a Japan description search finds more classes (18 against V3's 13 for "food"); a `/V4.0/` answer is a list, not V3's dictionary.
+
+**Other known intentional differences to record up front** (all from existing plans, not new decisions): the merged
 endpoint is EDGAR plus Wikipedia with no ArcGIS geocoding; EDGAR `detail` and `summary` are catalog-only on V4; the
 EDGAR catalog is a rolling two-year window on V4 against V3's full history; the version string differs; V4 caches
 upstream responses (a repeat inside the TTL is a cache hit).
@@ -472,20 +488,19 @@ anything in prod, so staging can never hold prod's tokens); `SQL_ENABLED` on in 
 
 ## 4. Steps I added
 
-**E. Build the 15 per-system non-US endpoints, and the two `/v2/` aliases (decided, Q3).** V3 serves, for each of EU (NACE), International
-(ISIC) and Japan, five lookups: for EU and International `section`, `division`, `group`, `class` and `description`; for Japan `division`,
-`major_group`, `group`, `industry_group` and `description` (`company_dns.py`; the V3 logic is in `lib/eu_sic.py`, `lib/international_sic.py`,
-`lib/japan_sic.py`). V4 already holds all three systems as flat tables with the hierarchy columns, registered at startup
-(`sic_data_nace`, `sic_data_isic`, `sic_data_japan`), so these are lookups over data it has, not new data work.
-- **Shape:** V3-parity (same envelope, same URL shape with `/V3.0/` to `/V4.0/`), each also served at its `/V3.0/` path, like the US set
-  (`v4-openapi-docs.md` §8). First task: map each V3 level name to the flat columns (the nesting rules already encoded in
-  `docs/plans/research/check_ic_feather.py` are the reference), and capture V3's real response for each endpoint as the fixture to match.
-- **UK stays excluded** (decision in roadmap §3a); the two `/v2/` Wikipedia and merged aliases are added (V3's own spec says they are
-  the same as the default).
-- **Done when:** the 15 endpoints and 2 aliases are in the OpenAPI document, each has L1 contract tests and an L3 parity case against live V3,
-  the per-system data-readiness test (L2) passes, and the README endpoint list is updated.
-- **Also resolves** the roadmap's inconsistent count (22 versus the 17 in `company_dns.py`); correct it in `v4-initial-release-roadmap.md` §3 and §3a
-  when this lands.
+**E. The 15 per-system non-US endpoints, the two `/v2/` aliases, and the V2.0 set (decided Q3; V2.0 added back 2026-10-07). Done 2026-10-07.** V3 serves, for each of EU (NACE), International
+(ISIC) and Japan, five lookups: `section`, `division`, `group`, `class` and `description` (Japan: `division`, `major_group`, `group`, `industry_group`, `description`). V4 already held all three systems as flat tables with the
+hierarchy columns, so these are lookups over data it has.
+- **Built:** `v4/crates/sic/src/systems.rs` (one generic level lookup over all four systems, and the V3 response shaper, with 8 tests whose expected values are V3's own answers) and
+  `v4/crates/server/src/sic_endpoints.rs` (the 43 routes, from two small macros: 30 for the 15 lookups at `/V4.0/` and `/V3.0/`, 11 V2.0 aliases, and the two `/v2/` aliases).
+- **Level names (V3 versus V4's flat columns):** for Japan, V3's "division" is V4's `section_id` (A-T), "major group" is `division_id` (2 digits), "group" is `group_id` (3 digits), "industry group" is
+  `class_id` (4 digits); for US SIC the same one-step shift (V3 "division" is `section_id`). EU NACE and ISIC use the same names in both.
+- **Matching V3:** a case-insensitive substring match on the level's code, or on the class description, as V3 does. Messages and module strings are V3's per system (EU prefixes "EU SIC", ISIC has none, Japan prefixes "Japan SIC").
+- **Verified against V3 production** (captured with a self-identifying User-Agent, one request at a time; fixtures in `api_tests/fixtures/v3/`): **15 of 19 responses identical** (code, message, module, data); the other four differ
+  only as listed under "Known intentional differences".
+- **Tests:** 9 in `api_tests/test_non_us_sic.py` (contract for all 15 in both shapes, no-match is a JSON 404 in both, parity with the fixtures, the V2.0 aliases equal their twins, including the Wikipedia, merged and `/v2/` aliases when run
+  with `API_TESTS_NETWORK=1`, and the spec lists everything), plus 27 in the `sic` crate. The spec checks in the live battery still pass (every new operation documents 401 and 429, every new tag is described).
+- **Also resolves** the roadmap's inconsistent count (22 versus the 17 in `company_dns.py`); corrected in `v4-initial-release-roadmap.md`.
 
 **A. Data-integrity gate.** `check_ic_feather.py` validates the four classification feather files (counts, nesting, text encoding, and
 each defect that previously got through). It is already planned as a build step in `v4-deployment.md` §3.2.4 and Steps C and D. It needs only
@@ -519,6 +534,8 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 | Q5 | Binary or image size target? | **Asked for 50MB or less if safe. Settled 2026-10-06: 50MB raw is not reachable at acceptable speed, so keep both the lean (about 89 MiB) and small (about 62 MiB) options and confirm after testing.** Data in step 5. |
 | Q8 | Which hardware, and what counts as "production degraded"? | **Two amd64 nodes (each over 20 cores, at least 384GB) and a Mac Studio (128GB)**; run the images on the Mac and on the nodes. The owner controls everything, so the degradation rule is a courtesy, not a gate. |
 | Q9 | A quiet window? | **None needed**; run whenever. |
+| Q12 | Should V3's limited V2.0 endpoints be served by V4 (excluded since 2026-09-28)? | **Yes, added back (2026-10-07)**, and the About page updated. 11 paths, aliases of their `/V3.0/` twins. |
+| Q13 | What data shape should the V3.0 and V2.0 paths return? | **V3's exact shape** on `/V3.0/` and `/V2.0/`, V4's list shape on `/V4.0/` (2026-10-07). Done for the US SIC and non-US aliases; EDGAR, Wikipedia and merged still to check in step 4. |
 
 **Still open (my defaults apply unless changed):**
 
@@ -533,7 +550,7 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 
 - [x] Step 2: `/docs` and `/redoc` both light and readable, reviewed in the browser (2026-10-07).
 - [x] Step 1: API documentation includes SQL, marked experimental, with the access and rate-limit text, 401 and 429 on every operation, tag descriptions and examples; spec checks in the live battery (2026-10-07).
-- [ ] New E: the 15 per-system endpoints and the two `/v2/` aliases merged, tested, and in the spec.
+- [x] New E: the 15 per-system endpoints, the two `/v2/` aliases and the V2.0 set built, tested against V3 fixtures, in the spec, on the About page (2026-10-07).
 - [ ] Step 3 suite merged, green in CI for its fast layers.
 - [ ] Step 4 parity report with no unexplained mismatch, and the unthinned baseline saved.
 - [x] Step 5 measurement, the two release profiles and the DataFusion feature trim, built and verified (2026-10-06).

@@ -1,0 +1,21 @@
+{
+  "code": 200,
+  "data": {
+    "groups": {
+      "25.9": {
+        "description": "Manufacture of other fabricated metal products",
+        "division_code": "25",
+        "section_code": "C"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "euSicData": "https://showvoc.op.europa.eu/#/datasets"
+    },
+    "modules": {}
+  },
+  "message": "EU SIC group data has been returned for query [25.9].",
+  "module": "EuSICQueries-> get_group_by_code"
+}

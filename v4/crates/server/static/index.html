@@ -341,38 +341,51 @@
               </div>
 
               <h3>API Versions</h3>
-              <p>company_dns V4 serves one real namespace, plus a compatibility alias for existing V3 integrations:</p>
+              <p>company_dns V4 serves one real namespace, plus compatibility aliases for existing V3 integrations: the full V3.0 set, and V3's limited legacy V2.0 set:</p>
 
               <div class="version-tabs-wrapper">
                 <div class="version-tabs">
                   <button type="button" class="version-tab active" data-version-tab="v4" onclick="selectVersionTab('v4')">V4.0 (Current)</button>
                   <button type="button" class="version-tab" data-version-tab="v3" onclick="selectVersionTab('v3')">V3.0 (Compatibility Aliases)</button>
+                  <button type="button" class="version-tab" data-version-tab="v2" onclick="selectVersionTab('v2')">V2.0 (Limited Legacy)</button>
                 </div>
 
                 <div id="versionTabV4" class="version-tab-panel">
                   <p>The real namespace this server implements:</p>
                   <ul>
                     <li><code>/V4.0/na/sic/...</code> - US SIC lookups (description, code, division, industry, major)</li>
-                    <li><code>/V4.0/global/sic/description/...</code> - keyword SIC search across every registered classification system (US SIC, Japan SIC, EU NACE)</li>
+                    <li><code>/V4.0/eu/sic/...</code>, <code>/V4.0/international/sic/...</code>, <code>/V4.0/japan/sic/...</code> - EU NACE, ISIC and Japan SIC lookups by section, division, group or class code (Japan: division, major_group, group, industry_group) and by description</li>
+                    <li><code>/V4.0/global/sic/description/...</code> - keyword SIC search across every registered classification system (US SIC, Japan SIC, EU NACE, ISIC)</li>
                     <li><code>/V4.0/na/sic/similarity/...</code> - semantic SIC search (V4.0-only, no V3 equivalent)</li>
-                    <li><code>/V4.0/global/sic/similarity/...</code> - semantic SIC search across every registered classification system (US SIC, Japan SIC, EU NACE; V4.0-only, no V3 equivalent)</li>
+                    <li><code>/V4.0/global/sic/similarity/...</code> - semantic SIC search across every registered classification system (V4.0-only, no V3 equivalent)</li>
                     <li><code>/V4.0/global/sic/hybrid/...</code> - fused keyword + semantic SIC search (Reciprocal Rank Fusion) across every registered classification system (V4.0-only)</li>
+                    <li><code>/V4.0/global/sic/match</code>, <code>/V4.0/global/sic/map</code> - Industry Match: a company description in, a short recommended set of industry codes out, and carrying a chosen set into other systems (V4.0-only)</li>
                     <li><code>/V4.0/na/companies/edgar/...</code>, <code>/V4.0/na/company/edgar/firmographics/...</code> - EDGAR</li>
                     <li><code>/V4.0/global/company/wikipedia/firmographics/...</code>, <code>/V4.0/global/company/merged/firmographics/...</code> - Wikipedia/merged</li>
+                    <li><code>POST /V4.0/sql</code> - <strong>experimental</strong> read-only SQL over the SIC and EDGAR data. Off unless the operator enables it, and it needs a credential; see the API reference</li>
                   </ul>
                 </div>
                 <div id="versionTabV3" class="version-tab-panel" hidden>
-                  <p>Every V4.0 path above, served at the old URL - same data, same envelope shape, for existing V3 integrations:</p>
+                  <p>The V3 endpoints, served at their old URLs and answered in <strong>V3's exact response shape</strong> (a dictionary keyed by code, with a total), for existing V3 integrations:</p>
                   <ul>
-                    <li><code>/V3.0/na/sic/...</code> - alias for <code>/V4.0/na/sic/...</code></li>
-                    <li><code>/V3.0/global/sic/description/...</code> - alias for <code>/V4.0/global/sic/description/...</code> (keyword only - semantic/hybrid global are planned, see <code>docs/plans/sic-global-search.md</code>)</li>
-                    <li><code>/V3.0/na/companies/edgar/...</code>, <code>/V3.0/na/company/edgar/firmographics/...</code> - alias for the EDGAR endpoints</li>
-                    <li><code>/V3.0/global/company/wikipedia/firmographics/...</code>, <code>/V3.0/global/company/merged/firmographics/...</code> - alias for Wikipedia/merged</li>
-                    <li><code>/V3.0/uk/...</code>, <code>/V3.0/eu/...</code>, <code>/V3.0/japan/...</code>, <code>/V3.0/international/...</code> - the single-system per-country endpoints (division/major-group/industry-group/description for one system at a time) are not implemented in V4; only the cross-system <code>/V4.0/global/sic/description/...</code> above exists so far</li>
+                    <li><code>/V3.0/na/sic/...</code> - US SIC (description, code, division, industry, major)</li>
+                    <li><code>/V3.0/eu/sic/...</code>, <code>/V3.0/international/sic/...</code>, <code>/V3.0/japan/sic/...</code> - the single-system per-country lookups (section/division/group/class, or for Japan division/major_group/group/industry_group, and description)</li>
+                    <li><code>/V3.0/global/sic/description/...</code> - keyword search across every registered classification system (semantic and hybrid search are V4.0-only)</li>
+                    <li><code>/V3.0/na/companies/edgar/...</code>, <code>/V3.0/na/company/edgar/firmographics/...</code> - EDGAR</li>
+                    <li><code>/V3.0/global/company/wikipedia/firmographics/...</code>, <code>/V3.0/global/company/merged/firmographics/...</code>, and the explicit <code>.../v2/firmographics/...</code> forms of both (the same as the default) - Wikipedia/merged</li>
                   </ul>
                 </div>
+                <div id="versionTabV2" class="version-tab-panel" hidden>
+                  <p>V3's limited legacy set, with no regional prefix (US and global only), answered exactly as the <code>/V3.0/</code> twin of each path:</p>
+                  <ul>
+                    <li><code>/V2.0/sic/description/...</code>, <code>/V2.0/sic/code/...</code>, <code>/V2.0/sic/division/...</code>, <code>/V2.0/sic/industry/...</code>, <code>/V2.0/sic/major/...</code> - US SIC</li>
+                    <li><code>/V2.0/companies/edgar/detail/...</code>, <code>/V2.0/companies/edgar/summary/...</code>, <code>/V2.0/companies/edgar/ciks/...</code>, <code>/V2.0/company/edgar/firmographics/...</code> - EDGAR</li>
+                    <li><code>/V2.0/company/wikipedia/firmographics/...</code>, <code>/V2.0/company/merged/firmographics/...</code> - Wikipedia/merged</li>
+                  </ul>
+                  <p>Eleven paths in all. They exist for old integrations; new work should use V4.0.</p>
+                </div>
               </div>
-              <p class="version-tabs-footnote"><em>Note: V2.0 is not implemented in V4 - its legacy <code>/V2.0/...</code> paths are intentionally not carried forward.</em></p>
+              <p class="version-tabs-footnote"><em>Not carried forward: V3's UK SIC endpoints (<code>/V3.0/uk/...</code>) and its legacy wptools <code>/v1/</code> Wikipedia and merged paths.</em></p>
             </div>
             
             <!-- API Documentation Tab -->

@@ -72,11 +72,13 @@ function navigateToTab(tabName) {
 // compatibility aliases) - was a static side-by-side comparison,
 // moved to a tab selector on request.
 function selectVersionTab(which) {
-    const isV4 = which === 'v4';
-    document.querySelector('.version-tab[data-version-tab="v4"]').classList.toggle('active', isV4);
-    document.querySelector('.version-tab[data-version-tab="v3"]').classList.toggle('active', !isV4);
-    document.getElementById('versionTabV4').hidden = !isV4;
-    document.getElementById('versionTabV3').hidden = isV4;
+    document.querySelectorAll('.version-tab').forEach(function (tab) {
+        tab.classList.toggle('active', tab.getAttribute('data-version-tab') === which);
+    });
+    ['v4', 'v3', 'v2'].forEach(function (v) {
+        const panel = document.getElementById('versionTab' + v.toUpperCase());
+        if (panel) panel.hidden = v !== which;
+    });
 }
 
 // Function to copy code examples to clipboard

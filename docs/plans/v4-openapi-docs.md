@@ -47,7 +47,9 @@ still in V3's own router (predates even the `/na/`-style regional
 prefix); carrying it forward into V4 would mean permanently supporting
 a second legacy shape indefinitely for no live-usage evidence it needs
 it, whereas `/V3.0/` is the shape V3's own current deployment actually
-serves today. **Decided: build the documented alias wrapper functions**
+serves today. **Reversed 2026-10-07 by the owner: V3's limited legacy `/V2.0/` set (11 paths: US SIC five, EDGAR four, Wikipedia and merged firmographics) is
+served again**, as aliases answered exactly like their `/V3.0/` twins (V3 itself served both URLs with the same handler), documented in `/docs` and on the About page;
+see `v4-release-to-staging.md`. **Decided: build the documented alias wrapper functions**
 (§8.3's option (b)) — the legacy paths appear in `/docs`/`/openapi.json`
 alongside `/V4.0/`, not silently.
 
@@ -358,6 +360,8 @@ implements today (`v4-server-prototype.md` §1's scope):
 | EDGAR firmographics by CIK | `/V3.0/na/company/edgar/firmographics/{cik}` | `/V4.0/na/company/edgar/firmographics/{cik}` |
 | Wikipedia firmographics | `/V3.0/global/company/wikipedia/firmographics/{name}` (+ its explicit `/v2/` alias, same backend) | `/V4.0/global/company/wikipedia/firmographics/{name}` |
 | Merged firmographics | `/V3.0/global/company/merged/firmographics/{name}` (+ its explicit `/v2/` alias) | `/V4.0/global/company/merged/firmographics/{name}` |
+
+**Update 2026-10-07: the non-US per-system endpoints (EU NACE, ISIC, Japan; UK stays out) are now built and aliased, in V3's exact response shape, and so are the two explicit `/v2/` Wikipedia and merged URLs (`v4-release-to-staging.md`, New E). The text below is the original analysis, kept as the record.**
 
 **Cannot alias — no real V4 backend exists, aliasing would 404 or (worse) misleadingly claim support:**
 

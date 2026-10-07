@@ -1,0 +1,22 @@
+{
+  "code": 200,
+  "data": {
+    "classes": {
+      "25.91": {
+        "description": "Manufacture of steel drums and similar containers",
+        "division_code": "25",
+        "group_code": "25.9",
+        "section_code": "C"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "euSicData": "https://showvoc.op.europa.eu/#/datasets"
+    },
+    "modules": {}
+  },
+  "message": "EU SIC class data has been returned for query [25.91].",
+  "module": "EuSICQueries-> get_class_by_code"
+}

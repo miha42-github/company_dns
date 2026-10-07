@@ -338,15 +338,33 @@ level that can be raised or lowered on a live, already-running process
 
 ## Endpoints
 
-V3-parity (same envelope, same URL shape, `/V3.0/` → `/V4.0/` — see
-`v4-server-prototype.md` §5.2/§5.3/§10). Every resource here is also
-served at its original `/V3.0/` path for backward compatibility
-(`v4-openapi-docs.md` §8) — both documented separately in `/docs`:
+V3-parity: same URL shape with `/V3.0/` changed to `/V4.0/` (`v4-server-prototype.md` §5.2/§5.3/§10).
+Every one of them is also served at its original `/V3.0/` path, and those paths answer in **V3's exact
+response shape** (a dictionary keyed by code with a `total`, V3's field names, messages and module strings), so an
+existing V3 integration keeps working; the `/V4.0/` paths answer with V4's shape (a list of matches, each with its
+parents). Both are documented separately in `/docs` (`v4-openapi-docs.md` §8):
 
 ```
-GET /V4.0/na/sic/{description,code,division,industry,major}/{query}   (+ /V3.0/na/sic/...)
-GET /V4.0/na/companies/edgar/{ciks,detail,summary}/{company_name}     (+ /V3.0/na/companies/edgar/...)
-GET /V4.0/na/company/edgar/firmographics/{cik_no}                     (+ /V3.0/na/company/edgar/firmographics/...)
+GET /V4.0/na/sic/{description,code,division,industry,major}/{query}            (+ /V3.0/na/sic/...)
+GET /V4.0/{eu,international}/sic/{section,division,group,class,description}/{query}   (+ /V3.0/...)
+GET /V4.0/japan/sic/{division,major_group,group,industry_group,description}/{query}   (+ /V3.0/japan/sic/...)
+GET /V4.0/na/companies/edgar/{ciks,detail,summary}/{company_name}              (+ /V3.0/na/companies/edgar/...)
+GET /V4.0/na/company/edgar/firmographics/{cik_no}                              (+ /V3.0/na/company/edgar/firmographics/...)
+```
+
+EU NACE, ISIC and Japan SIC (the 15 per-system lookups) are matched against V3's real responses: 15 of the 19
+captured V3 production responses are identical, and the rest differ only in data (V4's Japan and NACE files are the
+corrected ones, and V3's US division narrative `full_description` is returned empty). A no-match is a JSON 404
+envelope (V3 answered with an HTML page). Tests: `api_tests/` (`python3 api_tests/run.py`).
+
+**V2.0, the limited legacy set** (V3's shorter paths with no regional prefix), answered exactly as the `/V3.0/` twin of each:
+
+```
+GET /V2.0/sic/{description,code,division,industry,major}/{query}
+GET /V2.0/companies/edgar/{detail,summary,ciks}/{company_name}
+GET /V2.0/company/edgar/firmographics/{cik_no}
+GET /V2.0/company/wikipedia/firmographics/{company_name}
+GET /V2.0/company/merged/firmographics/{company_name}
 ```
 
 New, V4-only (§5.1), no `/V3.0/` equivalent:
@@ -364,20 +382,18 @@ its hierarchy and the text segment that supports it
 `POST /V4.0/global/sic/map` carries a chosen set of codes into the other systems by
 embedding similarity (no crosswalk tables are used).
 
-Real, built 2026-09-28 (§8.1/§8.2 — near-exact company/page title, same
+Real, built 2026-09-28 (§8.1/§8.2: near-exact company/page title, same
 as V3; V3's corporate-suffix hint restored and actually executed as a
-REST call, not just suggested). Also served at `/V3.0/`:
+REST call, not just suggested). Also served at `/V3.0/` and `/V2.0/`, and at the explicit `/V3.0/.../v2/...`
+URLs, which V3 documents as the same as the default:
 
 ```
-GET /V4.0/global/company/wikipedia/firmographics/{company_name}   (+ /V3.0/global/company/wikipedia/firmographics/...)
-GET /V4.0/global/company/merged/firmographics/{company_name}      (+ /V3.0/global/company/merged/firmographics/...)
+GET /V4.0/global/company/wikipedia/firmographics/{company_name}   (+ /V3.0/..., /V2.0/company/wikipedia/..., /V3.0/.../v2/...)
+GET /V4.0/global/company/merged/firmographics/{company_name}      (+ /V3.0/..., /V2.0/company/merged/..., /V3.0/.../v2/...)
 ```
 
-Not aliased at `/V3.0/` (`v4-openapi-docs.md` §8.1): the non-US SIC
-systems (UK/EU/ISIC/Japan — not implemented in V4 at all) and V3's
-legacy wptools-backed `/v1/` Wikipedia/merged variants (V4's client is
-a port of V3's `v2` backend specifically, no wptools equivalent
-exists).
+Not carried forward: V3's UK SIC endpoints (`/V3.0/uk/...`) and its legacy wptools-backed `/v1/` Wikipedia and
+merged variants (V4's client is a port of V3's `v2` backend specifically; no wptools equivalent exists).
 
 ## Comparing against V3
 

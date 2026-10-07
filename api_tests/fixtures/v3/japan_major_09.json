@@ -1,0 +1,20 @@
+{
+  "code": 200,
+  "data": {
+    "major_groups": {
+      "09": {
+        "description": "Manufacture of food",
+        "division_code": "E"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "japanSicData": "https://www.stat.go.jp/english/data/e-census/2021/industry.html"
+    },
+    "modules": {}
+  },
+  "message": "Japan SIC major group data has been returned for query [09].",
+  "module": "JapanSICQueries-> get_major_group_by_code"
+}

@@ -1,0 +1,28 @@
+{
+  "code": 200,
+  "data": {
+    "classes": {
+      "Casting of iron and steel": {
+        "code": "2431",
+        "division_code": "24",
+        "group_code": "243",
+        "section_code": "C"
+      },
+      "Manufacture of basic iron and steel": {
+        "code": "2410",
+        "division_code": "24",
+        "group_code": "241",
+        "section_code": "C"
+      }
+    },
+    "total": 2
+  },
+  "dependencies": {
+    "data": {
+      "isicData": "https://unstats.un.org/unsd/classifications/Econ/isic"
+    },
+    "modules": {}
+  },
+  "message": "Class data has been returned for description query [steel].",
+  "module": "InternationalSICQueries-> get_class_by_description"
+}

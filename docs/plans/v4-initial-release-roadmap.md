@@ -111,7 +111,7 @@ rather than guessed a third time.
 
 **What the real V3 spec actually contains**, and what it means for v1:
 
-- **12 `/V2.0/` paths** — confirmed intentionally excluded, matches
+- **`/V2.0/` paths** (**reversed 2026-10-07: served again**; the code has 11, not 12: US SIC five, EDGAR four, Wikipedia and merged firmographics, all aliases of their `/V3.0/` twins — see `v4-release-to-staging.md`). Originally: 12 paths — confirmed intentionally excluded, matches
   what was said directly. No V4 work.
 - **NA SIC (5)** and **NA EDGAR (4: `ciks`/`detail`/`summary`/
   `firmographics`)** — **V4 already has all of these**, confirmed
@@ -166,6 +166,8 @@ rather than guessed a third time.
       EDGAR catalog — both stay in scope, so this doesn't get the
       simplification either earlier draft of this section assumed.
 
+**Update 2026-10-07:** the 15 per-system EU NACE, ISIC and Japan endpoints and the two `/v2/` aliases are built (the count of non-US endpoints in V3's code is 17 including UK, not 22), and they match V3's real responses; UK stays excluded.
+
 ## 3a. Non-US SIC systems — real, tracked, gates `V4.0.0`, not this release
 
 **Decided directly**: *"They are in scope minus the UK for now. At this
@@ -183,7 +185,7 @@ once there's real substance to plan, not preemptively).
 - [x] Decided: EU, International/ISIC, and Japan SIC systems are real
       `V4.0.0` requirements, staged by data availability (Japan next,
       others "over time"). UK is excluded with no timeline given —
-      treat like the already-excluded `/V2.0/` endpoints for now,
+      treat like the excluded legacy endpoints for now (the `/V2.0/` paths were later added back, 2026-10-07),
       revisit only if that changes.
 - [x] Decided: **this milestone does not block the initial dev/staging
       release** (§0) — `company-dns-dev`/`company-dns-staging` can run

@@ -5,6 +5,7 @@ pub mod global;
 pub mod hybrid;
 pub mod lookup;
 pub mod similarity;
+pub mod systems;
 
 use datafusion::datasource::file_format::options::ArrowReadOptions;
 use datafusion::prelude::*;

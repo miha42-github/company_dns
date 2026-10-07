@@ -1,0 +1,21 @@
+{
+  "code": 200,
+  "data": {
+    "division": {
+      "E": {
+        "description": "Transportation, Communications, Electric, Gas, And Sanitary Services",
+        "full_description": "This division includes establishments providing, to the general public or to other business enterprises, passenger and freight transportation, communications services, or electricity, gas, steam, water or sanitary services, and all establishments of the United States Postal Service. For many of the industries in this division, the establishments have activities, workers, and physical facilities distributed over an extensive geographic area. For this division, the establishment is represented by a relatively permanent office, shop, station, terminal, or warehouse, etc. that is either (1) directly responsible for supervising such activities or (2) the base from which personnel operate to carry out these activities. Many of the industries are engaged in various related activities. For example, establishments of communications, pipeline, and utility enterprises include a variety of activities, such as power generation, pumping, transmission, and distribution. Establishments primarily engaged in such activities are all classified in this division. Establishments primarily engaged in new or replacement construction for establishments of these types of enterprises are classified as operating establishments in Division C, Construction. Locations engaged in activities such as sales of electric appliances to household consumers are classified in Division G, Retail Trade. The establishments classified in this division furnish services to the general public or to other business enterprises; establishments which furnish similar services only to other establishments of the same enterprise are classified as auxiliary to the establishments or units of the enterprise which they serve. However, separate establishments primarily engaged in long-distance trucking, stevedoring, water transportation, or pipeline transportation are classified according to their activity and not as auxiliaries, even though they serve only establishments of the same enterprise."
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {}
+  },
+  "message": "Division data has been returned for query [E].",
+  "module": "SICQueries-> get_division_desc_by_id"
+}
