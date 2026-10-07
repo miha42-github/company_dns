@@ -1,7 +1,9 @@
 # V4.0.0: the remaining steps from "feature complete" to running on staging
 
-Status: **Draft (2026-10-06), questions Q1 to Q5, Q8 and Q9 answered the same day.** Seven steps proposed by the
-owner, reviewed here, with changes, additions and the remaining open questions. Nothing in this doc is built yet.
+Status: **In progress (updated 2026-10-07).** Seven steps proposed by the owner, reviewed here, with changes, additions and the
+remaining open questions. **Only step 5 has been worked so far** (the size measurements and the two release build profiles, 2026-10-06);
+**steps 1 and 2 (API docs and the Swagger fixes), the non-US endpoints, the test suite, the parity run, the containers and staging are not started.**
+See "Progress" below for the item-by-item state.
 Owner: michael.hay@mediumroast.io
 Scope: the work between "V4 is feature complete" and "V4 runs on staging and has been
 verified against V3". Out of scope: promotion to production, the dev tier, and anything
@@ -17,6 +19,34 @@ Existing plans this builds on:
 | SQL endpoint, profiles (credentials and rules files), staging capacity test | [`v4-sql-endpoint.md`](v4-sql-endpoint.md) §5a, §5c, §8 |
 | Release scope, V3 parity decisions, secrets audit, CORS | [`v4-initial-release-roadmap.md`](v4-initial-release-roadmap.md) §2, §3, §3a, §6, §8 |
 | Industry Match | [`company-sic-match.md`](company-sic-match.md) |
+
+---
+
+## Progress (as of 2026-10-07)
+
+Step 5 was picked up first, by choice, because its measurements (where the bytes are, what each option costs) did not depend on anything else. **The Swagger fix
+(step 2) was skipped over, not decided against: it is a one-line change and is the cheapest thing left.** Everything below is verified against the repository, not remembered.
+
+| Item | State | What exists | Next action |
+|---|---|---|---|
+| **1. API docs include SQL, marked experimental** | **Partly done** | The SQL operation is tagged `experimental`, has an "Experimental:" summary, states its access rules and declares the HTTP Basic scheme (`v4-sql-endpoint.md` §5a). | Everything else in step 1 (spec `info.description`, 429 responses, tag descriptions, examples, the spec test). Nothing else is done. |
+| **2. Swagger look and feel** | **Not started** | Nothing changed: `/docs` still uses the standalone layout with the Swagger top bar and logo. | Add `.config(Config::new(["/openapi.json"]).use_base_layout())` to the `SwaggerUi` at `v4/crates/server/src/main.rs` line 323, look at it, look at `/redoc`. |
+| **New E. 15 non-US endpoints and two `/v2/` aliases** | **Not started** | The data (NACE, ISIC, Japan) is loaded; the endpoints do not exist. | Map V3's level names to the flat columns and capture V3's real responses as fixtures. |
+| **3. Python test suite** | **Not started** | `perf_tests/` (performance, covers about seven endpoints with a V4 path) and `v4/scripts/sql-try.sh check` (51 live cases, shell). No `api_tests/`. | Create `api_tests/` with the L0 and L1 layers first. |
+| **4. Parity run on live V3 and V4** | **Not started** | `perf_tests/shadow_compare.py` and the earlier `v3-vs-v4-*.json` results exist. No parity matrix. | Needs step 3 and New E. |
+| **5. Thin the binary** | **Measurement and options done; acceptance pending** | The size spike (component map, nine variants, latency, memory, the 51-case battery); two named profiles `release-lean` (89.2 MiB) and `release-small` (62.3 MiB) and the DataFusion feature trim in `v4/Cargo.toml`, built and verified; results in this doc. | Linux amd64 sizes, the regression check against the step 4 baseline, the model's packaging decision, and the lean-or-small choice (after step 6). |
+| **6. Docker builds, V3 and V4** | **Not started** | V3 has a `Dockerfile`; **V4 has none**. | Write the V4 Dockerfile (a build argument selects the profile), with the data gate. |
+| **7. Staging** | **Not started** | `k8s/prod/` only; no `k8s/staging/`. | Needs step 6. |
+| **A. Data-integrity gate** | **Not started** | `check_ic_feather.py` exists and works by hand. | Wire into the V4 build (step 6). |
+| **B. Security and CORS review** | **Not started** | CORS is still `permissive()`. | Decide the CORS policy; secrets audit. |
+| **C. Release hygiene** | **Not started** | | Version, changelog, migration note. |
+| **D. CI for V4** | **Not started** | No V4 workflow. | A workflow running tests and the fast suite layers. |
+| **F, G. Rollback, observability** | **Not started** | | Rehearse on staging. |
+
+**Out of order, and what that means.** Step 5 ran before step 4, so the "no regression" half of its acceptance rule (against a step 4 baseline) has not been applied
+yet. The measurements and the two profiles stand on their own; what waits is the regression check, the Linux numbers and the choice between the options.
+
+**Suggested next, in order of cost:** step 2 (minutes), then step 1's remaining items, then New E and the first layers of step 3 in parallel.
 
 ---
 
@@ -69,7 +99,7 @@ These are the reason the steps below differ from the original seven.
 | 2 | Reskin Swagger | Keep; small | Most of the "ugliness" is Swagger's standalone top bar. One setting removes it. **Decided (Q4): top bar now, branding later.** |
 | 3 | Extend the perf suite, V3 core then V4, in Python | Keep; reshape | Build a **functional layer beside** the perf suite, as `v4-deployment.md` §3.9 already designs, with stdlib plus `requests` only. Port the SQL shell battery into it. |
 | 4 | Run against live V3 and V4 for parity | Keep; define parity | Parity needs classes (identical, equivalent, absent by decision), normalisation of live data, and a politeness policy for live V3. Run it **before** thinning so it is the baseline. |
-| 5 | Thin the binary | Keep; re-baseline; target 50MB if safe; add the model | Follow `v4-deployment.md` §3.3 and §4. Add the model and ONNX packaging question, and an acceptance rule (no functional or performance regression). |
+| 5 | Thin the binary | Keep; measured, two options preserved | Follow `v4-deployment.md` §3.3 and §4. **Measured 2026-10-06:** 50MB raw is not reachable at acceptable speed; two named profiles (lean about 89 MiB, small about 62 MiB) are kept and the choice is confirmed after testing. Still open: the model and ONNX packaging question, Linux sizes, and the regression check. |
 | 6 | Docker builds of V3 and V4 side by side on amd64 (and arm64) | Keep; add a definition of "fair" | Equal resource limits, same test runner, same data, cold and warm. **Decided (Q2, Q8): the two amd64 worker nodes plus the Mac Studio for arm64, no quiet-window constraint.** Includes the data-integrity gate from `v4-deployment.md`. |
 | 7 | Deploy on staging | Keep; add what has to be true first | Wiring for profiles, the SQL capacity test, the §3.6 platform-parity checks, and go/no-go criteria for later promotion. |
 | New E | Build the 15 per-system non-US endpoints and the two `/v2/` aliases | Add (decided, Q3) | Ahead of step 3, because the V3 inventory and the parity matrix include them. See §4. |
@@ -97,13 +127,15 @@ These are the reason the steps below differ from the original seven.
                                 7 Staging  (rerun suite, SQL capacity test, platform checks)
 ```
 
-Steps 1, 2, New E and the first layers of step 3 can run in parallel; the parity layer of step 3 and step 4 need New E. Step 4 needs step 3. Step 5 needs the step 4 baseline and the
+Step 5's measurement and profiles were done early (2026-10-06; see "Progress"), so the box for step 5 in the diagram is only half drawn: its regression check still follows step 4. Steps 1, 2, New E and the first layers of step 3 can run in parallel; the parity layer of step 3 and step 4 need New E. Step 4 needs step 3. Step 5 needs the step 4 baseline and the
 model-packaging decision (§0.1). Step 6 needs step 5 and an amd64 host. Step 7 needs step 6 and the
 staging manifests.
 
 ## 3. The steps in detail
 
 ### Step 1: API documentation includes SQL, marked experimental
+
+**Status: partly done (2026-10-07).** The SQL operation itself is covered (below); the rest of the "To do" list has not been started.
 
 **Done already:** the SQL operation is tagged `experimental`, its summary starts with "Experimental:", its
 description states the access rules, it declares an HTTP Basic security scheme, and every response carries an
@@ -128,6 +160,10 @@ description states the access rules, it declares an HTTP Basic security scheme, 
 rules; roadmap §2 boxes can be checked; a spec test passes.
 
 ### Step 2: Swagger look and feel
+
+**Status: not started (2026-10-07).** The exact change, verified against the `utoipa-swagger-ui` 10 source: `SwaggerUi::new("/docs").url("/openapi.json", api)` at
+`v4/crates/server/src/main.rs` line 323 gets `.config(Config::new(["/openapi.json"]).use_base_layout())`. Two optional settings in the same call are worth having
+for the SQL demo: `.persist_authorization(true)` (the Basic credential survives a page reload) and `.display_request_duration(true)`.
 
 The white theme stays. The part that looks poor is the **top bar with the Swagger logo**.
 
@@ -239,11 +275,10 @@ with a reason; the baseline JSONs are saved and referenced from this doc.
 Owning plan: [`v4-deployment.md`](v4-deployment.md) §3.3 (levers) and §4 (spike). Do not repeat it; execute it with
 these additions.
 
-**Target (Q5, 2026-10-06): the server binary at 50MB or less, as far as it can be reached safely.** "Safely" means: the step 3 suite passes unchanged,
-`compare.py` shows no latency regression against the step 4 baseline, and cold start is not materially worse. The target is a stretch goal: the
-floor is whatever the safe levers deliver, and **anything beyond that needs an explicit decision**, because the remaining savings come with trade-offs
-(below). Report **both** the binary and the **image** (binary plus the embedding model plus the data), since the model alone is about 87MB and a 50MB binary
-is not a 50MB image.
+**Target (Q5, 2026-10-06): the owner asked for the server binary at 50MB or less if it can be done safely; the measurements below show it cannot at acceptable speed with
+compiler settings alone, so the outcome is two preserved options (decided in item 3), not 50MB.** "Safely" means: the step 3 suite passes unchanged, `compare.py` shows no latency
+regression against the step 4 baseline (**not yet checked, because that baseline does not exist yet**), and cold start is not materially worse. Report **both** the binary and the
+**image** (binary plus the embedding model plus the data), since the model alone is about 87MB and a 50MB binary is not a 50MB image.
 
 **1. Measured 2026-10-06 (macOS arm64, release build as it is today; Linux amd64 still to do).**
 
@@ -301,7 +336,7 @@ binary, which is closer to what an image layer costs to pull:
 pass with D1's DataFusion feature set. Not yet run: the step 3 suite (it does not exist yet), Linux amd64, and the V3 parity run.
 
 **Reading the data:**
-- **D1 is a free win**: 136 to 89 MiB (-34%), no slower (slightly faster), same memory. It needs only a `[profile.release]` section and a DataFusion feature list, and costs about 9 minutes of build.
+- **D1 is a free win**: 136 to 89 MiB (-34%), no slower (slightly faster), same memory. It is now the `release-lean` profile plus the DataFusion feature list in `v4/Cargo.toml` (built and verified), and costs about 9 minutes of build.
 - **`opt-level = "s"` (E) gets to 62 MiB** (23 MiB gzipped) and matches today's speed everywhere except scan-heavy SQL, where it is about 28% slower per query and 8% lower in concurrent throughput.
 - **`opt-level = "z"` (F) reaches 46.8 MiB, under the 50MB goal, but is 1.7x to 6x slower** (EDGAR lookups 4.3x, SQL scans about 6x). It fails the acceptance rule. Rejected.
 - **The SQL expression-function libraries cost nothing under fat LTO** (0.1 MiB), so there is no reason to cut SQL capability; the earlier "keep them on" decision stands and needs no revisiting.
@@ -465,7 +500,7 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 | Q2 | Which amd64 system for step 6? | **The two amd64 worker nodes**, and also the Mac Studio for arm64 (see Q8). |
 | Q3 | How should V4.0.0 treat the non-US per-system endpoints? | **Build them before release**: the 15 EU, International and Japan endpoints, plus the two `/v2/` aliases. UK stays excluded. |
 | Q4 | How far does the Swagger reskin go? | **Top bar now, branding later.** |
-| Q5 | Binary or image size target? | **Server binary at 50MB or less if it can be done safely; settled 2026-10-06 as "keep both the lean (about 89 MiB) and small (about 62 MiB) options and confirm after testing", since 50MB raw is not reachable at acceptable speed.** Original answer: **Server binary at 50MB or less if it can be done safely** (the owner's figure for today is about 127MB; measured 136 MiB stripped). Data in step 5: **89 MiB with no downside, 62 MiB with a small SQL-scan cost, 52 MiB only by also giving up `panic = "unwind"`; 46.8 MiB is reachable but 1.7x to 6x slower.** Decision on how far to go is open (below). |
+| Q5 | Binary or image size target? | **Asked for 50MB or less if safe. Settled 2026-10-06: 50MB raw is not reachable at acceptable speed, so keep both the lean (about 89 MiB) and small (about 62 MiB) options and confirm after testing.** Data in step 5. |
 | Q8 | Which hardware, and what counts as "production degraded"? | **Two amd64 nodes (each over 20 cores, at least 384GB) and a Mac Studio (128GB)**; run the images on the Mac and on the nodes. The owner controls everything, so the degradation rule is a courtesy, not a gate. |
 | Q9 | A quiet window? | **None needed**; run whenever. |
 
@@ -480,11 +515,12 @@ alerted on (roadmap §8 lists monitoring as non-blocking).
 
 ## 6. Definition of done for "released to staging"
 
-- Steps 1 and 2 merged; `/docs` and `/redoc` reviewed.
-- New E: the 15 per-system endpoints and the two `/v2/` aliases merged, tested, and in the spec.
-- Step 3 suite merged, green in CI for its fast layers.
-- Step 4 parity report with no unexplained mismatch, and the unthinned baseline saved.
-- Step 5 thinning applied under the acceptance rule; binary and image sizes measured on both platforms and recorded in `v4-deployment.md`; the binary at 50MB or less, or a recorded decision explaining the floor.
-- Step 6 images built from a clean checkout for amd64 and arm64, run on the nodes and the Mac Studio, the data gate in the build, the V3-versus-V4 results written up.
-- Step 7 staging running two replicas, suite green, capacity test and soak passed, rollback exercised.
-- Items A to G done or explicitly deferred with a reason.
+- [ ] Steps 1 and 2 merged; `/docs` and `/redoc` reviewed. *(step 2 not started; step 1 partly done)*
+- [ ] New E: the 15 per-system endpoints and the two `/v2/` aliases merged, tested, and in the spec.
+- [ ] Step 3 suite merged, green in CI for its fast layers.
+- [ ] Step 4 parity report with no unexplained mismatch, and the unthinned baseline saved.
+- [x] Step 5 measurement, the two release profiles and the DataFusion feature trim, built and verified (2026-10-06).
+- [ ] Step 5 remainder: sizes measured on Linux amd64 and recorded in `v4-deployment.md`; the no-regression check against the step 4 baseline; the model's packaging decided; the lean-or-small choice recorded after step 6.
+- [ ] Step 6 images built from a clean checkout for amd64 and arm64, run on the nodes and the Mac Studio, the data gate in the build, the V3-versus-V4 results written up.
+- [ ] Step 7 staging running two replicas, suite green, capacity test and soak passed, rollback exercised.
+- [ ] Items A to G done or explicitly deferred with a reason.
