@@ -119,17 +119,12 @@ class V3Parity(ServerTestCase):
             self.assertEqual(body["data"]["total"], len(body["data"]["industry_groups"]))
             self.assertGreaterEqual(body["data"]["total"], v3["data"]["total"])
 
-    def test_us_division_matches_except_the_narrative(self):
-        """V3's division answer carries a `full_description` narrative that V4's data does not have; the key stays (empty)
-        so a V3 reader does not fail."""
+    def test_us_division_matches_including_the_narrative(self):
+        """The division narrative (`full_description`) is served from the same text V3 uses."""
         _, body, _ = get("/V3.0/na/sic/division/E")
         v3 = fixture("us_division_E")
         self.assertEqual((body["code"], body["message"], body["module"]), (v3["code"], v3["message"], v3["module"]))
-        v4_e, v3_e = body["data"]["division"]["E"], v3["data"]["division"]["E"]
-        self.assertEqual(v4_e["description"], v3_e["description"])
-        self.assertEqual(sorted(v4_e), sorted(v3_e))
-        self.assertEqual(v4_e["full_description"], "")
-        self.assertTrue(v3_e["full_description"])
+        self.assertEqual(body["data"], v3["data"])
 
 
 class V2Aliases(ServerTestCase):

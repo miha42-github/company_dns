@@ -352,9 +352,9 @@ GET /V4.0/na/companies/edgar/{ciks,detail,summary}/{company_name}              (
 GET /V4.0/na/company/edgar/firmographics/{cik_no}                              (+ /V3.0/na/company/edgar/firmographics/...)
 ```
 
-EU NACE, ISIC and Japan SIC (the 15 per-system lookups) are matched against V3's real responses: 15 of the 19
+EU NACE, ISIC and Japan SIC (the 15 per-system lookups) are matched against V3's real responses: 16 of the 19
 captured V3 production responses are identical, and the rest differ only in data (V4's Japan and NACE files are the
-corrected ones, and V3's US division narrative `full_description` is returned empty). A no-match is a JSON 404
+corrected ones, and the US division narrative `full_description` is V3's text). A no-match is a JSON 404
 envelope (V3 answered with an HTML page). Tests: `api_tests/` (`python3 api_tests/run.py`).
 
 **V2.0, the limited legacy set** (V3's shorter paths with no regional prefix), answered exactly as the `/V3.0/` twin of each:

@@ -21,7 +21,8 @@
 //! Known, intentional differences from V3 (recorded in `docs/plans/v4-release-to-staging.md`): the
 //! `dependencies` block is V4's, a no-match is a JSON 404 envelope (V3 answered with an HTML 404 page), V4's
 //! Japan and NACE data are the corrected files, and V3's US `division` answer also carries a
-//! `full_description` narrative that V4's data does not have (it is returned empty).
+//! `full_description` narrative, which comes from `data/us_division_narratives.json` (generated from
+//! `source_data/sic_data/divisions.csv`, the same text V3 serves) because the SIC tables do not carry it.
 
 use datafusion::arrow::array::LargeStringArray;
 use serde::Serialize;
@@ -170,6 +171,16 @@ pub struct V3Reply {
     pub data: Value,
 }
 
+/// V3's narrative for a US SIC division (`""` for a division without one).
+fn division_narrative(division: &str) -> String {
+    static NARRATIVES: std::sync::OnceLock<std::collections::HashMap<String, String>> = std::sync::OnceLock::new();
+    NARRATIVES
+        .get_or_init(|| serde_json::from_str(include_str!("../data/us_division_narratives.json")).expect("us_division_narratives.json is valid"))
+        .get(division)
+        .cloned()
+        .unwrap_or_default()
+}
+
 fn s(v: &Option<String>) -> String {
     v.clone().unwrap_or_default()
 }
@@ -284,8 +295,7 @@ fn entry(system: System, level: Level, by_description: bool, r: &LevelRow) -> (S
     match system {
         System::Us => match level {
             Level::Section => {
-                // V3's division narrative has no counterpart in V4's data.
-                m.insert("full_description".into(), Value::String(String::new()));
+                m.insert("full_description".into(), Value::String(division_narrative(&r.section_id)));
             }
             Level::Division => put(&mut m, "division", r.section_id.clone()),
             Level::Group => {
@@ -477,7 +487,9 @@ mod tests {
         let r = reply(&c, System::Us, Level::Section, "E", false).await;
         assert_eq!(r.module, "SICQueries-> get_division_desc_by_id");
         assert_eq!(r.data["division"]["E"]["description"], "Transportation, Communications, Electric, Gas, And Sanitary Services");
-        assert_eq!(r.data["division"]["E"]["full_description"], "", "V4 has no division narrative; the key stays so V3 readers do not fail");
+        let narrative = r.data["division"]["E"]["full_description"].as_str().unwrap();
+        assert!(narrative.starts_with("This division includes establishments providing, to the general public or to other business enterprises"), "{narrative}");
+        assert_eq!(division_narrative("?"), "");
         let r = reply(&c, System::Us, Level::Class, "computer", true).await;
         assert_eq!((r.message.as_str(), r.module.as_str()), ("SIC data has been returned for query [computer].", "SICQueries-> get_all_sic_by_name"));
         assert_eq!(r.data["sics"]["Computer Storage Devices"]["code"], "3572");

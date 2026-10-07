@@ -5,6 +5,7 @@ mod errors;
 mod logging;
 mod rate_limit;
 mod sic_endpoints;
+mod v3_edgar;
 mod sql_endpoint;
 mod trusted_origin;
 mod user_agent;
@@ -1487,7 +1488,7 @@ async fn edgar_ciks_v3(
     State(state): State<Arc<AppState>>,
     Path(company_name): Path<String>,
 ) -> impl IntoResponse {
-    edgar_ciks_impl(&state, &company_name).await
+    v3_edgar::ciks(&state, &company_name).await
 }
 
 /// V3's `EdgarQueries.get_all_details(firmographics=True)` - the same
@@ -1534,7 +1535,7 @@ async fn edgar_detail_v3(
     State(state): State<Arc<AppState>>,
     Path(company_name): Path<String>,
 ) -> impl IntoResponse {
-    edgar_grouped_response(&state, &company_name, true).await
+    v3_edgar::detail(&state, &company_name).await
 }
 
 /// V3's `get_all_details(firmographics=False)` - same grouping as
@@ -1574,7 +1575,7 @@ async fn edgar_summary_v3(
     State(state): State<Arc<AppState>>,
     Path(company_name): Path<String>,
 ) -> impl IntoResponse {
-    edgar_grouped_response(&state, &company_name, false).await
+    v3_edgar::summary(&state, &company_name).await
 }
 
 async fn edgar_grouped_response(
@@ -1697,7 +1698,7 @@ async fn edgar_firmographics_v3(
     State(state): State<Arc<AppState>>,
     Path(cik_no): Path<String>,
 ) -> impl IntoResponse {
-    edgar_firmographics_impl(&state, &cik_no).await
+    v3_edgar::firmographics(&state, &cik_no).await
 }
 
 // -------------------------------------------------------------- //

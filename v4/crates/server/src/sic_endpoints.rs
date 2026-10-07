@@ -278,13 +278,13 @@ alias!(sic_industry_v2, "/V2.0/sic/industry/{industry_code}", "SIC (V2.0, alias)
 alias!(sic_major_v2, "/V2.0/sic/major/{major_code}", "SIC (V2.0, alias)", "US SIC major group by code", ("major_code", "SIC major-group code"),
     |state, q| v3_lookup(&state, System::Us, Level::Division, false, &q).await);
 alias!(edgar_ciks_v2, "/V2.0/companies/edgar/ciks/{company_name}", "EDGAR (V2.0, alias)", "CIK numbers for a company name", ("company_name", "Company name"),
-    |state, q| crate::edgar_ciks_impl(&state, &q).await);
+    |state, q| crate::v3_edgar::ciks(&state, &q).await);
 alias!(edgar_detail_v2, "/V2.0/companies/edgar/detail/{company_name}", "EDGAR (V2.0, alias)", "Detailed EDGAR company information", ("company_name", "Company name"),
-    |state, q| crate::edgar_grouped_response(&state, &q, true).await.into_response());
+    |state, q| crate::v3_edgar::detail(&state, &q).await);
 alias!(edgar_summary_v2, "/V2.0/companies/edgar/summary/{company_name}", "EDGAR (V2.0, alias)", "EDGAR company summary", ("company_name", "Company name"),
-    |state, q| crate::edgar_grouped_response(&state, &q, false).await.into_response());
+    |state, q| crate::v3_edgar::summary(&state, &q).await);
 alias!(edgar_firmographics_v2, "/V2.0/company/edgar/firmographics/{cik_no}", "EDGAR (V2.0, alias)", "EDGAR firmographics by CIK", ("cik_no", "CIK number"),
-    |state, q| crate::edgar_firmographics_impl(&state, &q).await);
+    |state, q| crate::v3_edgar::firmographics(&state, &q).await);
 alias!(wikipedia_firmographics_v2_legacy, "/V2.0/company/wikipedia/firmographics/{company_name}", "Wikipedia (V2.0, alias)", "Firmographics from Wikipedia", ("company_name", "Company name"),
     |state, q| crate::wikipedia_firmographics_impl(&state, &q).await.into_response());
 alias_always_200!(merged_firmographics_v2_legacy, "/V2.0/company/merged/firmographics/{company_name}", "Merged (V2.0, alias)", "Merged firmographics from all sources", ("company_name", "Company name"),
