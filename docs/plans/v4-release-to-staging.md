@@ -30,7 +30,7 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 | Item | State | What exists | Next action |
 |---|---|---|---|
 | **1. API docs include SQL, marked experimental** | **Partly done** | The SQL operation is tagged `experimental`, has an "Experimental:" summary, states its access rules and declares the HTTP Basic scheme (`v4-sql-endpoint.md` §5a). | Everything else in step 1 (spec `info.description`, 429 responses, tag descriptions, examples, the spec test). Nothing else is done. |
-| **2. Swagger look and feel** | **Done (2026-10-07)** | `/docs`: base layout (no top bar or logo), Basic credential persists, request duration shown. `/redoc`: served from our own copy of the template (`v4/crates/server/src/redoc.html`) pinned to a light colour scheme. **Decided: both documentation sites stay light.** Verified in the browser with the system theme forced to dark: both render light and readable. | Open, small: `/redoc` loads its script and fonts from `cdn.redoc.ly` and Google Fonts, so the reader's browser needs internet access (on-prem or air-gapped readers would see a blank page); decide whether to bundle them. Branding stays deferred. |
+| **2. Swagger look and feel** | **Done (2026-10-07)** | `/docs`: base layout (no top bar or logo), Basic credential persists, request duration shown. `/redoc`: our own template pinned to a light scheme, **the Redoc 2.5.4 bundle vendored and served by the server (MIT, licences and notices alongside, SHA-256 pinned by a test), and no web fonts**. **Decided: both documentation sites stay light.** Verified in the browser with the system theme forced to dark: both light and readable, and every request the `/redoc` page makes goes to `localhost` (nothing to a CDN or a font host). | Nothing open. Branding stays deferred. |
 | **New E. 15 non-US endpoints and two `/v2/` aliases** | **Not started** | The data (NACE, ISIC, Japan) is loaded; the endpoints do not exist. | Map V3's level names to the flat columns and capture V3's real responses as fixtures. |
 | **3. Python test suite** | **Not started** | `perf_tests/` (performance, covers about seven endpoints with a V4 path) and `v4/scripts/sql-try.sh check` (51 live cases, shell). No `api_tests/`. | Create `api_tests/` with the L0 and L1 layers first. |
 | **4. Parity run on live V3 and V4** | **Not started** | `perf_tests/shadow_compare.py` and the earlier `v3-vs-v4-*.json` results exist. No parity matrix. | Needs step 3 and New E. |
@@ -172,8 +172,14 @@ template sets no colour scheme. It is now served from our own copy of the templa
 background; `$spec` and `$config` kept), through `Redoc::with_url("/redoc", api).custom_html(include_str!("redoc.html"))`. Verified with the browser forced to dark: **both `/docs` and
 `/redoc` render light and readable.**
 
-*Still open (small):* `/redoc` loads `redoc.standalone.js` from `https://cdn.redoc.ly` and its fonts from Google Fonts, so the reader's browser needs internet access (relevant to on-prem or
-air-gapped readers). Decide whether to bundle them; not needed for staging.
+*Self-hosted (done 2026-10-07, the owner asked for it after the licence question):* the `/redoc` page used to load its script from `cdn.redoc.ly` (unpinned, "latest") and its fonts from
+Google Fonts. That needed internet access in the reader's browser, ran whatever Redocly published next, and sent every reader's IP address to Google (a 2022 Munich court found embedding
+Google Fonts that way breached GDPR). Now: Redoc **2.5.4**, the unmodified standalone bundle, is vendored in `v4/crates/server/assets/redoc/` (the pinned URL was byte-identical to what
+the page had been loading), embedded in the binary and served at `/redoc/redoc.standalone.js` (`v4/crates/server/src/docs.rs`); the fonts are the system stack. Licences: Redoc is MIT
+(Rebilly, Inc.), its bundled libraries are MIT and DOMPurify (Apache-2.0 or MPL-2.0); the texts sit next to the file and `v4/THIRD_PARTY_NOTICES.md` lists them, including Swagger UI
+(Apache-2.0). Montserrat and Roboto were OFL, but they are no longer used. Tests pin the bundle's SHA-256, require the licence files beside it, and fail if the page template ever references a third party.
+**Size:** the bundle adds about 1.05 MiB to the binary (about 319 KiB compressed); the lean and small numbers in step 5 were measured before it and each rise by about that much, to be re-measured.
+**Obligation going forward:** anything that redistributes the binary or an image containing it must keep the notices file and the licence files with it (build the image step to copy them).
 
 *Also visible and belonging to step 1:* the SQL group is the bare tag name "experimental" with no description.
 
@@ -406,7 +412,7 @@ creates it.
 **Build requirements (V4):** multi-stage; runtime image carries only the stripped binary, the data directory
 (`COMPANY_DNS_DATA_DIR`), the model (§0.1), and a numeric non-root UID (as V3 does, for Kubernetes `runAsNonRoot`); `HEALTHCHECK`
 on `/health`; built for `linux/amd64` first (the platform that matters), `linux/arm64` second. Data-integrity gate (New A):
-`check_ic_feather.py` runs on every classification file in the build and fails the build on a bad file.
+`check_ic_feather.py` runs on every classification file in the build and fails the build on a bad file. The image must also carry `v4/THIRD_PARTY_NOTICES.md` and the licence files in `v4/crates/server/assets/redoc/` (the vendored Redoc is MIT and requires its notice to travel with any redistribution).
 
 **The hosts (decided, Q2, Q8 and Q9, 2026-10-06): run the images on the Mac Studio and on the amd64 nodes.**
 - **amd64 worker nodes** (two nodes, each over 20 cores and at least 384GB of memory): the authoritative `linux/amd64` numbers, the same

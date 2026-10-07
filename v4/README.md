@@ -104,6 +104,11 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 exactly. Built via `utoipa`/`utoipa-axum` —
 [`docs/plans/v4-openapi-docs.md`](../docs/plans/v4-openapi-docs.md).
 
+Both pages stay in a light theme and load **nothing from a third party**: Swagger UI is embedded by
+`utoipa-swagger-ui`, and ReDoc is a vendored, pinned copy (2.5.4, MIT; `crates/server/assets/redoc/`) embedded in the
+binary and served at `/redoc/redoc.standalone.js`, with the system font stack (no CDN, no Google Fonts), so
+both work on an isolated network. Licences and notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
+
 ## Security
 
 Per-client rate limiting, an inbound `User-Agent` gate, and request
