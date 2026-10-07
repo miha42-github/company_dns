@@ -92,7 +92,8 @@ in the design as written and is scheduled only if it is wanted later.
   stripped** (measured directly: `strip` on a copy of the release
   binary, macOS arm64 build). ~44MB (26%) is symbol table; the
   remaining ~128MB is linked code and data.
-- `v4/Cargo.toml` has **no `[profile.release]` section at all** —
+- **Update 2026-10-06:** `v4/Cargo.toml` now has two named profiles, `release-lean` and `release-small`, and a trimmed DataFusion feature list, with the measured sizes and speeds in
+  [`v4-release-to-staging.md`](v4-release-to-staging.md) step 5 (the numbers below are the earlier measurement, kept as the record). Originally: `v4/Cargo.toml` has **no `[profile.release]` section at all** —
   every release build uses Cargo's plain defaults (`opt-level = 3`,
   `lto = false`, `codegen-units = 16`, `panic = "unwind"`,
   `strip = "none"`). None of the standard binary-size levers are on

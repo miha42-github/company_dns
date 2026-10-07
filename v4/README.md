@@ -33,6 +33,18 @@ apart on DataFusion 42.
 
 ## Running it
 
+**Build profiles.** `cargo build --release` is the quick development build. For a shipped binary there are
+two named profiles, both with fat LTO, one codegen unit and stripped symbols (the DataFusion feature trim, no Parquet and no
+compression codecs, applies to every build):
+
+```bash
+cargo build --profile release-lean    # about 89 MiB stripped; no slower than the plain release build
+cargo build --profile release-small   # about 62 MiB; same speed except scan-heavy SQL (about 28% slower)
+```
+
+Each takes several minutes to build. The sizes were measured on macOS arm64 and the choice between them is confirmed after
+testing on Linux (`docs/plans/v4-release-to-staging.md`, step 5). The binary lands in `target/release-lean/` or `target/release-small/`.
+
 **Data directory.** Every data file lives in one directory, named by
 `COMPANY_DNS_DATA_DIR`. For now, in development, point it at the repo's
 top-level `tmp/` (the same place the SIC files are staged by hand):

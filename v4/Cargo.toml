@@ -20,7 +20,11 @@ publish = false
 # process at all (a chrono-version conflict on DataFusion 42.2.0,
 # edgar-backend.md sec2.1).
 [workspace.dependencies]
-datafusion = "55"
+# Parquet and the compression codecs are off: V4 never reads Parquet (the data is Arrow IPC)
+# and measured 7 MiB smaller with no behaviour change. Every other default stays, including the
+# SQL expression-function libraries (they cost 0.1 MiB under LTO, and the SQL endpoint uses them).
+# docs/plans/v4-release-to-staging.md step 5.
+datafusion = { version = "55", default-features = false, features = ["nested_expressions", "crypto_expressions", "datetime_expressions", "encoding_expressions", "regex_expressions", "string_expressions", "unicode_expressions", "recursive_protection", "sql"] }
 edgarkit = "0.4.0"
 chrono = "0.4"
 moka = { version = "0.12", features = ["future"] }
@@ -73,3 +77,23 @@ regex = "1"
 base64 = "0.22"
 html2text = "0.17"
 thiserror = "2"
+
+# ---------------------------------------------------------------------------------------------
+# Release size options, measured 2026-10-06 (docs/plans/v4-release-to-staging.md step 5). Both are
+# kept so the side-by-side tests can build and compare them; the choice is confirmed after testing.
+# Plain `cargo build --release` is left alone (fast builds for development).
+#
+#   cargo build --profile release-lean    ~89 MiB stripped on macOS arm64; no slower than the old release build
+#   cargo build --profile release-small   ~62 MiB; same speed except scan-heavy SQL (about 28% slower)
+#
+# `panic = "abort"` stays off (a panicking request must not take the server down) and `opt-level`
+# "z" is rejected (1.7x to 6x slower). Builds take about 9 minutes (lean) and 6 (small).
+[profile.release-lean]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+
+[profile.release-small]
+inherits = "release-lean"
+opt-level = "s"
