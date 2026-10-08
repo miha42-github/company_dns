@@ -318,7 +318,7 @@ whole V3-parity surface and states what "parity" means.
 These are the `/V3.0/` and `/V2.0/` aliases only; the `/V4.0/` paths keep V4's shape, which the UI uses. Q14 closed the three smaller gaps; merged stays a recorded difference. The EDGAR `summary` answer now uses V3's message and module strings too.
 
 **Known intentional differences recorded from New E (2026-10-07), against V3 production:** a no-match is a JSON 404 envelope (V3 answered with an HTML page); the `dependencies` block is V4's; V3's US `division` answer
-carries a `full_description` narrative, which V4 serves from `v4/crates/sic/data/us_division_narratives.json` (generated from `source_data/sic_data/divisions.csv`, V3's text), so that answer is identical; V4's Japan file is the corrected one, so Japan division and group descriptions are upper-case
+carries a `full_description` narrative, which V4 serves from `v4/crates/sic/data/us_division_narratives.json` (generated from `source_data/sic_data/divisions.csv`, V3's text), so that answer is identical; V4's Japan file is the corrected one, so Japan division and group descriptions are upper-case (**confirmed by the owner on 2026-10-08: the government's English source HTML gives group names in upper case, and V3 was built from a partial extract of that project; source: https://www.soumu.go.jp/english/dgpp_ss/seido/sangyo/san13-3a.htm#a, JSIC Rev. 13, which prints `09 MANUFACTURE OF FOOD` and `091 LIVESTOCK PRODUCTS`, read 2026-10-08**)
 and a Japan description search finds more classes (18 against V3's 13 for "food"); a `/V4.0/` answer is a list, not V3's dictionary.
 
 **Other known intentional differences to record up front** (all from existing plans, not new decisions): the merged
