@@ -1,214 +1,195 @@
-# V4 data gaps found by the V3 parity run
+# Data package work item: the US SIC file and its division narrative
 
-Work item for a coding assistant (for example GitHub Copilot). Self-contained: everything needed is in this file and the repo.
-Found 2026-10-07 by `api_tests/parity_report.py` against production V3. These are **data** differences, not shape differences
-(the shapes match, apart from Gap 0 which is a pipeline problem; see `docs/plans/v4-release-to-staging.md`, step 4, decision Q14).
+A brief for an engineer or coding agent who has not seen this project before. You do not need to know anything about earlier
+versions of the service. Everything you need is in this file and the repository. Facts below were checked on 2026-10-08,
+after two deliveries of a corrected US data file (the second, `us_flat_embedded.feather` dated 2026-10-08 06:06, is the current one).
 
-## Gap 0: the US division narrative is missing from the data pipeline (symptom patched, cause open)
+## 1. Context in five lines
 
-| | |
-|---|---|
-| Request | `GET /V3.0/na/sic/division/E` |
-| V3 | `full_description` carries the division narrative ("This division includes establishments providing, ...") |
-| V4 before | `full_description` was empty |
-| V4 now | filled from `v4/crates/sic/data/us_division_narratives.json`, a **hand-generated copy** of `source_data/sic_data/divisions.csv` (`Full Description` column), committed in `2025b52` |
+- This repository serves industry-classification and company data over an HTTP API (the Rust server in `v4/`).
+- The classification data is loaded at startup from **flat data files** in the directory named by `COMPANY_DNS_DATA_DIR`
+  (on the author's machine `/Users/mihay42/dev/company_dns/tmp/`; it is not committed).
+- The files are supplied by the data owner (Mediumroast). The step that produces them **is not in this repository**; the repository
+  only holds a validator for them (`docs/plans/research/check_ic_feather.py`) and notes on defects found in earlier deliveries
+  (`docs/plans/research/*-defects.md`).
+- When a new delivery of the files arrives, the server must work with it without anyone patching code.
+- Your job is described in section 3. Sections 4 and 5 are two findings that are **not defects**; they are here so nobody
+  re-opens them, plus one small check.
 
-**The symptom is patched; the problem is not.** The US SIC table (`sic_data`) is loaded from a prebuilt data file whose
-schema has no narrative column, so any new data file from Mediumroast that is built the same way loses the narrative again.
-The JSON side file works around that: nothing regenerates it (the one-off script was not committed), it can drift from the
-CSV, and it only covers the US divisions.
+| # | Item | Verdict | What you do |
+|---|---|---|---|
+| 1a | The old US SIC file had no column for the division narrative text | **Fixed in the data** (new delivery, 2026-10-08); the server does not use it yet | Section 3.3: switch the server to the column, remove the stopgap |
+| 1b | The first new file's narratives for sections A, B, C and G ended with a stray space | **Fixed in the data** (second delivery, 2026-10-08 06:06; validator passes) | Section 3.2: keep the server trim as a safeguard |
+| 2 | EDGAR catalog does not contain one company a reference system finds | **Not a defect**: the company is outside the catalog's stated scope | Section 4: document, no code change |
+| 3 | Japan SIC descriptions are upper case and there are more of them than a reference system returns | **Not a defect**: the data matches the official source | Section 5: one completeness check |
 
-**Tasks**
-1. Find where the prebuilt SIC data file is produced (the embedding / ingest step that adds the vector columns) and why it drops
-   `Full Description`. Document the pipeline end to end in this file: inputs, steps, outputs, who runs it.
-2. Carry the narrative through the pipeline (a `section_full_desc` column or a small companion table), so it ships in the same
-   data file as the rest of the SIC data. Serve it from there in `v4/crates/sic/src/systems.rs`.
-3. Remove `v4/crates/sic/data/us_division_narratives.json` and the `include_str!` once the column exists. If a data file
-   without the column is loaded, the server must log a warning and fall back to an empty `full_description`, not fail.
-4. Add a data-readiness test (`api_tests/test_data_readiness.py`) that every US division A to J has a non-empty narrative, so a new
-   data file that drops it fails the suite instead of reaching production.
-5. Check the other systems (NACE, ISIC, Japan) for columns present in `source_data/` and absent from the loaded tables, and list any.
+## 2. Vocabulary
 
-### Gap 0 handoff package (everything that was added, so nothing needs asking)
+- **Section / division / group / class**: the four levels of the US Standard Industrial Classification. Section is a letter A to J
+  ("Transportation, Communications, Electric, Gas, And Sanitary Services" is section E). Division is a 2-digit code (40), group
+  is 3 digits (401), class is 4 digits (4011). In the data file the columns are named `section_*`, `division_*`, `group_*`, `class_*`.
+- **Narrative**: a long paragraph in the official classification that explains what a section covers (500 to 5,500 characters).
+  The CSV column is called `Full Description`; the API field is `full_description`.
+- **Reference system**: an older production service ("V3") that the new server was compared with, request by request. It is
+  used here only as evidence of what the answers should contain. It is not part of this repository.
 
-**Where the US SIC data comes from.** `v4/crates/server/src/main.rs` (around line 139) resolves `SIC_DATA_PATH`, default file
-`us_flat_embedded.feather`, in `COMPANY_DNS_DATA_DIR`; `SicCatalog::open` (`v4/crates/sic/src/lib.rs`) reads it with DataFusion
-`read_arrow` and registers it as table `sic_data` (columns used: `section_id`, `section_desc`, `division_id`, `division_desc`,
-`group_id`, `group_desc`, `class_id`, `class_desc`, plus vector columns that the SQL endpoint hides). This file is a
-Mediumroast artifact built outside this repo's Rust code (the embedding step adds the vectors): **find what builds it** (search
-this repo, `source_data/`, `scripts/`, and ask the owner if it is not here), and inspect its schema, for example with
-`pyarrow.ipc.open_file(...).schema`. The other systems load the same way: `JAPAN_SIC_DATA_PATH` (`sic_data_japan`), the NACE
-file (`sic_data_nace`), and `ISIC_DATA_PATH` (`sic_data_isic`).
+## 3. Item 1: the US SIC division narrative
 
-**The source text.** `source_data/sic_data/divisions.csv` (25,651 bytes) has the header `Division,Description,Full Description`
-and 10 rows, A to J. The `Full Description` column is the narrative V3 serves. Its length per division, in characters:
-A 2650, B 1902, C 5550, D 4981, E 1970, F 3161, G 3312, H 699, I 588, J 510. Division E begins
-"This division includes establishments providing, to the general public or to other business enterprises, passenger and
-freight transportation, communications services, electricity, gas, and sanitary services". The other source CSVs in the same
-directory are `industry-groups.csv`, `major-groups.csv` and `sic-codes.csv`.
+### 3.1 Background and what the delivery contains
 
-**What was added in commit `2025b52`.**
-- `v4/crates/sic/data/us_division_narratives.json` (25,425 bytes): a flat object `{"A": "<narrative>", ..., "J": "<narrative>"}`
-  with the same text as the CSV column. Generated once with this script, which was **not committed**:
-  ```python
-  import csv, json
-  d = {r['Division']: r['Full Description'] for r in csv.DictReader(open('source_data/sic_data/divisions.csv'))}
-  json.dump(d, open('v4/crates/sic/data/us_division_narratives.json', 'w'), indent=1, ensure_ascii=False)
-  ```
-- `v4/crates/sic/src/systems.rs`: the function `division_narrative(division: &str) -> String` loads that JSON once
-  (`OnceLock<HashMap>` over `include_str!("../data/us_division_narratives.json")`, empty string when the division is absent),
-  and the `System::Us` / `Level::Section` branch puts it in the entry as `full_description`. The unit test in the same file
-  asserts division E's text starts with "This division includes establishments providing, to the general public or to other business enterprises".
-- `api_tests/test_non_us_sic.py::V3Parity::test_us_division_matches_including_the_narrative` asserts the whole `/V3.0/na/sic/division/E`
-  `data` equals V3's fixture `api_tests/fixtures/v3/us_division_E.json`.
-- `api_tests/test_edgar_wikipedia_parity.py::V3ShapedEdgar::test_us_division_carries_v3s_full_description` asserts the same field.
-- Docs that mention it: `docs/plans/v4-release-to-staging.md` (known intentional differences paragraph) and `v4/README.md` (non-US section).
-  Update both when the side file is gone.
+The API must return a long explanatory paragraph (the **narrative**) for each US SIC section on
+`GET /V3.0/na/sic/division/{letter}`, in the field `data.division.{letter}.full_description`. The text lives in the repository's
+source data, `source_data/sic_data/divisions.csv` (header `Division,Description,Full Description`, 10 rows, A to J).
 
-**How to see the current behaviour.** Build with `cd v4 && cargo build --profile release-lean --bin company-dns-server` (about 7
-minutes), run it from `v4/crates/server` with the data directory set, then
-`curl localhost:4000/V3.0/na/sic/division/E` and compare with the fixture; `python3 api_tests/parity_report.py` compares all 25
-requests against production V3 (be polite: one request a second).
+The **old** `us_flat_embedded.feather` (1,005 rows, one per 4-digit class) had no column for it, so the server could not answer
+from the data. As a stopgap, commit `2025b52` added a hand-generated side file that the server reads instead (section 3.4).
 
-**Definition of done for Gap 0.** The narrative reaches `sic_data` (or a companion table) through the data pipeline; the
-JSON file and `include_str!` are deleted; a data file without the column logs a warning and yields an empty `full_description`
-(no startup failure); a data-readiness test fails when any division A to J lacks its narrative; the pipeline is documented in
-this file; both docs above are updated; both test suites pass.
+The **current** `us_flat_embedded.feather` (delivered 2026-10-08 06:06, 1,509,186 bytes) adds one column, `section_full_desc`
+(placed right after `section_desc`; read it by name, not by position), repeated on every row of the section. Verified:
 
-## Gap 1: the EDGAR catalog is missing a company V3 finds
-
-| | |
-|---|---|
-| Request | `GET /V3.0/na/companies/edgar/ciks/Apple` |
-| V3 | 8 companies, including `"PINEAPPLE, INC."` (CIK `1654672`) |
-| V4 | 7 companies; `PINEAPPLE, INC.` is absent |
-| Evidence | fixture `api_tests/fixtures/v3/edgar_ciks_apple.json`; run `python3 api_tests/parity_report.py` and read the `edgar_ciks_apple` line |
-
-**Hypothesis to verify first:** V3 searches the SEC's full company list; V4 searches a catalog built by `ingest-edgar`
-(`v4/crates/edgar/src/periods.rs`, default window of recent quarters from the SEC form index), so a company with no filing in
-the window is not in it. Confirm by checking whether CIK 1654672 has filings in the ingested quarters and what window the
-current catalog covers.
-
-**Tasks**
-1. Establish the cause (window too short, a form-type filter, name normalisation, or an ingest bug). Write the finding in this file.
-2. Fix it in `ingest-edgar` or the catalog query (`find_by_name`, `find_grouped_by_name` in `v4/crates/edgar/`), without
-   changing the catalog's size beyond what is justified (state the before and after row counts and ingest time).
-3. Add a test: a Rust unit test for the cause, and make `api_tests/test_edgar_wikipedia_parity.py::V3ShapedEdgar` also assert
-   that `ciks/Apple` contains every company name in the V3 fixture (a data check, skipped when the catalog is not loaded).
-
-## Gap 2: Japan SIC description search returns a different set than V3 (decided 2026-10-08: V4 is right, case is an intentional difference)
-
-| | |
-|---|---|
-| Request | `GET /V3.0/japan/sic/description/food` |
-| V3 | 13 entries, keyed by mixed-case descriptions (`Manufacture of food`, `Seafood products`, ...) |
-| V4 | 18 entries from the corrected file (15 entries V3 lacks such as `Cured food`, `Food processing services`) |
-| Related | `GET /V3.0/japan/sic/major_group/09` and `/group/091`: V4's `description` is upper-case (`MANUFACTURE OF FOOD`) where V3 is `Manufacture of food` |
-
-**Source (owner-supplied, 2026-10-08):** <https://www.soumu.go.jp/english/dgpp_ss/seido/sangyo/san13-3a.htm#a> (Japan's Ministry of Internal Affairs and Communications, English Japan Standard Industrial Classification). Fetching it is a download-free read; cite it, do not copy the page into the repo.
-
-**Evidence (page read 2026-10-08).** The page is the Japan Standard Industrial Classification (Rev. 13, October 2013), Structure and
-Explanatory Notes. It prints major group and group names in upper case: `09     MANUFACTURE OF FOOD`, and under it
-`091     LIVESTOCK PRODUCTS` (group 091), while class-level (4-digit) names are in sentence case (`0911  Frozen meat and subprimal
-products`). It also contains `Sozai` and `Cured food`, two of the entries V4 has and V3 lacks. So V4's upper case is the
-source's text for major groups and groups, and the extra entries are in the source. The page has about 1,400 four-digit rows.
-One open question for task 1: V3's description-search keys such as `Manufacture of food` are the same names in sentence
-case, so V3 (or its extract) lower-cased them.
-
-**Decision (owner, 2026-10-08).** The English source HTML from the Japanese government's classification gives group names in
-upper case, so V4's upper-case descriptions are the source's own text. V3's Japan implementation was built from a partial
-extract of that project, not the full system, which is why it has fewer entries and different case. **V4 is correct; do not
-normalise the case on any path, and do not change the stored data.** The upper-case descriptions are a recorded, intentional
-difference from V3 (already listed in `docs/plans/v4-release-to-staging.md`).
-
-**Tasks (what remains)**
-1. Compare case-insensitively: list which V3 descriptions have no V4 counterpart at all (not just a different case). Report the
-   list here. Any that are missing from V4 are a real loss to explain (the extract may use older wording), not a case issue.
-2. Replace the V3 comparison tests for Japan with tests that encode the decision, in `api_tests/test_non_us_sic.py::V3Parity`:
-   Japan `description` values compare equal to V3's fixtures case-insensitively (`japan_major_09`, `japan_group_091`), and every
-   V3 `japan_desc_food` entry that has a V4 counterpart matches it case-insensitively, with the missing ones from task 1 listed
-   as an explicit allow-list.
-3. Make `api_tests/parity_report.py` compare Japan descriptions case-insensitively (and report the extra V4 entries as
-   "V4 has more", not as a difference), so the report stops flagging an intended difference.
-4. (Done 2026-10-08, see Evidence below; nothing left to do.)
-
-## Examples: wrong and right output (CSV)
-
-"Wrong" is what V4 returned (or would return from a new data file that lacks the data); "right" is what production V3 returns and
-V4 must match (except Gap 2, where V4 is right and V3 is the partial extract). Values were captured on 2026-10-07. Each row is one field of the response.
-
-### Gap 0: `GET /V3.0/na/sic/division/E`, field `data.division.E`
+- Row count is still 1,005; every pre-existing column is identical to `us_flat.feather`; the 384-dimension vectors have no nulls.
+- Each section has exactly one narrative, and it equals the CSV text with surrounding whitespace removed.
+- The file grew by only 13 KB, so repeating the text per row is not a size problem (the file is compressed). Use this column; a
+  companion table is not needed.
 
 ```csv
-case,description,full_description_chars,full_description_starts_with
-"wrong (V4 before 2025b52, or a new data file without the column)","Transportation, Communications, Electric, Gas, And Sanitary Services",0,
-"right (V3, and V4 now)","Transportation, Communications, Electric, Gas, And Sanitary Services",1970,"This division includes establishments providing, to the general public or to other business enterprises, passenger and freight transportation, communications services, electricity, gas, and sanitary services"
-```
-
-Expected character counts for every division (the readiness test should assert each is greater than zero, and these exactly):
-
-```csv
-division,full_description_chars
-A,2650
-B,1902
-C,5550
+section,full_description_chars
+A,2649
+B,1901
+C,5549
 D,4981
 E,1970
 F,3161
-G,3312
+G,3311
 H,699
 I,588
 J,510
 ```
 
-### Gap 1: `GET /V3.0/na/companies/edgar/ciks/Apple`, field `data.companies`
+The validator passes on this file (`PASS`, no failures).
+
+### 3.2 Defect 1b (fixed in the second delivery): stray trailing space in four narratives
+
+History, so the safeguard below makes sense. The first corrected file (dated 2026-10-08 05:42) failed the validator on **179 rows**
+(`python3 docs/plans/research/check_ic_feather.py <path>/us_flat_embedded.feather`, check "full-width char, NBSP, tab/newline, stray or
+double spaces in English text"): every row of sections A (58), B (31), C (26) and G (64) had a narrative ending in one space. The
+space came from the source text (`divisions.csv`). The second delivery strips it, and the validator now passes.
+
+Wrong (first delivery) and right (current) for the end of each narrative:
 
 ```csv
-company_name,cik,v3_right,v4_wrong_today
-"Apple Hospitality REIT, Inc.",1418121,yes,yes
-Apple Inc.,320193,yes,yes
-"Apple iSports Group, Inc.",1134982,yes,yes
-MAUI LAND & PINEAPPLE CO INC,63330,yes,yes
-PINEAPPLE EXPRESS CANNABIS Co,1710495,yes,yes
-"PINEAPPLE, INC.",1654672,yes,MISSING
-Pineapple Energy Inc.,22701,yes,yes
-Pineapple Financial Inc.,1938109,yes,yes
+section,length_first_delivery,length_current,last_14_chars_first_delivery,last_14_chars_current
+A,2650,2649,"ps 01 and 02. |","s 01 and 02.|"
+B,1902,1901,"stablishment. |","tablishment.|"
+C,5550,5549," restaurants. |","restaurants.|"
+G,3312,3311,"ry Group 596. |","y Group 596.|"
 ```
 
-`data.totalCompanies` must be 8 (V4 returns 7).
+(The `|` marks the end of the string and is not part of the data.)
 
-### Gap 2: Japan SIC descriptions
+**Tasks for 1b (small, because the data is fixed)**
+1. Keep the validator rule as it is; do not relax it.
+2. Keep the server tolerant: when it reads `section_full_desc` (3.3), apply `trim()` to the value, so the API output stays clean even
+   if a later delivery regresses. Add a Rust unit test with a value `"text. "` that expects `"text."`.
+3. `source_data/sic_data/divisions.csv` still has the trailing space on the four rows (A, B, C, G). Remove it there too, so the
+   repository's source matches the delivered data; confirm the other six rows have none.
 
-`GET /V3.0/japan/sic/major_group/09` and `GET /V3.0/japan/sic/group/091`, field `description`:
+### 3.3 Tasks for 1a: use the column in the server
 
-```csv
-request,code,v3_partial_extract,v4_correct_per_source
-major_group/09,09,Manufacture of food,MANUFACTURE OF FOOD
-group/091,091,Livestock products,LIVESTOCK PRODUCTS
-```
+1. **Read the column.** In `v4/crates/sic/src/systems.rs`, change `division_narrative` (and the `System::Us` / `Level::Section` branch that
+   calls it) to take the narrative from the loaded `sic_data` rows (`section_full_desc`) instead of the side file. The query that
+   builds section rows is in `v4/crates/sic/src/lookup.rs` and `systems.rs` (`find_in_system`); the table is registered in
+   `SicCatalog::open` (`v4/crates/sic/src/lib.rs`).
+2. **Fail soft on old files.** If a data file has no `section_full_desc` column, log one warning at startup and return an empty
+   `full_description` for that file. The server must not refuse to start. Add a test using `us_flat.feather` (which lacks the column).
+3. **Remove the stopgap** (3.4): delete `v4/crates/sic/data/us_division_narratives.json` and the `include_str!`/`OnceLock`
+   code, and update the unit test in `systems.rs` that checks division E's text.
+4. **Add a data-readiness test** in `api_tests/test_data_readiness.py`: `GET /V3.0/na/sic/division/{A..J}` returns a non-empty
+   `full_description` with no leading or trailing whitespace, and with these exact lengths after trimming:
+   A 2649, B 1901, C 5549, D 4981, E 1970, F 3161, G 3311, H 699, I 588, J 510.
+5. **Validator check for presence.** In `docs/plans/research/check_ic_feather.py`, for `ic_module == "us"`, fail when `section_full_desc` is missing or
+   empty for any section A to J. (The existing hygiene check already covers whitespace once the column exists.)
+6. **Look for the same omission elsewhere.** For NACE, ISIC and Japan, list any column or table in `source_data/` that the feather
+   files lack and report it in "Results" (do not fix it in this change).
+7. **Update docs**: the "known intentional differences" paragraph in `docs/plans/v4-release-to-staging.md` and the non-US paragraph in
+   `v4/README.md` both mention the narrative; make them say it comes from the data file.
 
-`GET /V3.0/japan/sic/description/food`, first entries of `data.industry_groups` (V3 has 13, V4 has 18):
+### 3.4 The stopgap that exists today (you will remove it)
 
-```csv
-source,description_key,code,group_code,major_group_code,division_code
-V3 partial extract,"Eating and drinking places, and Food tale out and delivery services",M2,759,75,M
-V3 partial extract,"Food and beverage stores, n.e.c.",58B,589,58,I
-V3 partial extract,Food and beverages,522,522,52,I
-V4 has more (correct),"""Sozai"" (side-dish foods)",0996,099,09,E
-V4 has more (correct),Canned or bottled seafood and seaweed,0921,092,09,E
-V4 has more (correct),"Convenience stores, primarily for sale of food and beverages",5891,589,58,I
-```
+- `v4/crates/sic/data/us_division_narratives.json`: a flat JSON object `{"A": "<text>", ..., "J": "<text>"}`, generated once from the CSV with
+  this script, which was not committed:
+  ```python
+  import csv, json
+  d = {r['Division']: r['Full Description'] for r in csv.DictReader(open('source_data/sic_data/divisions.csv'))}
+  json.dump(d, open('v4/crates/sic/data/us_division_narratives.json', 'w'), indent=1, ensure_ascii=False)
+  ```
+- `v4/crates/sic/src/systems.rs`: the function `division_narrative(division)` loads that file (`include_str!`, once, into a
+  `HashMap`; empty string when the section is missing).
 
-The upper-case text and the extra V4 entries are correct (owner's check of the source HTML, 2026-10-08); V3 is the partial extract. These rows show the intended difference, not a defect.
+It is not acceptable as the end state: nothing regenerates the JSON, so it can drift from the CSV and from future data deliveries.
+(It also carries the same four trailing spaces, since it was copied from the CSV.)
 
-## Acceptance (all gaps)
-- Gap 0: no side data file remains, and the division narrative test fails when the column is absent.
-- `python3 api_tests/parity_report.py` shows `edgar_ciks_apple` IDENTICAL, and the Japan rows IDENTICAL or differing only by case and the extra V4 entries (Gap 2, intended).
-- `cd v4 && cargo test -p company-dns-sic -p company-dns-server` and `API_TESTS_NETWORK=1 python3 api_tests/run.py --network` pass.
-- Update the "Known intentional differences" paragraph in `docs/plans/v4-release-to-staging.md` to match what remains.
+### 3.5 Definition of done
 
-## Constraints
-- Do not commit credentials, tokens or `v4/.local/`. Do not call the production V3 service more than once a second, and
-  identify yourself in the `User-Agent`.
-- The `/V4.0/` response shapes do not change.
-- Build profile for the timing runs is `release-lean` (`cargo build --profile release-lean --bin company-dns-server`, about 7 minutes).
+- The server serves `full_description` from `section_full_desc` in the data file; the JSON file and the `include_str!` are gone.
+- `curl localhost:4000/V3.0/na/sic/division/{A..J}` returns the trimmed lengths in task 4 above.
+- Loading `us_flat.feather` (no column) starts the server, logs one warning, and returns `""`.
+- The validator fails on a US file that lacks the narrative, and passes on the current file (and fails if the narratives regain stray whitespace).
+- `cd v4 && cargo test -p company-dns-sic -p company-dns-server` passes, and `API_TESTS_NETWORK=1 python3 api_tests/run.py --network` passes against a running server.
+- "Results" (end of this file) lists what changed, and the other-systems omission list.
+
+## 4. Item 2 (not a defect): the EDGAR catalog does not contain "PINEAPPLE, INC."
+
+**Observation.** `GET /V3.0/na/companies/edgar/ciks/Apple` returns 7 companies. The reference system returns 8: the extra one is
+`PINEAPPLE, INC.` (CIK 1654672).
+
+**Finding (checked 2026-10-08).** The catalog file, `edgar_10x_catalog.feather` (72,813 rows; columns `cik, company_name, form_type,
+year, month, day, accession, url`), is built by `ingest-edgar` (`v4/crates/edgar/src/periods.rs`) from the SEC's quarterly filing
+indexes for **10-K and 10-Q forms in the last eight completed quarters** (2024 to 2026 in the current file). It contains no row
+for CIK 1654672. The SEC's own record for that company (`https://data.sec.gov/submissions/CIK0001654672.json`) shows its last
+10-Q on 2024-01-12, an `NT 10-K` on 2024-04-01 and a `15-12G` (deregistration) on 2024-05-07, so it has no 10-K or 10-Q in the window.
+The catalog is working as designed: it lists companies that have recently filed periodic reports. The reference system searched a
+larger list.
+
+**Tasks.**
+1. Record this finding in `docs/plans/v4-release-to-staging.md` as an intentional difference: "the EDGAR catalog covers 10-K and
+   10-Q filers in a rolling eight-quarter window; companies that stopped filing before the window (for example PINEAPPLE, INC.,
+   CIK 1654672) are not returned."
+2. Add that sentence to the description of the EDGAR `ciks` operation in the API docs (`v4/crates/server/src/main.rs`, the
+   `utoipa::path` for `edgar_ciks`), so users know the scope.
+3. Do **not** widen the window or change `ingest-edgar` unless the owner asks. If the owner does want lapsed filers, the change is to the form-type
+   filter and the window in `periods.rs`; report the row-count and ingest-time cost first.
+4. In `api_tests/test_edgar_wikipedia_parity.py`, the `ciks` test compares only the structure, so no test change is needed.
+
+## 5. Item 3 (not a defect): Japan SIC descriptions
+
+**Observation.** `GET /V3.0/japan/sic/major_group/09` returns `MANUFACTURE OF FOOD`; the reference system returns
+`Manufacture of food`. `GET /V3.0/japan/sic/description/food` returns 18 entries here and 13 there.
+
+**Finding (checked 2026-10-08).** The official source,
+<https://www.soumu.go.jp/english/dgpp_ss/seido/sangyo/san13-3a.htm> (Japan Standard Industrial Classification, Rev. 13, October
+2013), prints major-group and group names in upper case (`09 MANUFACTURE OF FOOD`, `091 LIVESTOCK PRODUCTS`) and class names in
+sentence case (`0911 Frozen meat and subprimal products`). It contains the entries that only this server returns (for example
+`Sozai`, `Cured food`). The reference system was built from a partial extract of that classification. The data here is right.
+**Do not change the case and do not change the stored data.**
+
+**Task (one check, report only).** Compare the descriptions the server holds for Japan (`japan_rev13_flat_embedded.feather`, 1,460
+class rows) with the entries on the source page. List, in this file, any entry on the page that the file lacks, and any file
+entry whose text differs from the page other than by case. An empty list is a valid result. The author fetched the page once;
+fetch it with a normal browser User-Agent, no more than once, and cite it rather than copying it into the repository.
+
+## 6. How to run things
+
+- Build the server: `cd v4 && cargo build --profile release-lean --bin company-dns-server` (about 7 minutes; `cargo build` is faster for debug).
+- Run it: `cd v4/crates/server && COMPANY_DNS_DATA_DIR=<dir with the feather files> ../../target/release-lean/company-dns-server` (port 4000).
+- Rust tests: `cd v4 && cargo test -p company-dns-sic -p company-dns-server`.
+- API tests (Python standard library only): `API_TESTS_NETWORK=1 python3 api_tests/run.py --network` (against `http://localhost:4000`).
+- Validator for the data files: `python3 docs/plans/research/check_ic_feather.py <file.feather>` (needs `pyarrow`).
+- Optional comparison against the reference service: `python3 api_tests/parity_report.py` (one request a second, self-identifying User-Agent).
+
+## 7. Constraints
+
+- Do not commit credentials, tokens, `v4/.local/`, or the data files (`tmp/` is gitignored).
+- The response shapes of the `/V4.0/` endpoints must not change.
+- Do not call the reference service or the SEC faster than one request a second, and identify yourself in the `User-Agent`.
+- Report what you changed and what you could not verify, in this file's "Results" section (add it at the end).
