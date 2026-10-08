@@ -208,6 +208,7 @@ mod tests {
             group_desc: Some("Computer And Office Equipment".into()),
             class_id: Some("3571".into()),
             class_desc: Some("Electronic Computers".into()),
+            section_full_desc: None,
         }
     }
 

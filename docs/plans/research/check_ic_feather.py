@@ -100,6 +100,14 @@ if module == "japan_rev13":
     ja = [f"{l}_desc_ja" for l in LEVELS if f"{l}_desc_ja" in cols]  # subclass_desc_ja is empty by design
     check("Japanese level column missing, empty, or without Japanese characters", (len(LEVELS) - len(ja)) * n + sum(1 for r in rows for c in ja if not r[c] or not jp(r[c])))
 
+if module == "us":
+    nar = {}
+    for r in rows:
+        nar.setdefault(r["section_id"], set()).add(r.get("section_full_desc") or "")
+    missing = [k for k in "ABCDEFGHIJ" if not (nar.get(k) and all(nar[k]))]
+    check("US section narrative (section_full_desc) missing or empty for a section A-J (name the sections)", len(missing) if "section_full_desc" in cols else len(set("ABCDEFGHIJ")), missing if "section_full_desc" in cols else ["column section_full_desc is absent"])
+    check("US section has more than one distinct narrative", sum(len(v) > 1 for v in nar.values()))
+
 print("-- vectors (structure only; re-embedding is a separate step)")
 vecs = t.column("vector_all_minilm_l6_v2").to_pylist()
 norms = [math.sqrt(sum(x * x for x in v)) for v in vecs]

@@ -147,6 +147,12 @@ async fn main() -> anyhow::Result<()> {
     .into_owned();
     tracing::info!("Loading US SIC data from {sic_path}...");
     let mut sic = SicCatalog::open(&sic_path).await?;
+    if !sic.has_us_section_narrative().await {
+        tracing::warn!(
+            "US SIC data file {sic_path} has no `section_full_desc` column: `full_description` on the US division lookups will be empty. \
+             Use a delivery that includes it (docs/plans/v4-data-gaps.md)."
+        );
+    }
 
     // docs/plans/sic-global-search.md: additional classification
     // systems register into the same catalog as they land, staged by
@@ -1459,7 +1465,7 @@ async fn edgar_ciks_impl(state: &AppState, company_name: &str) -> axum::response
     get,
     path = "/V4.0/na/companies/edgar/ciks/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
-    responses((status = 200, description = "CIK matches", body = ApiEnvelope),
+    responses((status = 200, description = "CIK matches. The catalog covers companies that filed a 10-K or 10-Q in a rolling window of the last eight completed quarters; companies that stopped filing before the window are not returned.", body = ApiEnvelope),
         (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),
@@ -1477,7 +1483,7 @@ async fn edgar_ciks(
     get,
     path = "/V3.0/na/companies/edgar/ciks/{company_name}",
     params(("company_name" = String, Path, description = "Company name (fuzzy match)")),
-    responses((status = 200, description = "CIK matches", body = ApiEnvelope),
+    responses((status = 200, description = "CIK matches. The catalog covers companies that filed a 10-K or 10-Q in a rolling window of the last eight completed quarters; companies that stopped filing before the window are not returned.", body = ApiEnvelope),
         (status = 404, description = "No match for this query, or nothing found upstream", body = ApiEnvelope),
         (status = 401, description = "A wrong HTTP Basic credential was sent (an Authorization header that does not match a profile). Calls with no credential are not affected.", body = ApiEnvelope),
         (status = 429, description = "Rate limit exceeded; Retry-After says how many seconds to wait. A self-identifying User-Agent gets a higher limit, and an authenticated profile may have its own quota.", body = ApiEnvelope),

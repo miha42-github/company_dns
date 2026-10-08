@@ -51,6 +51,21 @@ class ClassificationSystems(ServerTestCase):
         self.assertEqual((status, len(body["data"])), (200, 3))
 
 
+class UsDivisionNarratives(ServerTestCase):
+    """Every US SIC section (A-J) has its narrative, from the data file's `section_full_desc` column (docs/plans/v4-data-gaps.md)."""
+
+    LENGTHS = {"A": 2649, "B": 1901, "C": 5549, "D": 4981, "E": 1970, "F": 3161, "G": 3311, "H": 699, "I": 588, "J": 510}
+
+    def test_each_division_has_its_trimmed_narrative(self):
+        for letter, length in self.LENGTHS.items():
+            with self.subTest(division=letter):
+                status, body, _ = get(f"/V3.0/na/sic/division/{letter}")
+                self.assertEqual(status, 200)
+                text = body["data"]["division"][letter]["full_description"]
+                self.assertEqual(text, text.strip(), "no leading or trailing whitespace")
+                self.assertEqual(len(text), length)
+
+
 class EdgarCatalog(ServerTestCase):
     def filings(self, name):
         status, body, _ = get("/V4.0/na/companies/edgar/summary/" + quote(name))

@@ -21,8 +21,8 @@
 //! Known, intentional differences from V3 (recorded in `docs/plans/v4-release-to-staging.md`): the
 //! `dependencies` block is V4's, a no-match is a JSON 404 envelope (V3 answered with an HTML 404 page), V4's
 //! Japan and NACE data are the corrected files, and V3's US `division` answer also carries a
-//! `full_description` narrative, which comes from `data/us_division_narratives.json` (generated from
-//! `source_data/sic_data/divisions.csv`, the same text V3 serves) because the SIC tables do not carry it.
+//! `full_description` narrative, which comes from the US data file's `section_full_desc` column (empty when
+//! the file lacks the column).
 
 use datafusion::arrow::array::LargeStringArray;
 use serde::Serialize;
@@ -99,13 +99,36 @@ pub struct LevelRow {
     pub class_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub class_desc: Option<String>,
+    /// The section's narrative (US SIC only, section-level lookups, and only when the data file has the
+    /// `section_full_desc` column). Not part of the V4.0 JSON: it feeds V3's `full_description`.
+    #[serde(skip)]
+    pub section_full_desc: Option<String>,
 }
 
 fn col(batch: &datafusion::arrow::record_batch::RecordBatch, idx: usize) -> Option<&LargeStringArray> {
     batch.column(idx).as_any().downcast_ref::<LargeStringArray>()
 }
 
+/// The US SIC data file's column holding each section's narrative (V3's `full_description`).
+pub const NARRATIVE_COLUMN: &str = "section_full_desc";
+
 impl super::SicCatalog {
+    async fn table_has_column(&self, table: &str, column: &str) -> bool {
+        match self.ctx.table(table).await {
+            Ok(df) => df.schema().has_column_with_unqualified_name(column),
+            Err(_) => false,
+        }
+    }
+
+    /// Whether the loaded US SIC data carries the section narratives. The server logs a warning at startup when
+    /// it does not, and `full_description` is then empty.
+    pub async fn has_us_section_narrative(&self) -> bool {
+        match self.systems.iter().find(|s| s.source_label == System::Us.label()) {
+            Some(s) => self.table_has_column(&s.table_name, NARRATIVE_COLUMN).await,
+            None => false,
+        }
+    }
+
     /// Rows at `level` whose code (or, with `by_description`, class description) contains `query`,
     /// case-insensitively, in code order. `Ok(None)` means the system is not loaded on this server.
     pub async fn find_in_system(
@@ -126,7 +149,10 @@ impl super::SicCatalog {
         let level = if by_description { Level::Class } else { level };
         let filter = if by_description { "class_desc" } else { level.id_col() };
         let escaped = query.replace('\'', "''");
-        let cols = level.columns();
+        let mut cols: Vec<&str> = level.columns().to_vec();
+        if matches!(level, Level::Section) && self.table_has_column(&table, NARRATIVE_COLUMN).await {
+            cols.push(NARRATIVE_COLUMN);
+        }
         let sql = format!(
             "SELECT DISTINCT {} FROM {table} WHERE {filter} ILIKE '%{escaped}%' ORDER BY {}",
             cols.join(", "),
@@ -135,22 +161,21 @@ impl super::SicCatalog {
         let batches = self.ctx.sql(&sql).await?.collect().await?;
         let mut rows = Vec::new();
         for batch in &batches {
-            let get = |i: usize, r: usize| -> Option<String> {
-                if i >= cols.len() {
-                    return None;
-                }
+            let get = |name: &str, r: usize| -> Option<String> {
+                let i = cols.iter().position(|c| *c == name)?;
                 col(batch, i).map(|a| a.value(r).to_string())
             };
             for r in 0..batch.num_rows() {
                 rows.push(LevelRow {
-                    section_id: get(0, r).unwrap_or_default(),
-                    section_desc: get(1, r).unwrap_or_default(),
-                    division_id: get(2, r),
-                    division_desc: get(3, r),
-                    group_id: get(4, r),
-                    group_desc: get(5, r),
-                    class_id: get(6, r),
-                    class_desc: get(7, r),
+                    section_id: get("section_id", r).unwrap_or_default(),
+                    section_desc: get("section_desc", r).unwrap_or_default(),
+                    division_id: get("division_id", r),
+                    division_desc: get("division_desc", r),
+                    group_id: get("group_id", r),
+                    group_desc: get("group_desc", r),
+                    class_id: get("class_id", r),
+                    class_desc: get("class_desc", r),
+                    section_full_desc: get(NARRATIVE_COLUMN, r).map(|t| t.trim().to_string()),
                 });
             }
         }
@@ -169,16 +194,6 @@ pub struct V3Reply {
     pub message: String,
     pub module: String,
     pub data: Value,
-}
-
-/// V3's narrative for a US SIC division (`""` for a division without one).
-fn division_narrative(division: &str) -> String {
-    static NARRATIVES: std::sync::OnceLock<std::collections::HashMap<String, String>> = std::sync::OnceLock::new();
-    NARRATIVES
-        .get_or_init(|| serde_json::from_str(include_str!("../data/us_division_narratives.json")).expect("us_division_narratives.json is valid"))
-        .get(division)
-        .cloned()
-        .unwrap_or_default()
 }
 
 fn s(v: &Option<String>) -> String {
@@ -295,7 +310,7 @@ fn entry(system: System, level: Level, by_description: bool, r: &LevelRow) -> (S
     match system {
         System::Us => match level {
             Level::Section => {
-                m.insert("full_description".into(), Value::String(division_narrative(&r.section_id)));
+                m.insert("full_description".into(), Value::String(r.section_full_desc.clone().unwrap_or_default()));
             }
             Level::Division => put(&mut m, "division", r.section_id.clone()),
             Level::Group => {
@@ -487,9 +502,8 @@ mod tests {
         let r = reply(&c, System::Us, Level::Section, "E", false).await;
         assert_eq!(r.module, "SICQueries-> get_division_desc_by_id");
         assert_eq!(r.data["division"]["E"]["description"], "Transportation, Communications, Electric, Gas, And Sanitary Services");
-        let narrative = r.data["division"]["E"]["full_description"].as_str().unwrap();
-        assert!(narrative.starts_with("This division includes establishments providing, to the general public or to other business enterprises"), "{narrative}");
-        assert_eq!(division_narrative("?"), "");
+        assert_eq!(r.data["division"]["E"]["full_description"], "", "a data file without the narrative column gives an empty field, not an error");
+        assert!(!c.has_us_section_narrative().await);
         let r = reply(&c, System::Us, Level::Class, "computer", true).await;
         assert_eq!((r.message.as_str(), r.module.as_str()), ("SIC data has been returned for query [computer].", "SICQueries-> get_all_sic_by_name"));
         assert_eq!(r.data["sics"]["Computer Storage Devices"]["code"], "3572");
@@ -533,5 +547,36 @@ mod tests {
         let j = serde_json::to_value(&rows[0]).unwrap();
         assert!(j.get("group_id").is_some() && j.get("section_id").is_some());
         assert!(j.get("class_id").is_none(), "children are not included");
+    }
+
+    /// A US table that carries the narrative column, as the current data file does.
+    fn catalog_with_narratives() -> SicCatalog {
+        let names = ["section_id", "section_desc", "division_id", "division_desc", "group_id", "group_desc", "class_id", "class_desc", "section_full_desc"];
+        let rows = [
+            ["E", "Transportation", "40", "Railroad Transportation", "401", "Railroads", "4011", "Railroads, Line-Haul Operating", "This division includes establishments providing transport. "],
+            ["E", "Transportation", "40", "Railroad Transportation", "401", "Railroads", "4013", "Switching and Terminal Services", "This division includes establishments providing transport. "],
+        ];
+        let schema = Arc::new(Schema::new(names.iter().map(|n| Field::new(*n, DataType::LargeUtf8, false)).collect::<Vec<_>>()));
+        let cols: Vec<Arc<dyn datafusion::arrow::array::Array>> = (0..names.len())
+            .map(|i| Arc::new(LargeStringArray::from(rows.iter().map(|r| r[i]).collect::<Vec<_>>())) as _)
+            .collect();
+        let ctx = SessionContext::new();
+        let table = Arc::new(MemTable::try_new(schema.clone(), vec![vec![RecordBatch::try_new(schema, cols).unwrap()]]).unwrap());
+        ctx.register_table("sic_data", table).unwrap();
+        SicCatalog { ctx, systems: vec![SicSystem { table_name: "sic_data".into(), source_label: US.into() }] }
+    }
+
+    #[tokio::test]
+    async fn the_narrative_comes_from_the_data_file_trimmed() {
+        let c = catalog_with_narratives();
+        assert!(c.has_us_section_narrative().await);
+        let r = reply(&c, System::Us, Level::Section, "E", false).await;
+        assert_eq!(r.data["division"]["E"]["full_description"], "This division includes establishments providing transport.", "one entry per section, trailing space removed");
+        assert_eq!(r.data["total"], 1);
+        // other levels are unaffected and the V4 row shape does not gain the field
+        let rows = c.find_in_system(System::Us, Level::Section, "E", false).await.unwrap().unwrap();
+        assert!(serde_json::to_value(&rows[0]).unwrap().get("section_full_desc").is_none());
+        let r = reply(&c, System::Us, Level::Class, "4011", false).await;
+        assert_eq!(r.data["sics"]["4011"]["description"], "Railroads, Line-Haul Operating");
     }
 }

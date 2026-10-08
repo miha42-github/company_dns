@@ -64,9 +64,9 @@ def diff_keys(a, b, prefix="", depth=0):
     if isinstance(a, dict) and isinstance(b, dict) and depth < 3:
         for k in sorted(set(a) | set(b)):
             if k not in a:
-                out.append(f"+{prefix}{k} (V3 only)")
-            elif k not in b:
                 out.append(f"+{prefix}{k} (V4 only)")
+            elif k not in b:
+                out.append(f"+{prefix}{k} (V3 only)")
             else:
                 out += diff_keys(a[k], b[k], f"{prefix}{k}.", depth + 1)
     elif type(a) is not type(b):

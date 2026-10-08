@@ -18,10 +18,10 @@ after two deliveries of a corrected US data file (the second, `us_flat_embedded.
 
 | # | Item | Verdict | What you do |
 |---|---|---|---|
-| 1a | The old US SIC file had no column for the division narrative text | **Fixed in the data** (new delivery, 2026-10-08); the server does not use it yet | Section 3.3: switch the server to the column, remove the stopgap |
-| 1b | The first new file's narratives for sections A, B, C and G ended with a stray space | **Fixed in the data** (second delivery, 2026-10-08 06:06; validator passes) | Section 3.2: keep the server trim as a safeguard |
-| 2 | EDGAR catalog does not contain one company a reference system finds | **Not a defect**: the company is outside the catalog's stated scope | Section 4: document, no code change |
-| 3 | Japan SIC descriptions are upper case and there are more of them than a reference system returns | **Not a defect**: the data matches the official source | Section 5: one completeness check |
+| 1a | The old US SIC file had no column for the division narrative text | **Fixed in the data** (new delivery, 2026-10-08) **and in the server** (see Results) | Done |
+| 1b | The first new file's narratives for sections A, B, C and G ended with a stray space | **Fixed in the data** (second delivery, 2026-10-08 06:06; validator passes); server trim and `divisions.csv` fixed | Done |
+| 2 | EDGAR catalog does not contain one company a reference system finds | **Not a defect**: the company is outside the catalog's stated scope | Documented in the plan and the API docs (see Results) |
+| 3 | Japan SIC descriptions are upper case and there are more of them than a reference system returns | **Not a defect**: the data matches the official source | Completeness check done: no gaps (see Results) |
 
 ## 2. Vocabulary
 
@@ -193,3 +193,37 @@ fetch it with a normal browser User-Agent, no more than once, and cite it rather
 - The response shapes of the `/V4.0/` endpoints must not change.
 - Do not call the reference service or the SEC faster than one request a second, and identify yourself in the `User-Agent`.
 - Report what you changed and what you could not verify, in this file's "Results" section (add it at the end).
+
+## 8. Results (2026-10-08, by the V4 maintainer)
+
+All V4-side work in this brief is done. Nothing here is left for another agent, except what is listed under "Open".
+
+**Item 1a and 1b: US division narrative**
+- `v4/crates/sic/src/systems.rs`: the narrative now comes from the `sic_data` table's `section_full_desc` column and is trimmed
+  (`LevelRow.section_full_desc`, not serialised, so the `/V4.0/` JSON shape is unchanged). `find_in_system` selects the column only
+  when the table has it. The side file `v4/crates/sic/data/us_division_narratives.json`, `division_narrative`, `include_str!` and
+  the `OnceLock` are deleted. New public `SicCatalog::has_us_section_narrative()`.
+- `v4/crates/server/src/main.rs`: after loading the US file the server logs one warning, naming the file and the missing column, when
+  the column is absent; startup continues and `full_description` is `""`.
+- Tests: two in `systems.rs` (the narrative is read from the table, trimmed from `"... transport. "`, and the V4 row JSON lacks the field; a
+  table without the column gives `""` and `has_us_section_narrative()` is false). `cargo test -p company-dns-sic -p company-dns-server`: 68 + 28 pass.
+- `api_tests/test_data_readiness.py::UsDivisionNarratives`: all ten sections A to J, no surrounding whitespace, lengths 2649, 1901, 5549, 4981, 1970, 3161, 3311, 699, 588, 510.
+- `docs/plans/research/check_ic_feather.py`: for `ic_module == "us"` it fails when `section_full_desc` is absent or empty for any section A to J (the
+  message names them) or a section has more than one narrative. Verified: PASS on the current file; FAIL (exit 1, 10 sections named) on a copy with the column dropped;
+  the Japan file still passes.
+- `source_data/sic_data/divisions.csv`: the trailing space is removed from rows A, B, C and G; all ten rows now equal the delivered file.
+- Verified live: with the current file the server starts with no warning and the full suite passes (91 tests, 1 expected failure, the merged-firmographics difference);
+  with a data directory holding the old file (no column) the server starts, logs the warning, and `GET /V3.0/na/sic/division/E` returns 200 with `full_description` `""`.
+- Other systems (task 3.3.6): NACE, ISIC and Japan have no source-data tables in the repository other than the NACE TSV
+  (`source_data/eu_sic_data/NACE_Rev2.1_Heading_All_Languages.tsv`), which is a different revision from the loaded NACE Rev. 2 file, so there is nothing in the repository to compare the feather files against. No omission was found, and none was checked beyond that.
+
+**Item 2: EDGAR catalog scope**
+- Recorded as an intentional difference in `docs/plans/v4-release-to-staging.md`; the 200 description of the EDGAR `ciks` operation (`/V4.0/` and `/V3.0/`) now says the catalog covers filers of a 10-K or 10-Q in the last eight completed quarters. Window and `ingest-edgar` unchanged.
+
+**Item 3: Japan completeness (page fetched once, 2026-10-08)**
+- The page lists 99 two-digit, 530 three-digit and 1,460 four-digit codes; the file has exactly the same sets (99, 530, 1,460). Nothing on the page is missing from the file and nothing in the file is absent from the page.
+- 17 entries differ in text from the page, and all 17 are punctuation or spacing only: curly apostrophes and quotes changed to straight ones (for example `Men’s` to `Men's`), a full-width hyphen to `-` (class 2596), and `Lifting- carrier` to `Lifting-carrier` (class 0842). After normalising those, zero differences remain. These normalisations are what the validator asks for.
+- No change made.
+
+**Open**
+- Re-run `api_tests/parity_report.py` after the next data delivery to refresh the comparison numbers; the Japan upper-case rows and `edgar_ciks_apple` will keep showing as differences by design.
