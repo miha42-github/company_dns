@@ -1,0 +1,44 @@
+{
+ "purpose": "Step 4 baseline: the unthinned local V4 build, before the Docker images (docs/plans/v4-release-to-staging.md). Diff later suite reports against step4-unthinned-suite.json with api_tests/compare.py.",
+ "captured": "2026-10-09T03:24:32Z",
+ "git_commit": "5e7e34b3aa524d104edf10d172b4bf76a10e0fd9",
+ "binary": {
+  "path": "v4/target/release-lean/company-dns-server",
+  "profile": "release-lean",
+  "bytes": 95549680,
+  "sha256": "25acffd92a4db03ba4ce22251c28cf32ced8265e98fea77ddab65df1e1b377d0"
+ },
+ "data_files": {
+  "edgar_10x_catalog.feather": {
+   "bytes": 11626066,
+   "sha256": "28a57e890cbbda00c4b38bf5d99a2d2b20c77088228f4ecd06aef87c2c521577"
+  },
+  "international_flat_embedded.feather": {
+   "bytes": 699714,
+   "sha256": "4d5924f5a0da7cce68f1cc65fc81e8f4c7392b750ae246b5fbb73784a6a838b7"
+  },
+  "isic_rev4_flat_embedded.feather": {
+   "bytes": 634250,
+   "sha256": "122b4f0a9e4577828816ff202eec818cf5bdf32fc89908b432387fa48c4fc518"
+  },
+  "japan_rev13_flat_embedded.feather": {
+   "bytes": 2196258,
+   "sha256": "d4d439b91b5cb885b6c58e25492ad6f34f0145f9554937b4c19a0eb01c6f3811"
+  },
+  "nace_rev2_flat_embedded.feather": {
+   "bytes": 922626,
+   "sha256": "216b276675c4debf9d338f500224ab94a11d35c81842dacc85eb88593ff2eb74"
+  },
+  "us_flat.feather": {
+   "bytes": 93482,
+   "sha256": "f144d0131f950169004f8a8f3266201839a38787617d36e4f5c11a3fa02db54a"
+  },
+  "us_flat_embedded.feather": {
+   "bytes": 1509186,
+   "sha256": "e2b65c17792a10797d8dd76c850c48a3ed6e9e8f53a09ed1cb98842165f8f735"
+  }
+ },
+ "host": "Darwin arm64",
+ "notes": "Parity timings are from a laptop to production V3 and Wikimedia; use them for shape, not for published numbers. Upstream-backed routes include V4 cache hits.",
+ "parity_json": "not captured: production V3 (75.80.225.46:443) refused connections at capture time (even www.mediumroast.io). Capture api_tests/baselines/step4-unthinned-parity.json with `python3 api_tests/parity_report.py --repeats 5 --json ...` when V3 is reachable."
+}

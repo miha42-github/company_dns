@@ -1,0 +1,484 @@
+{
+  "started": "2026-10-09T03:22:53Z",
+  "seconds": 18.9,
+  "base_url": "http://localhost:4000",
+  "git_commit": "5e7e34b",
+  "network": true,
+  "layers": "all",
+  "counts": {
+    "passed": 93,
+    "expected_failure": 1
+  },
+  "results": [
+    {
+      "id": "test_contract.ErrorShapes.test_a_wrong_content_type_is_a_json_415",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_a_wrong_method_is_a_json_405_with_allow",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_an_unknown_route_is_a_json_404",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_invalid_json_is_a_json_400",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_k_is_clamped_not_rejected",
+      "status": "passed",
+      "seconds": 0.03
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_match_and_map_reject_bad_input_with_a_documented_400",
+      "status": "passed",
+      "seconds": 0.005
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_the_sql_operation_documents_every_answer_it_can_give",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_contract.ErrorShapes.test_unknown_model_and_bad_parameters_are_400s_and_documented",
+      "status": "passed",
+      "seconds": 0.003
+    },
+    {
+      "id": "test_contract.Responses.test_a_match_is_a_200_envelope_and_is_documented",
+      "status": "passed",
+      "seconds": 0.172
+    },
+    {
+      "id": "test_contract.Responses.test_every_route_documents_the_access_and_rate_limit_answers",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_contract.Responses.test_no_match_is_a_404_envelope_and_is_documented",
+      "status": "passed",
+      "seconds": 0.201
+    },
+    {
+      "id": "test_contract.Responses.test_routes_that_call_upstream_answer_in_the_envelope",
+      "status": "passed",
+      "seconds": 1.395
+    },
+    {
+      "id": "test_contract.Table.test_every_route_in_the_spec_has_a_contract_test",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_data_readiness.ClassificationSystems.test_a_class_knows_its_parents",
+      "status": "passed",
+      "seconds": 0.006
+    },
+    {
+      "id": "test_data_readiness.ClassificationSystems.test_each_system_has_at_least_the_classes_it_shipped_with",
+      "status": "passed",
+      "seconds": 0.021
+    },
+    {
+      "id": "test_data_readiness.ClassificationSystems.test_global_search_reaches_all_four_systems",
+      "status": "passed",
+      "seconds": 0.007
+    },
+    {
+      "id": "test_data_readiness.ClassificationSystems.test_the_embedding_model_is_loaded",
+      "status": "passed",
+      "seconds": 0.008
+    },
+    {
+      "id": "test_data_readiness.ClassificationSystems.test_the_hierarchies_are_complete",
+      "status": "passed",
+      "seconds": 0.009
+    },
+    {
+      "id": "test_data_readiness.EdgarCatalog.test_it_spans_the_expected_quarters_for_known_filers",
+      "status": "passed",
+      "seconds": 0.013
+    },
+    {
+      "id": "test_data_readiness.EdgarCatalog.test_merged_firmographics_finds_edgar_data_for_known_companies",
+      "status": "passed",
+      "seconds": 1.607
+    },
+    {
+      "id": "test_data_readiness.EdgarCatalog.test_the_catalog_is_loaded_and_finds_known_companies",
+      "status": "passed",
+      "seconds": 0.006
+    },
+    {
+      "id": "test_data_readiness.UsDivisionNarratives.test_each_division_has_its_trimmed_narrative",
+      "status": "passed",
+      "seconds": 0.024
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.KnownGaps.test_merged_is_one_flat_record",
+      "status": "expected_failure",
+      "seconds": 0.003
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.Matches.test_edgar_summary_has_v3s_shape",
+      "status": "passed",
+      "seconds": 0.005
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.Matches.test_wikipedia_has_v3s_shape_and_stable_fields",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.V3ShapedEdgar.test_edgar_ciks_is_wrapped_in_companies_and_totalcompanies_with_string_ciks",
+      "status": "passed",
+      "seconds": 0.004
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.V3ShapedEdgar.test_edgar_detail_has_v3s_per_company_structure",
+      "status": "passed",
+      "seconds": 0.007
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.V3ShapedEdgar.test_edgar_firmographics_carries_the_sic_hierarchy_fields",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.V3ShapedEdgar.test_edgar_summary_uses_v3s_message_and_module",
+      "status": "passed",
+      "seconds": 0.005
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.V3ShapedEdgar.test_the_v2_paths_answer_the_same_way",
+      "status": "passed",
+      "seconds": 0.005
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.V3ShapedEdgar.test_us_division_carries_v3s_full_description",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.WikipediaLineage.test_a_repeat_request_is_a_cache_hit_with_no_upstream_time",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.WikipediaLineage.test_tickers_are_symbols_only_in_both_sources",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_edgar_wikipedia_parity.WikipediaLineage.test_v3_and_v2_paths_use_v3s_message_and_module_and_have_performance",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_a_forged_origin_is_accepted_for_nothing",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_a_granted_profile_gets_through",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_failed_logins_are_throttled_but_the_right_credential_still_works",
+      "status": "passed",
+      "seconds": 0.004
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_no_credential_is_401_with_a_challenge",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_profiles_without_sql_or_the_dataset_get_403",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_unknown_dataset_and_empty_sql_are_400",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.Access.test_wrong_token_and_unknown_profile_are_401",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.ErrorsOnTheManagedServer.test_a_wrong_credential_is_a_json_401_on_every_kind_of_route",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_a_bypass_profile_is_not_limited",
+      "status": "passed",
+      "seconds": 0.044
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_a_profile_without_a_rate_limit_grant_gets_the_normal_tier_whatever_its_user_agent",
+      "status": "passed",
+      "seconds": 0.007
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_a_quota_profile_has_its_own_bucket",
+      "status": "passed",
+      "seconds": 0.01
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_a_self_identifying_user_agent_gets_the_normal_tier",
+      "status": "passed",
+      "seconds": 0.009
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_a_wrong_credential_on_a_lookup_is_401_not_anonymous",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_anonymous_with_a_generic_user_agent_gets_the_draconian_tier",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_health_is_never_rate_limited",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_limits_and_profiles.LookupRateLimits.test_the_tiers_are_separate_buckets",
+      "status": "passed",
+      "seconds": 0.004
+    },
+    {
+      "id": "test_limits_and_profiles.PerProfileSqlLimits.test_a_profile_can_lower_the_row_cap",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.PerProfileSqlLimits.test_a_profile_can_lower_the_timeout",
+      "status": "passed",
+      "seconds": 2.003
+    },
+    {
+      "id": "test_limits_and_profiles.PerProfileSqlLimits.test_a_profile_has_its_own_concurrency_gate",
+      "status": "passed",
+      "seconds": 2.003
+    },
+    {
+      "id": "test_limits_and_profiles.PerProfileSqlLimits.test_a_profile_has_its_own_request_rate",
+      "status": "passed",
+      "seconds": 0.004
+    },
+    {
+      "id": "test_limits_and_profiles.SqlData.test_bad_sql_is_400_with_a_message",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.SqlData.test_every_loaded_system_is_a_table",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.SqlData.test_it_queries_real_data",
+      "status": "passed",
+      "seconds": 0.004
+    },
+    {
+      "id": "test_limits_and_profiles.SqlData.test_only_single_read_only_statements_run",
+      "status": "passed",
+      "seconds": 0.003
+    },
+    {
+      "id": "test_limits_and_profiles.SqlData.test_the_embedding_columns_are_hidden",
+      "status": "passed",
+      "seconds": 0.003
+    },
+    {
+      "id": "test_limits_and_profiles.SqlData.test_the_response_says_it_is_experimental",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.SqlGoesThroughTheLimiter.test_a_wrong_credential_is_a_401_never_anonymous",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_limits_and_profiles.SqlGoesThroughTheLimiter.test_anonymous_with_a_forged_origin_is_limited_like_anyone",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_limits_and_profiles.SqlLimits.test_a_memory_hog_is_refused_cleanly",
+      "status": "passed",
+      "seconds": 0.068
+    },
+    {
+      "id": "test_limits_and_profiles.SqlLimits.test_a_runaway_query_is_cancelled_at_the_timeout",
+      "status": "passed",
+      "seconds": 5.001
+    },
+    {
+      "id": "test_limits_and_profiles.SqlLimits.test_default_row_cap_explicit_limit_and_ceiling",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_limits_and_profiles.SqlLimits.test_the_concurrency_cap_refuses_instead_of_queueing",
+      "status": "passed",
+      "seconds": 5.004
+    },
+    {
+      "id": "test_non_us_sic.NonUsContract.test_no_match_is_a_json_404_in_both_shapes",
+      "status": "passed",
+      "seconds": 0.047
+    },
+    {
+      "id": "test_non_us_sic.NonUsContract.test_v3_paths_return_v3s_dictionary_with_a_total",
+      "status": "passed",
+      "seconds": 0.022
+    },
+    {
+      "id": "test_non_us_sic.NonUsContract.test_v4_paths_return_a_list_of_matches_with_their_parents",
+      "status": "passed",
+      "seconds": 0.021
+    },
+    {
+      "id": "test_non_us_sic.Spec.test_new_paths_are_in_the_openapi_document",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_non_us_sic.V2Aliases.test_local_aliases_equal_their_twins",
+      "status": "passed",
+      "seconds": 0.034
+    },
+    {
+      "id": "test_non_us_sic.V2Aliases.test_network_aliases_equal_their_twins",
+      "status": "passed",
+      "seconds": 0.015
+    },
+    {
+      "id": "test_non_us_sic.V3Parity.test_identical_to_v3",
+      "status": "passed",
+      "seconds": 0.023
+    },
+    {
+      "id": "test_non_us_sic.V3Parity.test_japan_equivalent_to_v3",
+      "status": "passed",
+      "seconds": 0.006
+    },
+    {
+      "id": "test_non_us_sic.V3Parity.test_us_division_matches_including_the_narrative",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_smoke.Smoke.test_health",
+      "status": "passed",
+      "seconds": 0.0
+    },
+    {
+      "id": "test_smoke.Smoke.test_industry_match_answers",
+      "status": "passed",
+      "seconds": 0.021
+    },
+    {
+      "id": "test_smoke.Smoke.test_one_lookup_per_family_answers",
+      "status": "passed",
+      "seconds": 0.052
+    },
+    {
+      "id": "test_smoke.Smoke.test_the_documentation_pages_are_served",
+      "status": "passed",
+      "seconds": 0.002
+    },
+    {
+      "id": "test_smoke.Smoke.test_the_spec_loads_and_describes_the_api",
+      "status": "passed",
+      "seconds": 0.001
+    },
+    {
+      "id": "test_v4_functions.GlobalSearch.test_hybrid_search_fuses_keyword_and_semantic",
+      "status": "passed",
+      "seconds": 0.025
+    },
+    {
+      "id": "test_v4_functions.GlobalSearch.test_keyword_search_spans_every_system_and_tags_each_hit",
+      "status": "passed",
+      "seconds": 0.006
+    },
+    {
+      "id": "test_v4_functions.GlobalSearch.test_semantic_search_ranks_from_one_and_descends",
+      "status": "passed",
+      "seconds": 0.045
+    },
+    {
+      "id": "test_v4_functions.GlobalSearch.test_the_tokeniser_check_reports_truncation",
+      "status": "passed",
+      "seconds": 0.004
+    },
+    {
+      "id": "test_v4_functions.IndustryMatch.test_a_long_description_is_split_into_chunks",
+      "status": "passed",
+      "seconds": 0.115
+    },
+    {
+      "id": "test_v4_functions.IndustryMatch.test_a_recommended_set_of_two_to_five_per_system_with_evidence",
+      "status": "passed",
+      "seconds": 0.089
+    },
+    {
+      "id": "test_v4_functions.IndustryMatch.test_a_very_short_input_is_flagged",
+      "status": "passed",
+      "seconds": 0.009
+    },
+    {
+      "id": "test_v4_functions.IndustryMatch.test_rematching_the_segments_a_user_kept",
+      "status": "passed",
+      "seconds": 0.026
+    },
+    {
+      "id": "test_v4_functions.IndustryMatch.test_the_default_is_us_sic_only",
+      "status": "passed",
+      "seconds": 0.033
+    },
+    {
+      "id": "test_v4_functions.IndustryMatch.test_the_response_shows_how_the_text_was_read_and_states_its_limits",
+      "status": "passed",
+      "seconds": 0.035
+    },
+    {
+      "id": "test_v4_functions.Map.test_a_description_ranks_the_candidates",
+      "status": "passed",
+      "seconds": 0.036
+    },
+    {
+      "id": "test_v4_functions.Map.test_codes_are_carried_into_the_requested_systems_by_similarity",
+      "status": "passed",
+      "seconds": 0.066
+    },
+    {
+      "id": "test_v4_functions.Map.test_the_answer_says_it_is_by_similarity_and_a_suggestion",
+      "status": "passed",
+      "seconds": 0.012
+    },
+    {
+      "id": "test_v4_functions.Map.test_the_default_is_every_other_system",
+      "status": "passed",
+      "seconds": 0.036
+    }
+  ]
+}
