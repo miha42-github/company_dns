@@ -95,7 +95,31 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 `EDGAR_CATALOG_PATH`, plus `SIC_MODELS`
 (`all_minilm_l6_v2` default, per `go-duckdb-rewrite.md` §7.8), `PORT`
 (default `4000`), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
-"## Observability" below).
+"## Docker
+
+The image is self-contained: the binary, the UI, the data files and the embedding model are all inside it, so a pod starts with no
+volume and no outbound access. Decided in `docs/plans/v4-deployment.md` section 3.2 and `docs/plans/v4-release-to-staging.md` step 6.
+
+```bash
+v4/scripts/docker-build.sh -t company-dns-v4:dev            # release-lean (about 89 MiB binary)
+v4/scripts/docker-build.sh -t company-dns-v4:small -p release-small
+v4/scripts/docker-smoke.sh company-dns-v4:dev               # starts with --network none, then runs the offline test layers
+```
+
+What the build needs that is not in git (the script supplies both; override with `DATA_DIR` and `MODEL_DIR`):
+
+| Build context | What it is | Default |
+|---|---|---|
+| `data` | the four classification `.feather` files and `edgar_10x_catalog.feather` | the repository's `tmp/`, or `COMPANY_DNS_DATA_DIR` |
+| `model` | the fastembed cache holding all-MiniLM-L6-v2 (`models--Qdrant--all-MiniLM-L6-v2-onnx`) | `v4/.fastembed_cache`; run the server once to create it |
+
+Two gates run in the build, so a bad input fails the build and never becomes an image: `check_ic_feather.py` on every classification
+file (plus a row and quarter check on the EDGAR catalog), and a SHA-256 check of the model weights. The runtime is `debian:trixie-slim`
+(glibc), because the ONNX runtime fastembed uses has no musl build. The process runs as UID 10001. A volume mounted at `/app/data`
+replaces the data without a rebuild. The image carries `THIRD_PARTY_NOTICES.md` and the Redoc licence under `/usr/share/doc/company-dns/`.
+The ONNX runtime is downloaded during the Rust build, so the build itself needs network access (the running container does not).
+
+## Observability" below).
 
 ## API docs
 
