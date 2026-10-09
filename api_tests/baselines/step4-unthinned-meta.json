@@ -40,5 +40,5 @@
  },
  "host": "Darwin arm64",
  "notes": "Parity timings are from a laptop to production V3 and Wikimedia; use them for shape, not for published numbers. Upstream-backed routes include V4 cache hits.",
- "parity_json": "not captured: production V3 (75.80.225.46:443) refused connections at capture time (even www.mediumroast.io). Capture api_tests/baselines/step4-unthinned-parity.json with `python3 api_tests/parity_report.py --repeats 5 --json ...` when V3 is reachable."
+ "parity_json": "step4-unthinned-parity.json, captured 2026-10-08 after V3 became reachable again: 25 requests, 2 repeats, 2 s pause. Verdicts: 16 identical, 6 same shape, 3 different (Japan description search, EDGAR ciks catalog scope, merged firmographics)."
 }

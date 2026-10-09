@@ -1,0 +1,356 @@
+[
+  {
+    "name": "eu_section_A",
+    "path": "/V3.0/eu/sic/section/A",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 61.28406245261431,
+    "v4_ms": 4.725999431684613,
+    "v4_cold_ms": 7.931082975119352,
+    "v3_bytes": 304,
+    "v4_bytes": 304
+  },
+  {
+    "name": "eu_division_25",
+    "path": "/V3.0/eu/sic/division/25",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 254.56125009804964,
+    "v4_ms": 1.792999915778637,
+    "v4_cold_ms": 2.065374981611967,
+    "v3_bytes": 367,
+    "v4_bytes": 367
+  },
+  {
+    "name": "eu_group_259",
+    "path": "/V3.0/eu/sic/group/25.9",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 52.38056252710521,
+    "v4_ms": 4.5496453531086445,
+    "v4_cold_ms": 4.972916096448898,
+    "v3_bytes": 357,
+    "v4_bytes": 357
+  },
+  {
+    "name": "eu_class_2591",
+    "path": "/V3.0/eu/sic/class/25.91",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 52.73518757894635,
+    "v4_ms": 3.4237506333738565,
+    "v4_cold_ms": 3.7281671538949013,
+    "v3_bytes": 383,
+    "v4_bytes": 383
+  },
+  {
+    "name": "eu_desc_steel",
+    "path": "/V3.0/eu/sic/description/steel",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 83.0781040713191,
+    "v4_ms": 4.947582958266139,
+    "v4_cold_ms": 5.334790796041489,
+    "v3_bytes": 781,
+    "v4_bytes": 781
+  },
+  {
+    "name": "intl_section_A",
+    "path": "/V3.0/international/sic/section/A",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 87.8581665456295,
+    "v4_ms": 5.170437041670084,
+    "v4_cold_ms": 6.835916079580784,
+    "v3_bytes": 321,
+    "v4_bytes": 308
+  },
+  {
+    "name": "intl_division_25",
+    "path": "/V3.0/international/sic/division/25",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 86.70508279465139,
+    "v4_ms": 4.26406180486083,
+    "v4_cold_ms": 5.1530408672988415,
+    "v3_bytes": 384,
+    "v4_bytes": 371
+  },
+  {
+    "name": "intl_group_259",
+    "path": "/V3.0/international/sic/group/259",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 89.18550005182624,
+    "v4_ms": 4.791812505573034,
+    "v4_cold_ms": 5.47891715541482,
+    "v3_bytes": 405,
+    "v4_bytes": 392
+  },
+  {
+    "name": "intl_class_2591",
+    "path": "/V3.0/international/sic/class/2591",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 88.93633307889104,
+    "v4_ms": 5.336708389222622,
+    "v4_cold_ms": 6.605249829590321,
+    "v3_bytes": 420,
+    "v4_bytes": 407
+  },
+  {
+    "name": "intl_desc_steel",
+    "path": "/V3.0/international/sic/description/steel",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 91.22716635465622,
+    "v4_ms": 5.298353964462876,
+    "v4_cold_ms": 6.671541836112738,
+    "v3_bytes": 499,
+    "v4_bytes": 486
+  },
+  {
+    "name": "japan_major_09",
+    "path": "/V3.0/japan/sic/major_group/09",
+    "verdict": "SAME SHAPE",
+    "detail": [
+      "data values differ"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 78.13495816662908,
+    "v4_ms": 6.901000393554568,
+    "v4_cold_ms": 10.124667081981897,
+    "v3_bytes": 357,
+    "v4_bytes": 330
+  },
+  {
+    "name": "japan_group_091",
+    "path": "/V3.0/japan/sic/group/091",
+    "verdict": "SAME SHAPE",
+    "detail": [
+      "data values differ"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 88.83743756450713,
+    "v4_ms": 5.41114597581327,
+    "v4_cold_ms": 6.339500192552805,
+    "v3_bytes": 364,
+    "v4_bytes": 337
+  },
+  {
+    "name": "japan_desc_food",
+    "path": "/V3.0/japan/sic/description/food",
+    "verdict": "DIFFERENT",
+    "detail": [
+      "+data.industry_groups.\"Sozai\" (side-dish foods) (V4 only)",
+      "+data.industry_groups.Canned or bottled seafood and seaweed (V4 only)",
+      "+data.industry_groups.Convenience stores, primarily for sale of food and beverages (V4 only)",
+      "+data.industry_groups.Cured food (V4 only)",
+      "+data.industry_groups.Cured food stores (V4 only)",
+      "+data.industry_groups.Eating and drinking places, and Food tale out and delivery services (V3 only)"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 87.46383339166641,
+    "v4_ms": 5.829333560541272,
+    "v4_cold_ms": 7.18004209920764,
+    "v3_bytes": 1792,
+    "v4_bytes": 2353
+  },
+  {
+    "name": "us_division_E",
+    "path": "/V3.0/na/sic/division/E",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 85.87541710585356,
+    "v4_ms": 6.667604669928551,
+    "v4_cold_ms": 8.83162533864379,
+    "v3_bytes": 2382,
+    "v4_bytes": 2327
+  },
+  {
+    "name": "us_major_35",
+    "path": "/V3.0/na/sic/major/35",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 87.69902121275663,
+    "v4_ms": 4.768457729369402,
+    "v4_cold_ms": 5.875165574252605,
+    "v3_bytes": 406,
+    "v4_bytes": 351
+  },
+  {
+    "name": "us_industry_357",
+    "path": "/V3.0/na/sic/industry/357",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 184.70414564944804,
+    "v4_ms": 5.096624605357647,
+    "v4_cold_ms": 6.40616612508893,
+    "v3_bytes": 407,
+    "v4_bytes": 352
+  },
+  {
+    "name": "us_code_3571",
+    "path": "/V3.0/na/sic/code/3571",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 64.52366639859974,
+    "v4_ms": 5.989354336634278,
+    "v4_cold_ms": 6.979291792958975,
+    "v3_bytes": 556,
+    "v4_bytes": 501
+  },
+  {
+    "name": "us_desc_computers",
+    "path": "/V3.0/na/sic/description/computers",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 55.63766695559025,
+    "v4_ms": 5.1240206230431795,
+    "v4_cold_ms": 6.283374968916178,
+    "v3_bytes": 1154,
+    "v4_bytes": 1099
+  },
+  {
+    "name": "v2_code_3571",
+    "path": "/V2.0/sic/code/3571",
+    "verdict": "IDENTICAL",
+    "detail": [],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 56.49783345870674,
+    "v4_ms": 3.1857292633503675,
+    "v4_cold_ms": 3.278416581451893,
+    "v3_bytes": 556,
+    "v4_bytes": 501
+  },
+  {
+    "name": "edgar_ciks_apple",
+    "path": "/V3.0/na/companies/edgar/ciks/Apple",
+    "verdict": "DIFFERENT",
+    "detail": [
+      "+data.companies.PINEAPPLE, INC. (V3 only)"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 129.79672965593636,
+    "v4_ms": 11.128499871119857,
+    "v4_cold_ms": 13.665792066603899,
+    "v3_bytes": 856,
+    "v4_bytes": 503
+  },
+  {
+    "name": "edgar_summary_appleinc",
+    "path": "/V3.0/na/companies/edgar/summary/Apple%20Inc.",
+    "verdict": "SAME SHAPE",
+    "detail": [
+      "data values differ"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 158.07602042332292,
+    "v4_ms": 11.607874883338809,
+    "v4_cold_ms": 13.290416914969683,
+    "v3_bytes": 2456,
+    "v4_bytes": 1639
+  },
+  {
+    "name": "edgar_detail_appleinc",
+    "path": "/V3.0/na/companies/edgar/detail/Apple%20Inc.",
+    "verdict": "SAME SHAPE",
+    "detail": [
+      "data values differ"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 340.4623749665916,
+    "v4_ms": 12.88091647438705,
+    "v4_cold_ms": 15.749041922390461,
+    "v3_bytes": 4049,
+    "v4_bytes": 2898
+  },
+  {
+    "name": "edgar_firmo_320193",
+    "path": "/V3.0/na/company/edgar/firmographics/320193",
+    "verdict": "SAME SHAPE",
+    "detail": [
+      "data values differ"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 342.78524992987514,
+    "v4_ms": 5.67777082324028,
+    "v4_cold_ms": 6.25737477093935,
+    "v3_bytes": 1635,
+    "v4_bytes": 1301
+  },
+  {
+    "name": "wikipedia_appleinc",
+    "path": "/V3.0/global/company/wikipedia/firmographics/Apple%20Inc.",
+    "verdict": "SAME SHAPE",
+    "detail": [
+      "message",
+      "data values differ"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 1254.0133327711374,
+    "v4_ms": 1.3864580541849136,
+    "v4_cold_ms": 1.7678751610219479,
+    "v3_bytes": 6338,
+    "v4_bytes": 6313
+  },
+  {
+    "name": "merged_appleinc",
+    "path": "/V3.0/global/company/merged/firmographics/Apple%20Inc.",
+    "verdict": "DIFFERENT",
+    "detail": [
+      "+data.address (V3 only)",
+      "+data.category (V3 only)",
+      "+data.cik (V3 only)",
+      "+data.city (V3 only)",
+      "+data.companyFactsURL (V3 only)",
+      "+data.country (V3 only)"
+    ],
+    "v3_status": 200,
+    "v4_status": 200,
+    "v3_ms": 1660.7236457057297,
+    "v4_ms": 7.47104175388813,
+    "v4_cold_ms": 9.092416614294052,
+    "v3_bytes": 9834,
+    "v4_bytes": 7126
+  }
+]
