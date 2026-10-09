@@ -1,0 +1,21 @@
+{
+  "code": 200,
+  "data": {
+    "groups": {
+      "259": {
+        "description": "Manufacture of other fabricated metal products; metalworking service activities",
+        "division_code": "25",
+        "section_code": "C"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "isicData": "https://unstats.un.org/unsd/classifications/Econ/isic"
+    },
+    "modules": {}
+  },
+  "message": "Group data has been returned for query [259].",
+  "module": "InternationalSICQueries-> get_group_by_code"
+}

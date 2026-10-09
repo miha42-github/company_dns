@@ -1,0 +1,16 @@
+[package]
+name = "company-dns-sic"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+datafusion.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+regex.workspace = true
+fastembed = "7"
+
+[dev-dependencies]
+tokio.workspace = true

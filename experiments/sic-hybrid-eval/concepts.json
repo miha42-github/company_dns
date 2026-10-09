@@ -1,0 +1,766 @@
+{
+ "_note": "37 hand-picked concepts. 'classes' = acceptable class_ids per system (calibration picks; ISIC = NACE picks mapped through the shared 4-digit code, 11 by hand). Query forms: short phrase, long sentence, single term. Picked by one author from class text before scores were seen; see docs/plans/sic-hybrid-search.md section 3.",
+ "concepts": [
+  {
+   "concept": "growing wheat",
+   "short": "growing wheat",
+   "long": "a farm that grows wheat, barley and other grain crops",
+   "term": "wheat",
+   "classes": {
+    "us": [
+     "0111"
+    ],
+    "japan": [
+     "0112"
+    ],
+    "nace": [
+     "01.11"
+    ],
+    "isic": [
+     "0111"
+    ]
+   }
+  },
+  {
+   "concept": "logging",
+   "short": "logging",
+   "long": "a company that harvests timber and cuts down trees",
+   "term": "logging",
+   "classes": {
+    "us": [
+     "2411"
+    ],
+    "japan": [
+     "0221"
+    ],
+    "nace": [
+     "02.20"
+    ],
+    "isic": [
+     "0220"
+    ]
+   }
+  },
+  {
+   "concept": "commercial sea fishing",
+   "short": "commercial sea fishing",
+   "long": "a fishing fleet that catches fish at sea",
+   "term": "fishing",
+   "classes": {
+    "us": [
+     "0912",
+     "0913"
+    ],
+    "japan": [
+     "0311",
+     "0312",
+     "0313",
+     "0314"
+    ],
+    "nace": [
+     "03.11"
+    ],
+    "isic": [
+     "0311"
+    ]
+   }
+  },
+  {
+   "concept": "coal mining",
+   "short": "coal mining",
+   "long": "an underground mine that extracts coal",
+   "term": "coal",
+   "classes": {
+    "us": [
+     "1221",
+     "1222"
+    ],
+    "japan": [
+     "0521"
+    ],
+    "nace": [
+     "05.10"
+    ],
+    "isic": [
+     "0510"
+    ]
+   }
+  },
+  {
+   "concept": "crude oil extraction",
+   "short": "crude oil extraction",
+   "long": "a company that drills wells to extract crude oil",
+   "term": "crude oil",
+   "classes": {
+    "us": [
+     "1311"
+    ],
+    "japan": [
+     "0531"
+    ],
+    "nace": [
+     "06.10"
+    ],
+    "isic": [
+     "0610"
+    ]
+   }
+  },
+  {
+   "concept": "bakery",
+   "short": "bakery",
+   "long": "a bakery that makes bread and cakes",
+   "term": "bakery",
+   "classes": {
+    "us": [
+     "2051"
+    ],
+    "japan": [
+     "0971"
+    ],
+    "nace": [
+     "10.71"
+    ],
+    "isic": [
+     "1071"
+    ]
+   }
+  },
+  {
+   "concept": "pharmaceutical manufacturing",
+   "short": "pharmaceutical manufacturing",
+   "long": "a company that manufactures prescription medicines and drugs",
+   "term": "pharmaceutical",
+   "classes": {
+    "us": [
+     "2834"
+    ],
+    "japan": [
+     "1652"
+    ],
+    "nace": [
+     "21.20"
+    ],
+    "isic": [
+     "2100"
+    ]
+   }
+  },
+  {
+   "concept": "semiconductor manufacturing",
+   "short": "semiconductor manufacturing",
+   "long": "a factory that makes integrated circuits and chips",
+   "term": "semiconductor",
+   "classes": {
+    "us": [
+     "3674"
+    ],
+    "japan": [
+     "2813",
+     "2814"
+    ],
+    "nace": [
+     "26.11"
+    ],
+    "isic": [
+     "2610"
+    ]
+   }
+  },
+  {
+   "concept": "car manufacturing",
+   "short": "car manufacturing",
+   "long": "a company that builds passenger cars and automobiles",
+   "term": "car",
+   "classes": {
+    "us": [
+     "3711"
+    ],
+    "japan": [
+     "3111"
+    ],
+    "nace": [
+     "29.10"
+    ],
+    "isic": [
+     "2910"
+    ]
+   }
+  },
+  {
+   "concept": "shipbuilding",
+   "short": "shipbuilding",
+   "long": "a shipyard that builds and repairs large ships",
+   "term": "ship",
+   "classes": {
+    "us": [
+     "3731"
+    ],
+    "japan": [
+     "3131"
+    ],
+    "nace": [
+     "30.11"
+    ],
+    "isic": [
+     "3011"
+    ]
+   }
+  },
+  {
+   "concept": "clothing store",
+   "short": "clothing store",
+   "long": "a retail shop selling clothes and apparel",
+   "term": "clothing",
+   "classes": {
+    "us": [
+     "5651"
+    ],
+    "japan": [
+     "5721",
+     "5731",
+     "5732"
+    ],
+    "nace": [
+     "47.71"
+    ],
+    "isic": [
+     "4771"
+    ]
+   }
+  },
+  {
+   "concept": "supermarket",
+   "short": "supermarket",
+   "long": "a large grocery store selling food and household goods",
+   "term": "supermarket",
+   "classes": {
+    "us": [
+     "5411"
+    ],
+    "japan": [
+     "5611"
+    ],
+    "nace": [
+     "47.11"
+    ],
+    "isic": [
+     "4711"
+    ]
+   }
+  },
+  {
+   "concept": "restaurant",
+   "short": "restaurant",
+   "long": "a place where customers sit and are served meals",
+   "term": "restaurant",
+   "classes": {
+    "us": [
+     "5812"
+    ],
+    "japan": [
+     "7611",
+     "7621"
+    ],
+    "nace": [
+     "56.10"
+    ],
+    "isic": [
+     "5610"
+    ]
+   }
+  },
+  {
+   "concept": "hotel",
+   "short": "hotel",
+   "long": "a hotel offering rooms for overnight guests",
+   "term": "hotel",
+   "classes": {
+    "us": [
+     "7011"
+    ],
+    "japan": [
+     "7511"
+    ],
+    "nace": [
+     "55.10"
+    ],
+    "isic": [
+     "5510"
+    ]
+   }
+  },
+  {
+   "concept": "hospital",
+   "short": "hospital",
+   "long": "a general hospital providing inpatient medical and surgical care",
+   "term": "hospital",
+   "classes": {
+    "us": [
+     "8062"
+    ],
+    "japan": [
+     "8311"
+    ],
+    "nace": [
+     "86.10"
+    ],
+    "isic": [
+     "8610"
+    ]
+   }
+  },
+  {
+   "concept": "child day care",
+   "short": "child day care",
+   "long": "a nursery that looks after young children during the day",
+   "term": "day care",
+   "classes": {
+    "us": [
+     "8351"
+    ],
+    "japan": [
+     "8531"
+    ],
+    "nace": [
+     "88.91"
+    ],
+    "isic": [
+     "8890"
+    ]
+   }
+  },
+  {
+   "concept": "funeral services",
+   "short": "funeral services",
+   "long": "a company that arranges funerals and cremations",
+   "term": "funeral",
+   "classes": {
+    "us": [
+     "7261"
+    ],
+    "japan": [
+     "7961"
+    ],
+    "nace": [
+     "96.03"
+    ],
+    "isic": [
+     "9603"
+    ]
+   }
+  },
+  {
+   "concept": "hair salon",
+   "short": "hair salon",
+   "long": "a salon offering haircuts and beauty treatments",
+   "term": "hair",
+   "classes": {
+    "us": [
+     "7231"
+    ],
+    "japan": [
+     "7831"
+    ],
+    "nace": [
+     "96.02"
+    ],
+    "isic": [
+     "9602"
+    ]
+   }
+  },
+  {
+   "concept": "gym",
+   "short": "gym",
+   "long": "a gym or fitness centre with exercise equipment",
+   "term": "fitness",
+   "classes": {
+    "us": [
+     "7991"
+    ],
+    "japan": [
+     "8048"
+    ],
+    "nace": [
+     "93.13"
+    ],
+    "isic": [
+     "9311",
+     "9319"
+    ]
+   }
+  },
+  {
+   "concept": "law firm",
+   "short": "law firm",
+   "long": "a firm of lawyers providing legal advice and representation",
+   "term": "legal",
+   "classes": {
+    "us": [
+     "8111"
+    ],
+    "japan": [
+     "7211"
+    ],
+    "nace": [
+     "69.10"
+    ],
+    "isic": [
+     "6910"
+    ]
+   }
+  },
+  {
+   "concept": "accounting firm",
+   "short": "accounting firm",
+   "long": "accountants providing bookkeeping, auditing and tax services",
+   "term": "accounting",
+   "classes": {
+    "us": [
+     "8721"
+    ],
+    "japan": [
+     "7241"
+    ],
+    "nace": [
+     "69.20"
+    ],
+    "isic": [
+     "6920"
+    ]
+   }
+  },
+  {
+   "concept": "advertising agency",
+   "short": "advertising agency",
+   "long": "an agency that designs and places advertising campaigns",
+   "term": "advertising",
+   "classes": {
+    "us": [
+     "7311"
+    ],
+    "japan": [
+     "7311"
+    ],
+    "nace": [
+     "73.11"
+    ],
+    "isic": [
+     "7310"
+    ]
+   }
+  },
+  {
+   "concept": "architects and engineers",
+   "short": "architects and engineers",
+   "long": "a firm of architects and consulting engineers",
+   "term": "architect",
+   "classes": {
+    "us": [
+     "8711",
+     "8712"
+    ],
+    "japan": [
+     "7421",
+     "7429"
+    ],
+    "nace": [
+     "71.11",
+     "71.12"
+    ],
+    "isic": [
+     "7110"
+    ]
+   }
+  },
+  {
+   "concept": "electricity generation",
+   "short": "electricity generation",
+   "long": "a power plant that generates electricity",
+   "term": "electric",
+   "classes": {
+    "us": [
+     "4911"
+    ],
+    "japan": [
+     "3311"
+    ],
+    "nace": [
+     "35.11"
+    ],
+    "isic": [
+     "3510"
+    ]
+   }
+  },
+  {
+   "concept": "water supply",
+   "short": "water supply",
+   "long": "a utility that treats and supplies drinking water",
+   "term": "water supply",
+   "classes": {
+    "us": [
+     "4941"
+    ],
+    "japan": [
+     "3611"
+    ],
+    "nace": [
+     "36.00"
+    ],
+    "isic": [
+     "3600"
+    ]
+   }
+  },
+  {
+   "concept": "building contractor",
+   "short": "building contractor",
+   "long": "a company that constructs houses and apartment buildings",
+   "term": "construction of buildings",
+   "classes": {
+    "us": [
+     "1522",
+     "1531"
+    ],
+    "japan": [
+     "0611",
+     "0641",
+     "0651"
+    ],
+    "nace": [
+     "41.20"
+    ],
+    "isic": [
+     "4100"
+    ]
+   }
+  },
+  {
+   "concept": "trucking",
+   "short": "trucking",
+   "long": "a company that moves goods by lorry or truck over long distances",
+   "term": "freight",
+   "classes": {
+    "us": [
+     "4213"
+    ],
+    "japan": [
+     "4411"
+    ],
+    "nace": [
+     "49.41"
+    ],
+    "isic": [
+     "4923"
+    ]
+   }
+  },
+  {
+   "concept": "railway",
+   "short": "railway",
+   "long": "a railway operator running passenger and freight trains",
+   "term": "railway",
+   "classes": {
+    "us": [
+     "4011"
+    ],
+    "japan": [
+     "4211"
+    ],
+    "nace": [
+     "49.10",
+     "49.20"
+    ],
+    "isic": [
+     "4911",
+     "4912"
+    ]
+   }
+  },
+  {
+   "concept": "airline",
+   "short": "airline",
+   "long": "an airline flying passengers between airports on scheduled flights",
+   "term": "air transport",
+   "classes": {
+    "us": [
+     "4512"
+    ],
+    "japan": [
+     "4611"
+    ],
+    "nace": [
+     "51.10"
+    ],
+    "isic": [
+     "5110"
+    ]
+   }
+  },
+  {
+   "concept": "warehouse",
+   "short": "warehouse",
+   "long": "a company that stores goods in warehouses",
+   "term": "warehous",
+   "classes": {
+    "us": [
+     "4225"
+    ],
+    "japan": [
+     "4711"
+    ],
+    "nace": [
+     "52.10"
+    ],
+    "isic": [
+     "5210"
+    ]
+   }
+  },
+  {
+   "concept": "telecommunications",
+   "short": "telecommunications",
+   "long": "a telephone and internet network operator",
+   "term": "telecommunication",
+   "classes": {
+    "us": [
+     "4813"
+    ],
+    "japan": [
+     "3711",
+     "3712",
+     "3719",
+     "3721"
+    ],
+    "nace": [
+     "61.10"
+    ],
+    "isic": [
+     "6110"
+    ]
+   }
+  },
+  {
+   "concept": "commercial bank",
+   "short": "commercial bank",
+   "long": "a bank that takes deposits and makes loans to customers",
+   "term": "bank",
+   "classes": {
+    "us": [
+     "6021"
+    ],
+    "japan": [
+     "6221"
+    ],
+    "nace": [
+     "64.19"
+    ],
+    "isic": [
+     "6419"
+    ]
+   }
+  },
+  {
+   "concept": "life insurance",
+   "short": "life insurance",
+   "long": "an insurer selling life insurance policies",
+   "term": "insurance",
+   "classes": {
+    "us": [
+     "6311"
+    ],
+    "japan": [
+     "6711"
+    ],
+    "nace": [
+     "65.11"
+    ],
+    "isic": [
+     "6511"
+    ]
+   }
+  },
+  {
+   "concept": "temp agency",
+   "short": "temp agency",
+   "long": "an agency that supplies temporary workers to businesses",
+   "term": "temporary",
+   "classes": {
+    "us": [
+     "7363"
+    ],
+    "japan": [
+     "9121"
+    ],
+    "nace": [
+     "78.20"
+    ],
+    "isic": [
+     "7820"
+    ]
+   }
+  },
+  {
+   "concept": "primary school",
+   "short": "primary school",
+   "long": "a school educating young children",
+   "term": "school",
+   "classes": {
+    "us": [
+     "8211"
+    ],
+    "japan": [
+     "8121"
+    ],
+    "nace": [
+     "85.20"
+    ],
+    "isic": [
+     "8510"
+    ]
+   }
+  },
+  {
+   "concept": "car repair garage",
+   "short": "car repair garage",
+   "long": "a garage that repairs and services cars",
+   "term": "repair of motor",
+   "classes": {
+    "us": [
+     "7538"
+    ],
+    "japan": [
+     "8911"
+    ],
+    "nace": [
+     "45.20"
+    ],
+    "isic": [
+     "4520"
+    ]
+   }
+  },
+  {
+   "concept": "library",
+   "short": "library",
+   "long": "a public library lending books",
+   "term": "librar",
+   "classes": {
+    "us": [
+     "8231"
+    ],
+    "japan": [
+     "8212"
+    ],
+    "nace": [
+     "91.01"
+    ],
+    "isic": [
+     "9101"
+    ]
+   }
+  }
+ ]
+}

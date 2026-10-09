@@ -1,0 +1,25 @@
+[package]
+name = "dynamic-log-level-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "dynamic-log-level-spike"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+axum = "0.8"
+tower-http = { version = "0.6", features = ["trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Candidate mechanism for docs/plans/v4-dynamic-log-level.md §4.4 - a
+# real ConfigMap-mount symlink-swap simulation (src/configmap_sim.rs)
+# decides live whether this actually sees the change, or whether
+# polling (no extra dependency needed) is the more reliable choice.
+notify = "8"
+anyhow = "1"
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }

@@ -1,0 +1,54 @@
+{
+  "code": 200,
+  "data": {
+    "address": "ONE APPLE PARK WAY",
+    "category": "Large accelerated filer",
+    "cik": "0000320193",
+    "city": "CUPERTINO",
+    "companyFactsURL": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+    "description": "Unknown",
+    "division": "D",
+    "divisionDescription": "Manufacturing",
+    "ein": "942404110",
+    "entityType": "operating",
+    "exchanges": [
+      "Nasdaq"
+    ],
+    "filingsURL": "https://www.sec.gov/cgi-bin/browse-edgar?CIK=320193&action=getcompany",
+    "firmographicsURL": "https://data.sec.gov/submissions/CIK0000320193.json",
+    "fiscalYearEnd": "0926",
+    "industryGroup": "357",
+    "industryGroupDescription": "Computer And Office Equipment",
+    "majorGroup": "35",
+    "majorGroupDescription": "Industrial And Commercial Machinery And Computer Equipment",
+    "name": "Apple Inc.",
+    "phone": "(408) 996-1010",
+    "sic": "3571",
+    "sicDescription": "Electronic Computers",
+    "stateOfIncorporation": "CA",
+    "stateProvince": "CA",
+    "tickers": [
+      "Nasdaq",
+      "AAPL"
+    ],
+    "transactionsByIssuer": "https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK=320193",
+    "transactionsByOwner": "https://www.sec.gov/cgi-bin/own-disp?action=getowner&CIK=320193",
+    "website": "Unknown",
+    "zipPostal": "95014"
+  },
+  "dependencies": {
+    "data": {
+      "edgarFacts": "https://data.sec.gov/api/xbrl/companyfacts/",
+      "edgarSubmissions": "https://data.sec.gov/submissions/",
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "pyedgarRoot": "https://www.sec.gov/Archives/edgar/data",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {
+      "pyedgar": "https://github.com/gaulinmp/pyedgar",
+      "sic": "https://github.com/miha42-github/company_dns"
+    }
+  },
+  "message": "Company data has been returned for query [320193].",
+  "module": "EdgarQueries-> get_firmographics"
+}

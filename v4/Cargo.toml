@@ -1,0 +1,99 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/cache",
+    "crates/edgar",
+    "crates/sic",
+    "crates/wikipedia",
+    "crates/firmographics",
+    "crates/server",
+]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+# Decided in docs/plans/go-duckdb-rewrite.md sec7.9/status line and
+# docs/plans/edgar-backend.md status line (2026-09-28): DataFusion 55.x,
+# chosen alongside edgarkit for EDGAR (Option 2) - the two decisions are
+# linked, since 55.x is what lets edgarkit and DataFusion share a single
+# process at all (a chrono-version conflict on DataFusion 42.2.0,
+# edgar-backend.md sec2.1).
+[workspace.dependencies]
+# Parquet and the compression codecs are off: V4 never reads Parquet (the data is Arrow IPC)
+# and measured 7 MiB smaller with no behaviour change. Every other default stays, including the
+# SQL expression-function libraries (they cost 0.1 MiB under LTO, and the SQL endpoint uses them).
+# docs/plans/v4-release-to-staging.md step 5.
+datafusion = { version = "55", default-features = false, features = ["nested_expressions", "crypto_expressions", "datetime_expressions", "encoding_expressions", "regex_expressions", "string_expressions", "unicode_expressions", "recursive_protection", "sql"] }
+edgarkit = "0.4.0"
+chrono = "0.4"
+moka = { version = "0.12", features = ["future"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1"
+# Upgraded 0.7 -> 0.8 (docs/plans/v4-openapi-docs.md sec2): a
+# prerequisite for utoipa-axum/utoipa-swagger-ui/utoipa-redoc, which all
+# require axum ^0.8.4. Checked the real migration surface before
+# upgrading rather than assuming risk: only the route-path syntax
+# (:param -> {param}) and nothing else in axum 0.8's breaking-changes
+# list applies to this codebase's actual usage (Router/State/Path/
+# Query/get/IntoResponse/Json/CorsLayer/axum::serve only) - v4 is
+# pre-release, so taking this now is fine.
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors", "limit", "timeout", "trace", "set-header"] }
+utoipa = { version = "6", features = ["axum_extras"] }
+utoipa-axum = "0.3"
+utoipa-swagger-ui = { version = "10", features = ["axum"] }
+utoipa-redoc = { version = "7", features = ["axum"] }
+# docs/plans/v4-security-hardening.md sec2/sec4: rate limiting
+# (tower_governor's GovernorLayer confirmed working, sec4.1, but the
+# actual tiered/bypass design uses governor's RateLimiter::keyed
+# directly - sec3.2's "resolved... option (b)"), and the sec3.5 rolling
+# shared-secret User-Agent (HMAC-SHA256 over a UTC date+hour salt).
+tower_governor = "0.8"
+governor = "0.10"
+sha2 = "0.11"
+# docs/plans/v4-dynamic-log-level.md sec3/sec4: real structured logging
+# (replacing println!/eprintln!, and giving TraceLayer's own events -
+# already generated, previously silently dropped - somewhere to go),
+# plus a live-reloadable level (tracing_subscriber::reload, confirmed
+# in experiments/dynamic-log-level-spike/ to need no separate cargo
+# feature beyond env-filter's own dependency chain).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Promoted from experiments/wikipedia-spike/ (docs/plans/
+# v4-server-prototype.md sec8.1): the real Wikipedia/Wikidata HTTP
+# client in company-dns-wikipedia. Deliberately raw reqwest, not a
+# general-purpose MediaWiki crate - see that spike's README "Existing
+# crate evaluation" for why (no candidate provides wptools' infobox-
+# parsing logic or maxlag/backoff/field-narrowing).
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
+roxmltree = "0.20"
+regex = "1"
+# HTTP Basic Auth header decoding for the experimental SQL endpoint
+# (docs/plans/v4-sql-endpoint.md section 5a). 0.22 is already in the tree.
+base64 = "0.22"
+html2text = "0.17"
+thiserror = "2"
+
+# ---------------------------------------------------------------------------------------------
+# Release size options, measured 2026-10-06 (docs/plans/v4-release-to-staging.md step 5). Both are
+# kept so the side-by-side tests can build and compare them; the choice is confirmed after testing.
+# Plain `cargo build --release` is left alone (fast builds for development).
+#
+#   cargo build --profile release-lean    ~89 MiB stripped on macOS arm64; no slower than the old release build
+#   cargo build --profile release-small   ~62 MiB; same speed except scan-heavy SQL (about 28% slower)
+#
+# `panic = "abort"` stays off (a panicking request must not take the server down) and `opt-level`
+# "z" is rejected (1.7x to 6x slower). Builds take about 9 minutes (lean) and 6 (small).
+[profile.release-lean]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+
+[profile.release-small]
+inherits = "release-lean"
+opt-level = "s"

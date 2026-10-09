@@ -1,5 +1,21 @@
 # Migrate company_dns from Azure Container Apps to on-prem MicroK8s
 
+**Partially superseded (2026-09-30) by
+[`v4-deployment.md`](v4-deployment.md)**: this doc's reusable, still-true
+facts — the live cluster survey (nodes, namespaces, ingress/Traefik
+resolution, TLS, storage classes, SealedSecrets availability) and the
+proven `k8s/prod/` manifest pattern — are now carried forward and kept
+current in that doc's §1.3/§3.8, since V4 needs them too (specifically
+to add dev/staging environments this doc explicitly deferred, its own
+line below: *"No introduction of dev/staging tiers (can be a later
+follow-up if needed)"* — that follow-up is `v4-deployment.md` §3.4).
+**Everything below this notice stays exactly as it is, unedited**: it's
+the historical record of V3's actual Azure→K8s migration (already
+complete), not a living document — don't add new V4 decisions here,
+they belong in `v4-deployment.md`.
+
+---
+
 Status: **Migration complete.** `company_dns` is live on the cluster at
 `https://company-dns.mediumroast.io` (verified: TLS cert issued and valid,
 `/health` and representative endpoints returning correct responses), the

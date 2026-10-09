@@ -1,0 +1,16 @@
+{
+  "defaults": {
+    "rate_limit": {"requests_per_minute": 300, "burst": 30}
+  },
+  "profiles": {
+    "mediumroast.io": {
+      "rate_limit": {"bypass": true},
+      "sql": {"datasets": ["sic", "edgar"],
+              "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2, "requests_per_minute": 30}}
+    },
+    "partner-example": {
+      "rate_limit": {"requests_per_minute": 600},
+      "sql": {"datasets": ["sic"], "limits": {"max_rows": 200}}
+    }
+  }
+}

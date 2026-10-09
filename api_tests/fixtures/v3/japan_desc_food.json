@@ -1,0 +1,94 @@
+{
+  "code": 200,
+  "data": {
+    "industry_groups": {
+      "Eating and drinking places, and Food tale out and delivery services": {
+        "code": "M2",
+        "division_code": "M",
+        "group_code": "759",
+        "major_group_code": "75"
+      },
+      "Food and beverage stores, n.e.c.": {
+        "code": "58B",
+        "division_code": "I",
+        "group_code": "589",
+        "major_group_code": "58"
+      },
+      "Food and beverages": {
+        "code": "522",
+        "division_code": "I",
+        "group_code": "522",
+        "major_group_code": "52"
+      },
+      "Food delivery services": {
+        "code": "772",
+        "division_code": "M",
+        "group_code": "772",
+        "major_group_code": "77"
+      },
+      "Food take out and delivery services": {
+        "code": "77",
+        "division_code": "M",
+        "group_code": "77",
+        "major_group_code": "77"
+      },
+      "Food take out services": {
+        "code": "771",
+        "division_code": "M",
+        "group_code": "771",
+        "major_group_code": "77"
+      },
+      "Manufacture of food": {
+        "code": "09",
+        "division_code": "E",
+        "group_code": "09",
+        "major_group_code": "09"
+      },
+      "Miscellaneous foods and related products": {
+        "code": "099",
+        "division_code": "E",
+        "group_code": "099",
+        "major_group_code": "09"
+      },
+      "Prepared animal foods and organic fertilizers": {
+        "code": "106",
+        "division_code": "E",
+        "group_code": "106",
+        "major_group_code": "10"
+      },
+      "Retail food and beverage stores, n.e.c.": {
+        "code": "589",
+        "division_code": "I",
+        "group_code": "589",
+        "major_group_code": "58"
+      },
+      "Retail trade (food and beverage)": {
+        "code": "58",
+        "division_code": "I",
+        "group_code": "58",
+        "major_group_code": "58"
+      },
+      "Seafood products": {
+        "code": "092",
+        "division_code": "E",
+        "group_code": "092",
+        "major_group_code": "09"
+      },
+      "Wholesale trade (food and beverages)": {
+        "code": "52",
+        "division_code": "I",
+        "group_code": "52",
+        "major_group_code": "52"
+      }
+    },
+    "total": 13
+  },
+  "dependencies": {
+    "data": {
+      "japanSicData": "https://www.stat.go.jp/english/data/e-census/2021/industry.html"
+    },
+    "modules": {}
+  },
+  "message": "Japan SIC industry group data has been returned for description query [food].",
+  "module": "JapanSICQueries-> get_industry_group_by_description"
+}

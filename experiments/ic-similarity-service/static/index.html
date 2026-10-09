@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>IC Similarity Search (test tool)</title>
+<style>
+  /* Dark theme tokens borrowed from html/styles.css :root - not the
+     full stylesheet, just enough to look visually consistent. */
+  :root {
+    --color-bg-primary: #0F0D0E;
+    --color-bg-secondary: #1a1718;
+    --color-bg-tertiary: #3c3b3b;
+    --color-text-primary: #ca703f;
+    --color-text-secondary: rgb(104, 95, 88);
+    --color-text-accent: #924e29;
+    --color-link-primary: #1696c8;
+    --spacing-xs: 0.3rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --font-family-base: 'Avenir Next', 'Open Sans Light', 'Lato Medium', sans-serif;
+    --font-size-base: 11.5pt;
+    --font-size-small: 10.5pt;
+    --border-width: 0.05rem;
+    --border-color: rgb(104, 95, 88);
+    --border-radius: 0.5rem;
+    --border-radius-small: 0.3rem;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-family: var(--font-family-base);
+    font-size: var(--font-size-base);
+  }
+
+  .wrap {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: var(--spacing-lg);
+  }
+
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+  }
+
+  .subtitle {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-small);
+    margin-bottom: var(--spacing-lg);
+  }
+
+  /* Input mode tabs */
+  .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .tab {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-secondary);
+    border: var(--border-width) solid var(--border-color);
+    border-bottom: none;
+    border-radius: var(--border-radius-small) var(--border-radius-small) 0 0;
+    padding: var(--spacing-xs) var(--spacing-md);
+    font-family: inherit;
+    font-size: var(--font-size-small);
+    cursor: pointer;
+  }
+
+  .tab.active {
+    background: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
+  }
+
+  .input-panel {
+    background: var(--color-bg-tertiary);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: 0 var(--border-radius-small) var(--border-radius-small) var(--border-radius-small);
+    padding: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .input-panel[hidden] {
+    display: none;
+  }
+
+  input[type="text"], textarea, input[type="number"] {
+    background: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    border: var(--border-width) solid var(--border-color);
+    border-radius: var(--border-radius-small);
+    padding: var(--spacing-sm);
+    font-family: inherit;
+    font-size: inherit;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 6rem;
+  }
+
+  .controls-row {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: center;
+    margin-top: var(--spacing-sm);
+  }
+
+  .controls-row input[type="number"] {
+    width: 4rem;
+  }
+
+  .controls-row label {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-small);
+  }
+
+  button {
+    background: var(--color-text-accent);
+    color: var(--color-bg-primary);
+    border: none;
+    border-radius: var(--border-radius-small);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+  }
+
+  button:hover {
+    opacity: 0.85;
+  }
+
+  button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    text-align: left;
+    padding: var(--spacing-sm);
+    border-bottom: var(--border-width) solid var(--border-color);
+    font-size: var(--font-size-small);
+    vertical-align: middle;
+  }
+
+  th {
+    color: var(--color-text-secondary);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+  }
+
+  .rank {
+    color: var(--color-text-secondary);
+    width: 2rem;
+  }
+
+  /* Similarity cell: raw score, calibrated bar, qualitative band -
+     see docs/plans/ic-similarity-search-poc.md sec5 for why a bare
+     percentage alone is misleading. */
+  .sim-cell {
+    width: 12rem;
+  }
+
+  /* Plain-language label is the primary signal (sec5.7) - prominent.
+     Raw score is secondary/muted, shown small below the bar; available
+     on hover via the cell's title attribute too. */
+  .sim-band {
+    font-size: 0.85rem;
+    font-weight: 500;
+  }
+
+  .sim-bar-track {
+    background: var(--color-bg-secondary);
+    border-radius: var(--border-radius-small);
+    height: 0.4rem;
+    margin-top: 0.25rem;
+    overflow: hidden;
+  }
+
+  .sim-bar-fill {
+    height: 100%;
+    border-radius: var(--border-radius-small);
+  }
+
+  .sim-raw {
+    display: block;
+    color: var(--color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    font-size: 0.65rem;
+    margin-top: 0.15rem;
+  }
+
+  .band-unlikely .sim-bar-fill { background: #6b6560; }
+  .band-possible .sim-bar-fill { background: #924e29; }
+  .band-likely .sim-bar-fill { background: #d98a3d; }
+  .band-verysimilar .sim-bar-fill { background: #e8b04a; }
+
+  .band-unlikely .sim-band { color: #8f8a85; }
+  .band-possible .sim-band { color: #ca703f; }
+  .band-likely .sim-band { color: #d98a3d; }
+  .band-verysimilar .sim-band { color: #e8b04a; }
+
+  .path {
+    color: var(--color-text-primary);
+  }
+
+  .path .sep {
+    color: var(--color-text-secondary);
+    margin: 0 0.3em;
+  }
+
+  .status {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-small);
+    margin-bottom: var(--spacing-md);
+    min-height: 1.2em;
+  }
+
+  .status.error {
+    color: #c0392b;
+  }
+
+  .calibration-note {
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    margin-top: var(--spacing-xs);
+  }
+
+  .truncation-warning {
+    background: rgba(217, 138, 61, 0.12);
+    border: var(--border-width) solid #d98a3d;
+    border-radius: var(--border-radius-small);
+    color: #e8b04a;
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: var(--font-size-small);
+    margin-bottom: var(--spacing-md);
+  }
+
+  .token-count-note {
+    color: var(--color-text-secondary);
+    font-size: 0.7rem;
+    margin-bottom: var(--spacing-md);
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>IC Similarity Search</h1>
+  <div class="subtitle">
+    Test tool for docs/plans/go-duckdb-rewrite.md &sect;7.8's model decision (all-MiniLM-L6-v2 only) - not part of company_dns itself.
+  </div>
+
+  <div class="tabs">
+    <button type="button" class="tab active" id="tabSimple" data-mode="simple">Simple</button>
+    <button type="button" class="tab" id="tabDetailed" data-mode="detailed">Detailed</button>
+  </div>
+
+  <div class="input-panel" id="panelSimple">
+    <input type="text" id="querySimple" placeholder="e.g. growing wheat, software company, oil drilling..." autofocus>
+  </div>
+
+  <div class="input-panel" id="panelDetailed" hidden>
+    <textarea id="queryDetailed" placeholder="Paste a longer description here - a company description, a fuller phrase, etc."></textarea>
+  </div>
+
+  <!-- Input-layer truncation check (not a post-search banner - checked
+       live, debounced, as the user types/pastes, so it's visible
+       before they ever hit Search). -->
+  <div class="truncation-warning" id="truncationWarning" style="display:none"></div>
+  <div class="token-count-note" id="tokenCountNote" style="display:none"></div>
+
+  <div class="controls-row">
+    <label for="k">results:</label>
+    <input type="number" id="k" value="10" min="1" max="50" title="how many results">
+    <button id="searchBtn">Search</button>
+  </div>
+
+  <div class="status" id="status" style="margin-top: var(--spacing-md);"></div>
+
+  <table id="results" style="display:none">
+    <thead>
+      <tr>
+        <th class="rank">#</th>
+        <th class="sim-cell">similarity</th>
+        <th>classification path</th>
+      </tr>
+    </thead>
+    <tbody id="resultsBody"></tbody>
+  </table>
+  <div class="calibration-note" id="calibrationNote" style="display:none">
+    Match labels are calibrated against this corpus's own results, not a raw 0-100% scale
+    (hover a result's percentage for the exact score). See docs/plans/ic-similarity-search-poc.md &sect;5.
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

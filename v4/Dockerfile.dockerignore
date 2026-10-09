@@ -1,0 +1,10 @@
+# Applies to v4/Dockerfile only (V3's Dockerfile at the repository root has its own context rules).
+*
+!v4
+!docs/plans/research/check_ic_feather.py
+v4/target
+v4/.local
+v4/.fastembed_cache
+**/.fastembed_cache
+**/__pycache__
+**/*.log

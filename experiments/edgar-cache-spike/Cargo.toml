@@ -1,0 +1,18 @@
+[package]
+name = "edgar-cache-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "edgar-cache-spike"
+path = "src/main.rs"
+
+[dependencies]
+edgarkit = "0.4.0"
+# The general caching mechanism decided in go-duckdb-rewrite.md sec5.1 -
+# process-local, in-process, TTL+LRU, no external process. "future"
+# feature enables the async Cache API this spike's tokio-based fetch
+# path needs.
+moka = { version = "0.12", features = ["future"] }
+tokio = { version = "1", features = ["full"] }

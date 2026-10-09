@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "data": {
+    "sections": {
+      "A": {
+        "description": "AGRICULTURE, FORESTRY AND FISHING"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "euSicData": "https://showvoc.op.europa.eu/#/datasets"
+    },
+    "modules": {}
+  },
+  "message": "EU SIC section data has been returned for query [A].",
+  "module": "EuSICQueries-> get_section_by_code"
+}

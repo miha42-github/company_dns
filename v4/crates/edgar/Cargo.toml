@@ -1,0 +1,19 @@
+[package]
+name = "company-dns-edgar"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+company-dns-cache = { path = "../cache" }
+edgarkit.workspace = true
+datafusion.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+
+[[bin]]
+name = "ingest-edgar"
+path = "src/bin/ingest_edgar.rs"

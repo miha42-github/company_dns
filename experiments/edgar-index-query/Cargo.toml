@@ -1,0 +1,17 @@
+[package]
+name = "edgar-index-query"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "edgar-index-query"
+path = "src/main.rs"
+
+[dependencies]
+# Deliberately no edgarkit here - see ../edgar-spike/Cargo.toml for why
+# this had to be a separate crate (a real chrono-version conflict
+# between edgarkit and arrow-arith, pulled in transitively by
+# datafusion). Same read_arrow pattern as ../df-spike.
+datafusion = "42"
+tokio = { version = "1", features = ["full"] }

@@ -1,0 +1,40 @@
+{
+  "code": 200,
+  "data": {
+    "classes": {
+      "Casting of steel": {
+        "code": "24.52",
+        "division_code": "24",
+        "group_code": "24.5",
+        "section_code": "C"
+      },
+      "Manufacture of basic iron and steel and of ferro-alloys": {
+        "code": "24.10",
+        "division_code": "24",
+        "group_code": "24.1",
+        "section_code": "C"
+      },
+      "Manufacture of steel drums and similar containers": {
+        "code": "25.91",
+        "division_code": "25",
+        "group_code": "25.9",
+        "section_code": "C"
+      },
+      "Manufacture of tubes, pipes, hollow profiles and related fittings, of steel": {
+        "code": "24.20",
+        "division_code": "24",
+        "group_code": "24.2",
+        "section_code": "C"
+      }
+    },
+    "total": 4
+  },
+  "dependencies": {
+    "data": {
+      "euSicData": "https://showvoc.op.europa.eu/#/datasets"
+    },
+    "modules": {}
+  },
+  "message": "EU SIC class data has been returned for description query [steel].",
+  "module": "EuSICQueries-> get_class_by_description"
+}

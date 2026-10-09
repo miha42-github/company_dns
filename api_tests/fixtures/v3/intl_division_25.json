@@ -1,0 +1,20 @@
+{
+  "code": 200,
+  "data": {
+    "divisions": {
+      "25": {
+        "description": "Manufacture of fabricated metal products, except machinery and equipment",
+        "section_code": "C"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "isicData": "https://unstats.un.org/unsd/classifications/Econ/isic"
+    },
+    "modules": {}
+  },
+  "message": "Division data has been returned for query [25].",
+  "module": "InternationalSICQueries-> get_division_by_code"
+}

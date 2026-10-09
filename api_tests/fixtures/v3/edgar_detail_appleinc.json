@@ -1,0 +1,123 @@
+{
+  "code": 200,
+  "data": {
+    "companies": {
+      "APPLE INC": {
+        "code": 200,
+        "data": {
+          "address": "ONE APPLE PARK WAY",
+          "category": "Large accelerated filer",
+          "cik": "0000320193",
+          "city": "CUPERTINO",
+          "companyFactsURL": "https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json",
+          "description": "Unknown",
+          "division": "D",
+          "divisionDescription": "Manufacturing",
+          "ein": "942404110",
+          "entityType": "operating",
+          "exchanges": [
+            "Nasdaq"
+          ],
+          "filingsURL": "https://www.sec.gov/cgi-bin/browse-edgar?CIK=320193&action=getcompany",
+          "firmographicsURL": "https://data.sec.gov/submissions/CIK0000320193.json",
+          "fiscalYearEnd": "0926",
+          "industryGroup": "357",
+          "industryGroupDescription": "Computer And Office Equipment",
+          "majorGroup": "35",
+          "majorGroupDescription": "Industrial And Commercial Machinery And Computer Equipment",
+          "name": "Apple Inc.",
+          "phone": "(408) 996-1010",
+          "sic": "3571",
+          "sicDescription": "Electronic Computers",
+          "stateOfIncorporation": "CA",
+          "stateProvince": "CA",
+          "tickers": [
+            "Nasdaq",
+            "AAPL"
+          ],
+          "transactionsByIssuer": "https://www.sec.gov/cgi-bin/own-disp?action=getissuer&CIK=320193",
+          "transactionsByOwner": "https://www.sec.gov/cgi-bin/own-disp?action=getowner&CIK=320193",
+          "website": "Unknown",
+          "zipPostal": "95014"
+        },
+        "dependencies": {
+          "data": {
+            "edgarFacts": "https://data.sec.gov/api/xbrl/companyfacts/",
+            "edgarSubmissions": "https://data.sec.gov/submissions/",
+            "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+            "pyedgarRoot": "https://www.sec.gov/Archives/edgar/data",
+            "sicData": "https://github.com/miha42-github/sic4-list"
+          },
+          "modules": {
+            "pyedgar": "https://github.com/gaulinmp/pyedgar",
+            "sic": "https://github.com/miha42-github/company_dns"
+          }
+        },
+        "forms": {
+          "2024-11-1-000032019324000123": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/0000320193-24-000123-index.html",
+            "formType": "10-K"
+          },
+          "2024-2-2-000032019324000006": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000006/0000320193-24-000006-index.html",
+            "formType": "10-Q"
+          },
+          "2024-5-3-000032019324000069": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000069/0000320193-24-000069-index.html",
+            "formType": "10-Q"
+          },
+          "2024-8-2-000032019324000081": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019324000081/0000320193-24-000081-index.html",
+            "formType": "10-Q"
+          },
+          "2025-1-31-000032019325000008": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000008/0000320193-25-000008-index.html",
+            "formType": "10-Q"
+          },
+          "2025-10-31-000032019325000079": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/0000320193-25-000079-index.html",
+            "formType": "10-K"
+          },
+          "2025-5-2-000032019325000057": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000057/0000320193-25-000057-index.html",
+            "formType": "10-Q"
+          },
+          "2025-8-1-000032019325000073": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019325000073/0000320193-25-000073-index.html",
+            "formType": "10-Q"
+          },
+          "2026-1-30-000032019326000006": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000006/0000320193-26-000006-index.html",
+            "formType": "10-Q"
+          },
+          "2026-5-1-000032019326000013": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000013/0000320193-26-000013-index.html",
+            "formType": "10-Q"
+          },
+          "2026-7-31-000032019326000020": {
+            "filingIndex": "https://www.sec.gov/Archives/edgar/data/320193/000032019326000020/0000320193-26-000020-index.html",
+            "formType": "10-Q"
+          }
+        },
+        "message": "Company data has been returned for query [320193].",
+        "module": "EdgarQueries-> get_firmographics"
+      }
+    },
+    "totalCompanies": 1
+  },
+  "dependencies": {
+    "data": {
+      "edgarFacts": "https://data.sec.gov/api/xbrl/companyfacts/",
+      "edgarSubmissions": "https://data.sec.gov/submissions/",
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "pyedgarRoot": "https://www.sec.gov/Archives/edgar/data",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {
+      "pyedgar": "https://github.com/gaulinmp/pyedgar",
+      "sic": "https://github.com/miha42-github/company_dns"
+    }
+  },
+  "message": "Company data has been returned for query [Apple Inc.].",
+  "module": "EdgarQueries-> get_all_details"
+}

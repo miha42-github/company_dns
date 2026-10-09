@@ -1,0 +1,8 @@
+[package]
+name = "embed-bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+fastembed = "7"
+anyhow = "1"

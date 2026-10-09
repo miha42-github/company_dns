@@ -1,0 +1,21 @@
+{
+  "code": 200,
+  "data": {
+    "major_groups": {
+      "35": {
+        "description": "Industrial And Commercial Machinery And Computer Equipment",
+        "division": "D"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {}
+  },
+  "message": "Major group data has been returned for query [35].",
+  "module": "SICQueries-> get_all_major_group_by_no"
+}

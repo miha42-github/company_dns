@@ -1,0 +1,26 @@
+{
+  "code": 200,
+  "data": {
+    "sics": {
+      "3571": {
+        "description": "Electronic Computers",
+        "division": "D",
+        "division_desc": "Manufacturing",
+        "industry_group": "357",
+        "industry_group_desc": "Computer And Office Equipment",
+        "major_group": "35",
+        "major_group_desc": "Industrial And Commercial Machinery And Computer Equipment"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "oshaSICQuery": "https://www.osha.gov/data/sic-search",
+      "sicData": "https://github.com/miha42-github/sic4-list"
+    },
+    "modules": {}
+  },
+  "message": "SIC data has been returned for query [3571].",
+  "module": "SICQueries-> get_all_sic_by_no"
+}

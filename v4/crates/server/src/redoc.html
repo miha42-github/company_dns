@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>company_dns API (V4)</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Both API documentation pages (/docs and /redoc) stay in a light theme: this pins the page to
+         light so a dark system preference cannot turn the canvas dark under ReDoc's light colours.
+         Nothing here is loaded from a third party: the script is the vendored, pinned Redoc bundle served
+         by this server, and the fonts are the system stack (no Google Fonts, no CDN). Otherwise this is
+         utoipa-redoc's default template; $spec and $config are filled in by it. -->
+    <meta name="color-scheme" content="light" />
+
+    <style>
+      :root { color-scheme: light; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        background: #ffffff;
+        color: #333333;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="redoc-container"></div>
+    <script src="/redoc/redoc.standalone.js"></script>
+    <script>
+      var systemFonts = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+      Redoc.init(
+        $spec,
+        Object.assign(
+          { theme: { typography: { fontFamily: systemFonts, headings: { fontFamily: systemFonts } } } },
+          $config
+        ),
+        document.getElementById("redoc-container")
+      );
+    </script>
+  </body>
+</html>

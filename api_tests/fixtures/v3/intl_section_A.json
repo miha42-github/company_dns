@@ -1,0 +1,19 @@
+{
+  "code": 200,
+  "data": {
+    "sections": {
+      "A": {
+        "description": "Agriculture, forestry and fishing"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "isicData": "https://unstats.un.org/unsd/classifications/Econ/isic"
+    },
+    "modules": {}
+  },
+  "message": "Section data has been returned for query [A].",
+  "module": "InternationalSICQueries-> get_section_by_code"
+}

@@ -1,0 +1,22 @@
+{
+  "code": 200,
+  "data": {
+    "classes": {
+      "2591": {
+        "description": "Forging, pressing, stamping and roll-forming of metal; powder metallurgy",
+        "division_code": "25",
+        "group_code": "259",
+        "section_code": "C"
+      }
+    },
+    "total": 1
+  },
+  "dependencies": {
+    "data": {
+      "isicData": "https://unstats.un.org/unsd/classifications/Econ/isic"
+    },
+    "modules": {}
+  },
+  "message": "Class data has been returned for query [2591].",
+  "module": "InternationalSICQueries-> get_class_by_code"
+}
