@@ -74,6 +74,38 @@ class V3ShapedEdgar(ServerTestCase):
             self.assertEqual(v2[f], v3[f], f)
 
 
+class WikipediaLineage(ServerTestCase):
+    """The Wikipedia answers carry lineage and attribution: how the company was found, the data sources, and what the call cost."""
+
+    @unittest.skipUnless(NETWORK, "calls Wikipedia; set API_TESTS_NETWORK=1")
+    def test_v3_and_v2_paths_use_v3s_message_and_module_and_have_performance(self):
+        v3 = fixture("wikipedia_appleinc")
+        for path in (f"/V3.0/global/company/wikipedia/firmographics/{APPLE}", f"/V2.0/company/wikipedia/firmographics/{APPLE}"):
+            with self.subTest(path=path):
+                _, body, _ = get(path)
+                self.assertEqual(body["module"], v3["module"])
+                self.assertTrue(body["message"].startswith("Discovered and returning wikipedia data for the company [Apple Inc.]"), body["message"])
+                self.assertEqual(sorted(body["performance"]), sorted(["extraction_time", "parallel_api_time", "total_time", "cache_hit"]))
+                self.assertEqual(body["dependencies"]["data"], v3["dependencies"]["data"])
+
+    @unittest.skipUnless(NETWORK, "calls Wikipedia and SEC; set API_TESTS_NETWORK=1")
+    def test_tickers_are_symbols_only_in_both_sources(self):
+        """V3 put the exchange into `tickers` (`["NASDAQ", "AAPL"]`); V4 returns the symbols, and `exchanges` carries the exchange."""
+        for name, path in (("wikipedia", f"/V3.0/global/company/wikipedia/firmographics/{APPLE}"), ("edgar", "/V3.0/na/company/edgar/firmographics/320193")):
+            with self.subTest(source=name):
+                data = data_of(path)
+                self.assertEqual(data["tickers"], ["AAPL"])
+                self.assertTrue(data["exchanges"])
+
+    @unittest.skipUnless(NETWORK, "calls Wikipedia; set API_TESTS_NETWORK=1")
+    def test_a_repeat_request_is_a_cache_hit_with_no_upstream_time(self):
+        get(f"/V4.0/global/company/wikipedia/firmographics/{APPLE}")
+        _, body, _ = get(f"/V4.0/global/company/wikipedia/firmographics/{APPLE}")
+        self.assertTrue(body["performance"]["cache_hit"])
+        self.assertEqual(body["performance"]["parallel_api_time"], 0)
+        self.assertEqual(body["module"], "WikipediaClient->get_firmographics", "the V4 path keeps V4's own module")
+
+
 class KnownGaps(ServerTestCase):
     """V3's shape that V4's /V3.0/ aliases do not return, recorded as intentional for now
     (docs/plans/v4-release-to-staging.md, decision Q14)."""

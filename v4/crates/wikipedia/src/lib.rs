@@ -41,7 +41,26 @@ pub const USER_AGENT: &str =
 
 pub struct WikipediaClient {
     http: reqwest::Client,
-    cache: FallbackCache<String, Arc<serde_json::Value>>,
+    cache: FallbackCache<String, Arc<Lookup>>,
+}
+
+/// A successful lookup as cached: the firmographics, the human-readable message that says how the company was found, and how
+/// long the original fetch took.
+#[derive(Debug)]
+pub struct Lookup {
+    pub data: Arc<serde_json::Value>,
+    pub message: String,
+    parallel_api_time: f64,
+    extraction_time: f64,
+}
+
+/// What one request cost: `parallel_api_time` and `extraction_time` are zero on a cache hit, `total_time` is this request's own
+/// elapsed time. The first three are V3's `performance` keys; `cache_hit` is V4's.
+#[derive(Debug, Clone)]
+pub struct Found {
+    pub data: Arc<serde_json::Value>,
+    pub message: String,
+    pub performance: serde_json::Value,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -89,16 +108,42 @@ impl WikipediaClient {
         &self,
         company_name: &str,
     ) -> Result<Arc<serde_json::Value>, Arc<WikipediaError>> {
-        self.cache
+        self.lookup(company_name).await.map(|f| f.data)
+    }
+
+    /// `get_firmographics` plus the message and timings the API puts in its envelope.
+    pub async fn lookup(&self, company_name: &str) -> Result<Found, Arc<WikipediaError>> {
+        let started = std::time::Instant::now();
+        let fetched = std::sync::atomic::AtomicBool::new(false);
+        let l = self
+            .cache
             .try_get_with(company_name.to_string(), async {
+                fetched.store(true, std::sync::atomic::Ordering::Relaxed);
                 let outcome = client::lookup_firmographics(&self.http, company_name)
                     .await
                     .map_err(|e| WikipediaError::Request(e.to_string()))?;
                 match outcome.firmographics {
-                    Some(f) => Ok(Arc::new(f)),
+                    Some(f) => Ok(Arc::new(Lookup {
+                        data: Arc::new(f),
+                        message: outcome.message,
+                        parallel_api_time: outcome.parallel_api_time,
+                        extraction_time: outcome.extraction_time,
+                    })),
                     None => Err(WikipediaError::NotFound(outcome.message)),
                 }
             })
-            .await
+            .await?;
+        let hit = !fetched.load(std::sync::atomic::Ordering::Relaxed);
+        let (api, extraction) = if hit { (0.0, 0.0) } else { (l.parallel_api_time, l.extraction_time) };
+        Ok(Found {
+            data: l.data.clone(),
+            message: l.message.clone(),
+            performance: serde_json::json!({
+                "extraction_time": extraction,
+                "parallel_api_time": api,
+                "total_time": started.elapsed().as_secs_f64(),
+                "cache_hit": hit,
+            }),
+        })
     }
 }

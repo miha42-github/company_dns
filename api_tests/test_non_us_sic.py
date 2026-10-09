@@ -36,8 +36,8 @@ NO_MATCH = {  # a query that matches nothing, per path prefix
 
 
 def drop_volatile(env):
-    """The envelope minus what legitimately differs between V3 and V4 (the dependencies block)."""
-    return {k: v for k, v in env.items() if k != "dependencies"}
+    """The envelope minus what legitimately differs between V3 and V4 (the dependencies block) or between two requests (timings)."""
+    return {k: v for k, v in env.items() if k not in ("dependencies", "performance")}
 
 
 class NonUsContract(ServerTestCase):

@@ -36,6 +36,11 @@ pub struct ApiEnvelope {
     pub data: Value,
     #[schema(value_type = Object)]
     pub dependencies: Value,
+    /// Present on the Wikipedia answers: what the request cost (`extraction_time`, `parallel_api_time`, `total_time` in seconds,
+    /// and V4's `cache_hit`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schema(value_type = Option<Object>)]
+    pub performance: Option<Value>,
 }
 
 pub fn envelope(code: u16, message: impl Into<String>, module: &str, data: Value) -> Value {

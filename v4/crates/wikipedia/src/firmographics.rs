@@ -71,17 +71,20 @@ fn transform_isin(isin: &str) -> String {
     isin.trim_matches(|c| c == '{' || c == '}').to_string()
 }
 
-/// Port of wptools' `_transform_stock_ticker`.
-fn transform_stock_ticker(traded_as: &str) -> [String; 2] {
+/// Port of wptools' `_transform_stock_ticker`, with one deliberate fix: V3 returns the positional pair
+/// `[exchange, ticker]` (`["NASDAQ", "AAPL"]`) under `tickers`, which mixes an exchange name into a list of ticker symbols
+/// (the exchange is already in `exchanges`). This returns the symbols only (`["AAPL"]`), as the EDGAR firmographics do.
+/// A value that cannot be read gives `["Unknown"]`, V3's placeholder.
+fn transform_stock_ticker(traded_as: &str) -> Vec<String> {
     let Some(m) = RE_BRACES.find_iter(traded_as.trim()).last() else {
-        return [UKN.to_string(), UKN.to_string()];
+        return vec![UKN.to_string()];
     };
     let tmp = m.as_str().trim_matches(|c| c == '{' || c == '}');
     let parts: Vec<&str> = RE_PIPES.split(tmp).collect();
     if parts.len() >= 2 {
-        [parts[0].to_string(), parts[1].to_string()]
+        vec![parts[1].to_string()]
     } else {
-        [UKN.to_string(), UKN.to_string()]
+        vec![UKN.to_string()]
     }
 }
 
@@ -248,4 +251,21 @@ pub fn build_firmographics(inputs: RawInputs) -> Value {
     }
 
     Value::Object(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tickers_are_the_symbols_not_the_exchange_and_symbol_pair() {
+        assert_eq!(transform_stock_ticker("{{Nasdaq|AAPL}}"), vec!["AAPL"]);
+        assert_eq!(transform_stock_ticker("{{NYSE|IBM}}"), vec!["IBM"]);
+    }
+
+    #[test]
+    fn an_unreadable_value_is_unknown() {
+        assert_eq!(transform_stock_ticker("no template here"), vec!["Unknown"]);
+        assert_eq!(transform_stock_ticker("{{Nasdaq}}"), vec!["Unknown"]);
+    }
 }

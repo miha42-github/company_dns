@@ -69,7 +69,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # general-purpose MediaWiki crate - see that spike's README "Existing
 # crate evaluation" for why (no candidate provides wptools' infobox-
 # parsing logic or maxlag/backoff/field-narrowing).
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip"] }
 roxmltree = "0.20"
 regex = "1"
 # HTTP Basic Auth header decoding for the experimental SQL endpoint

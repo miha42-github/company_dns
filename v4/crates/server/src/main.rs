@@ -1710,13 +1710,29 @@ async fn edgar_firmographics_v3(
 // -------------------------------------------------------------- //
 // Wikipedia (sec8.1, built 2026-09-28) + merged firmographics (sec8.2)
 
-async fn wikipedia_firmographics_impl(
-    state: &AppState,
-    company_name: &str,
-) -> axum::response::Response {
-    let module = "WikipediaClient->get_firmographics";
-    match state.wikipedia.get_firmographics(company_name).await {
-        Ok(data) => ok(module, "ok", (*data).clone()).into_response(),
+/// The `/V4.0/` Wikipedia answer.
+async fn wikipedia_firmographics_impl(state: &AppState, company_name: &str) -> axum::response::Response {
+    wikipedia_answer(state, company_name, "WikipediaClient->get_firmographics").await
+}
+
+/// The `/V3.0/` and `/V2.0/` Wikipedia answer: the same, under V3's module string.
+pub(crate) async fn wikipedia_firmographics_v3_impl(state: &AppState, company_name: &str) -> axum::response::Response {
+    wikipedia_answer(state, company_name, "WikipediaQueriesV2-> get_firmographics").await
+}
+
+/// Lineage and attribution travel with the answer: a message saying how the company was found, the data sources in
+/// `dependencies.data`, and `performance` (what the request cost).
+async fn wikipedia_answer(state: &AppState, company_name: &str, module: &str) -> axum::response::Response {
+    match state.wikipedia.lookup(company_name).await {
+        Ok(found) => {
+            let mut body = envelope::envelope(200, found.message.clone(), module, (*found.data).clone());
+            body["performance"] = found.performance.clone();
+            body["dependencies"]["data"] = json!({
+                "wikiData": "https://www.wikidata.org/wiki/Wikidata:Data_access",
+                "wikipedia": "https://www.mediawiki.org/wiki/API:Main_page",
+            });
+            (axum::http::StatusCode::OK, axum::Json(body)).into_response()
+        }
         // NotFound carries V3's own hint message verbatim (byte-identical
         // to lib/wikipedia_v2.py's lookup_error, restored here after
         // confirming V3's own custom 404 handler silently discards it -
@@ -1764,7 +1780,7 @@ async fn wikipedia_firmographics_v3(
     Path(company_name): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
-    wikipedia_firmographics_impl(&state, &company_name).await
+    wikipedia_firmographics_v3_impl(&state, &company_name).await
 }
 
 async fn merged_firmographics_impl(

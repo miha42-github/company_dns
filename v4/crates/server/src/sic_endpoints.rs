@@ -286,11 +286,11 @@ alias!(edgar_summary_v2, "/V2.0/companies/edgar/summary/{company_name}", "EDGAR 
 alias!(edgar_firmographics_v2, "/V2.0/company/edgar/firmographics/{cik_no}", "EDGAR (V2.0, alias)", "EDGAR firmographics by CIK", ("cik_no", "CIK number"),
     |state, q| crate::v3_edgar::firmographics(&state, &q).await);
 alias!(wikipedia_firmographics_v2_legacy, "/V2.0/company/wikipedia/firmographics/{company_name}", "Wikipedia (V2.0, alias)", "Firmographics from Wikipedia", ("company_name", "Company name"),
-    |state, q| crate::wikipedia_firmographics_impl(&state, &q).await.into_response());
+    |state, q| crate::wikipedia_firmographics_v3_impl(&state, &q).await.into_response());
 alias_always_200!(merged_firmographics_v2_legacy, "/V2.0/company/merged/firmographics/{company_name}", "Merged (V2.0, alias)", "Merged firmographics from all sources", ("company_name", "Company name"),
     |state, q| crate::merged_firmographics_impl(&state, &q).await.into_response());
 // ---- the explicit /v2/ URLs: V3 documents them as "same as default" ----
 alias!(wikipedia_firmographics_v2_url, "/V3.0/global/company/wikipedia/v2/firmographics/{company_name}", "Wikipedia (V3.0, alias)", "Firmographics from Wikipedia (the v2 backend, same as the default path)", ("company_name", "Company name"),
-    |state, q| crate::wikipedia_firmographics_impl(&state, &q).await.into_response());
+    |state, q| crate::wikipedia_firmographics_v3_impl(&state, &q).await.into_response());
 alias_always_200!(merged_firmographics_v2_url, "/V3.0/global/company/merged/v2/firmographics/{company_name}", "Merged (V3.0, alias)", "Merged firmographics (the v2 Wikipedia backend, same as the default path)", ("company_name", "Company name"),
     |state, q| crate::merged_firmographics_impl(&state, &q).await.into_response());

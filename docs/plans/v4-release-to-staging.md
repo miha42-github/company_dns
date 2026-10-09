@@ -323,6 +323,15 @@ and a Japan description search finds more classes (18 against V3's 13 for "food"
 
 **EDGAR catalog scope (checked 2026-10-08, `docs/plans/v4-data-gaps.md`):** the EDGAR catalog covers companies that filed a 10-K or 10-Q in a rolling window of the last eight completed quarters. A company that stopped filing before the window (for example PINEAPPLE, INC., CIK 1654672, last 10-Q 2024-01-12, deregistered 2024-05-07) is not returned by `ciks`, while V3 searched a larger list. This is why `ciks/Apple` returns 7 companies here and 8 on V3. Intentional.
 
+**Wikipedia and EDGAR lineage and formatting (decided 2026-10-08, "a better outcome even where it differs from V3"):**
+the Wikipedia answers carry V3's lineage: a `message` saying how the company was found (V3's wording without its "(v2 backend)" suffix, which would
+misname the implementation), V3's `module` string on the `/V3.0/` and `/V2.0/` paths (`/V4.0/` keeps `WikipediaClient->get_firmographics`),
+`dependencies.data` listing Wikidata and Wikipedia, and a `performance` block (`extraction_time`, `parallel_api_time`, `total_time` in seconds, plus V4's
+`cache_hit`; the first two are 0 on a cache hit). `tickers` is a list of ticker symbols (`["AAPL"]`) from both Wikipedia and EDGAR; V3 put the exchange
+into it (`["NASDAQ", "AAPL"]`, a positional pair), and the exchange stays in `exchanges`. This applies to every path, `/V4.0/` included.
+
+**Wikipedia uncached latency (measured 2026-10-08).** Without caching, V4's first Wikipedia lookups were slower than V3's in one run (median 828 ms against 465 ms, 10 companies, from a laptop). Cause found: V4's HTTP client sent no `Accept-Encoding`, so Wikidata's claims response arrived uncompressed (305 to 670 KB, against 47 to 117 KB gzipped), while V3's Python client gzips by default. A direct A/B of that one call across the 10 companies: 704 ms median plain, 540 ms gzipped (-23%). Fix: reqwest's `gzip` feature (`v4/Cargo.toml`). After the fix, three interleaved cold rounds (30 lookups each side): V4 778 ms median (p90 973), V3 839 ms (p90 1,043). V3's own median ranged from 465 to 839 ms between runs, so laptop-to-Wikimedia network conditions dominate; compare again on the staging network, where V3 and V4 sit side by side. Next lever if needed: skip Wikidata's second, sequential labels call (static property labels plus a cached label map).
+
 **Other known intentional differences to record up front** (all from existing plans, not new decisions): the merged
 endpoint is EDGAR plus Wikipedia with no ArcGIS geocoding; EDGAR `detail` and `summary` are catalog-only on V4; the
 EDGAR catalog is a rolling two-year window on V4 against V3's full history; the version string differs; V4 caches

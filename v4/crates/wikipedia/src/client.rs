@@ -380,6 +380,9 @@ pub(crate) struct LookupOutcome {
     #[allow(dead_code)]
     pub(crate) resolved_via_suffix: bool,
     pub(crate) message: String,
+    /// Seconds spent in the concurrent Wikipedia/Wikidata calls, and in building the firmographics from them.
+    pub(crate) parallel_api_time: f64,
+    pub(crate) extraction_time: f64,
 }
 
 /// Tries the raw name first (the common case - already an exact title
@@ -445,6 +448,7 @@ pub(crate) async fn lookup_firmographics(
     // latency cost since it runs alongside `resolve_candidate` rather
     // than after it. Only wasted (one extra, harmless request) on the
     // rarer path where a suffix candidate ends up being the real match.
+    let api_started = std::time::Instant::now();
     let (resolved, optimistic_wikidata) = tokio::join!(
         resolve_candidate(client, WIKIPEDIA_API, raw_name),
         fetch_wikidata(client, raw_name),
@@ -456,6 +460,8 @@ pub(crate) async fn lookup_firmographics(
             resolved_title: None,
             resolved_via_suffix: false,
             message: hint_message(raw_name),
+            parallel_api_time: api_started.elapsed().as_secs_f64(),
+            extraction_time: 0.0,
         });
     };
 
@@ -474,6 +480,8 @@ pub(crate) async fn lookup_firmographics(
         fetch_wikidata(client, wikidata_title).await?
     };
 
+    let parallel_api_time = api_started.elapsed().as_secs_f64();
+    let extraction_started = std::time::Instant::now();
     let firmographics = firmographics::build_firmographics(RawInputs {
         infobox: Some(&infobox),
         wikidata: &wikidata,
@@ -495,6 +503,8 @@ pub(crate) async fn lookup_firmographics(
         resolved_title: Some(title),
         resolved_via_suffix,
         message,
+        parallel_api_time,
+        extraction_time: extraction_started.elapsed().as_secs_f64(),
     })
 }
 

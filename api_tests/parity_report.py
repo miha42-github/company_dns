@@ -55,7 +55,8 @@ def ask(base, path):
 
 
 def strip(b):
-    return {k: v for k, v in b.items() if k != "dependencies"} if isinstance(b, dict) else b
+    # dependencies is V4's own; performance holds timings, which differ on every request (its presence is covered by the tests)
+    return {k: v for k, v in b.items() if k not in ("dependencies", "performance")} if isinstance(b, dict) else b
 
 
 def diff_keys(a, b, prefix="", depth=0):
