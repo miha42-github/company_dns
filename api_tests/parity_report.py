@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Live V3-vs-V4 report: for each fixture's request, asks both services, compares the answers and times them.
 
-    python3 api_tests/parity_report.py [--v3 URL] [--v4 URL] [--repeats N] [--json out.json]
+    python3 api_tests/parity_report.py [--v3 URL] [--v4 URL] [--repeats N] [--auth PROFILE:TOKEN] [--json out.json]
 
 V3 is the production service, so it is asked politely: one request at a time, a pause between, a self-identifying User-Agent.
 Variances are reported as: IDENTICAL (equal once `dependencies` is dropped), SAME SHAPE (same keys and types, data differs),
@@ -38,8 +38,15 @@ CASES = [  # (fixture, path)
 UA = "company_dns-parity-report/1.0 (michael.hay@mediumroast.io)"
 
 
+AUTH = None  # set from --auth: "profile:token" for HTTP Basic, sent to both services (V3 ignores it)
+
+
 def ask(base, path):
-    req = urllib.request.Request(base + path, headers={"User-Agent": UA})
+    headers = {"User-Agent": UA}
+    if AUTH:
+        import base64
+        headers["Authorization"] = "Basic " + base64.b64encode(AUTH.encode()).decode()
+    req = urllib.request.Request(base + path, headers=headers)
     t = time.perf_counter()
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
@@ -82,7 +89,10 @@ def main():
     ap.add_argument("--repeats", type=int, default=3)
     ap.add_argument("--pause", type=float, default=1.0)
     ap.add_argument("--json")
+    ap.add_argument("--auth", metavar="PROFILE:TOKEN", help="HTTP Basic credential (a V4 profile with rate_limit bypass) so V4's rate limiter does not interfere")
     a = ap.parse_args()
+    global AUTH
+    AUTH = a.auth
     rows = []
     for name, path in CASES:
         base = fixture(name)

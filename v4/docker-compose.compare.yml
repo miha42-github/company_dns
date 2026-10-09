@@ -1,0 +1,30 @@
+# V3 and V4 side by side on one host, for the step 6 comparison (docs/plans/v4-amd64-build-and-compare.md).
+#
+# Services sit behind profiles so a performance pass can run ONE at a time (concurrent runs contaminate each other):
+#   docker compose -f v4/docker-compose.compare.yml --profile v4 up -d      # V4 on :4000
+#   docker compose -f v4/docker-compose.compare.yml --profile v3 up -d      # V3 on :8000
+#   docker compose -f v4/docker-compose.compare.yml --profile v3 --profile v4 up -d   # both, for functional parity runs
+#
+# Limits default to the production pods' (k8s/prod/deployment.yaml: 500m CPU, 1Gi). For the headroom run override them:
+#   LIMIT_CPUS=16 LIMIT_MEM=64g docker compose ... up -d
+#
+# V3 is the image production runs (its database is built at image build time from SEC and SIC downloads, so it is pulled,
+# not rebuilt). Override V3_IMAGE to compare against a different tag. Both containers need outbound HTTPS (SEC, Wikipedia,
+# Wikidata) and use the same network, so live upstream calls behave alike.
+services:
+  v3:
+    profiles: ["v3"]
+    image: ${V3_IMAGE:-ghcr.io/miha42-github/company_dns/company_dns:09262026-5}
+    container_name: compare-v3
+    ports: ["8000:8000"]
+    cpus: ${LIMIT_CPUS:-0.5}
+    mem_limit: ${LIMIT_MEM:-1g}
+    restart: "no"
+  v4:
+    profiles: ["v4"]
+    image: ${V4_IMAGE:-company-dns-v4:amd64-lean}
+    container_name: compare-v4
+    ports: ["4000:4000"]
+    cpus: ${LIMIT_CPUS:-0.5}
+    mem_limit: ${LIMIT_MEM:-1g}
+    restart: "no"

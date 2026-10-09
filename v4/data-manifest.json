@@ -1,0 +1,22 @@
+{
+  "description": "Pins the classification data a release is built from (Mediumroast SIC feather files). Update a hash only when a new delivery has been checked (docs/plans/research/check_ic_feather.py). Used by v4/scripts/fetch_data.py.",
+  "delivery": "2026-10-08 (US file with section_full_desc)",
+  "files": {
+    "us_flat_embedded.feather": {
+      "sha256": "e2b65c17792a10797d8dd76c850c48a3ed6e9e8f53a09ed1cb98842165f8f735",
+      "bytes": 1509186
+    },
+    "japan_rev13_flat_embedded.feather": {
+      "sha256": "d4d439b91b5cb885b6c58e25492ad6f34f0145f9554937b4c19a0eb01c6f3811",
+      "bytes": 2196258
+    },
+    "nace_rev2_flat_embedded.feather": {
+      "sha256": "216b276675c4debf9d338f500224ab94a11d35c81842dacc85eb88593ff2eb74",
+      "bytes": 922626
+    },
+    "isic_rev4_flat_embedded.feather": {
+      "sha256": "122b4f0a9e4577828816ff202eec818cf5bdf32fc89908b432387fa48c4fc518",
+      "bytes": 634250
+    }
+  }
+}
