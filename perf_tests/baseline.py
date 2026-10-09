@@ -251,7 +251,7 @@ def verify_endpoints_exist(base_url: str, timeout: float, profile: str = "v3") -
     - rather than hard-failing a V4 run over a missing spec, this warns
     and skips verification when the spec isn't available at all."""
     try:
-        resp = requests.get(f"{base_url}/openapi.json", timeout=timeout)
+        resp = new_session().get(f"{base_url}/openapi.json", timeout=timeout)
         resp.raise_for_status()
         spec_paths = set(resp.json().get("paths", {}).keys())
     except (requests.RequestException, ValueError) as e:
@@ -275,6 +275,20 @@ def verify_endpoints_exist(base_url: str, timeout: float, profile: str = "v3") -
             f"from this suite's assumptions, refusing to run:\n  "
             + "\n  ".join(missing)
         )
+
+
+# Set by main() from --user-agent and --auth. V4 treats a generic User-Agent (python-requests) as the strictest rate-limit tier
+# (5 requests a minute) and an anonymous identified caller as 200 a minute, so a V4 run needs an identifying User-Agent and,
+# for load, a profile with a rate-limit bypass (v4/scripts/perf-profile.sh). V3 ignores both.
+SESSION_CONFIG = {"user_agent": "company_dns-perf-tests/1.0 (+https://github.com/miha42-github/company_dns)", "auth": None}
+
+
+def new_session() -> requests.Session:
+    session = requests.Session()
+    session.headers["User-Agent"] = SESSION_CONFIG["user_agent"]
+    if SESSION_CONFIG["auth"]:
+        session.auth = SESSION_CONFIG["auth"]
+    return session
 
 
 def do_request(session: requests.Session, base_url: str, call: Call, timeout: float) -> tuple[int | None, float, str | None]:
@@ -307,7 +321,7 @@ def do_request_with_body(
 
 def run_sequential(base_url: str, calls: list[Call], delay: float, timeout: float) -> list[CallResult]:
     results = []
-    session = requests.Session()
+    session = new_session()
     for i, call in enumerate(calls):
         status, latency_ms, error = do_request(session, base_url, call, timeout)
         results.append(CallResult(call.endpoint_key, call.category, call.company_key, call.url, status, latency_ms, error, "sequential", 1, 0))
@@ -375,7 +389,7 @@ def run_concurrency_experiment(
                     batch = [Call(key, ep["category"], "-", url) for _ in range(level)]
 
                 print(f"  concurrency={level:>2}  run={run_index + 1}/{repeat}  endpoint={key}")
-                session = requests.Session()
+                session = new_session()
                 wall_start = time.perf_counter()
                 # Per-company batches fetch bodies too, to verify concurrent
                 # requests don't cross-contaminate results (see
@@ -548,9 +562,14 @@ def main():
     parser.add_argument("--delay", type=float, default=0.15, help="seconds between sequential calls, default: 0.15")
     parser.add_argument("--timeout", type=float, default=30.0, help="per-request timeout in seconds, default: 30")
     parser.add_argument("--skip-concurrency", action="store_true", help="only run the sequential baseline")
+    parser.add_argument("--user-agent", default=SESSION_CONFIG["user_agent"], help="User-Agent sent with every request (a self-identifying one gets V4's normal rate limit)")
+    parser.add_argument("--auth", metavar="PROFILE:TOKEN", default=None, help="HTTP Basic credential for V4 (a profile with rate_limit bypass, see v4/scripts/perf-profile.sh); ignored by V3")
     parser.add_argument("--list", action="store_true", help="print the call matrix and exit, without making requests")
     parser.add_argument("--out", type=Path, default=None, help="JSON output path, default: perf_tests/results/<timestamp>.json")
     args = parser.parse_args()
+    SESSION_CONFIG['user_agent'] = args.user_agent
+    if args.auth:
+        SESSION_CONFIG['auth'] = tuple(args.auth.split(':', 1))
 
     calls = build_call_matrix(profile=args.profile)
 

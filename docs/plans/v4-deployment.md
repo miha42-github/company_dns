@@ -351,7 +351,7 @@ for whenever §3.2 lands on an option that needs one.
    Apple went from 1 filing to 8 in the EDGAR Explorer. It needs network access
    to sec.gov and the project User-Agent; it cannot read the local V3 index
    files.
-3. **The SIC data is staged by hand in `tmp/` for now**, because the delivery
+3. **(Superseded 2026-10-09: see `v4-release-to-staging.md`, item H "Data supply". `v4/scripts/fetch_data.py` fetches the SIC files from a directory or URL with a pinned manifest, and the image build makes the EDGAR catalog itself. Only the delivery location is still open.) The SIC data is staged by hand in `tmp/` for now**, because the delivery
    mechanism from mediumroast.io is not confirmed. **Consequence worth stating
    plainly:** `tmp/` is gitignored, so a CI runner cannot see it. Until that
    delivery mechanism exists, an image that contains the SIC data has to be built

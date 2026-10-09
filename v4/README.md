@@ -106,15 +106,19 @@ v4/scripts/docker-build.sh -t company-dns-v4:small -p release-small
 v4/scripts/docker-smoke.sh company-dns-v4:dev               # starts with --network none, then runs the offline test layers
 ```
 
+Like V3 (whose `makedb.py` builds its EDGAR database during the image build), the build prepares everything: it runs `ingest-edgar` against sec.gov (about 15 seconds, 8 quarters), so the build needs network access and the image is ready to run when it starts. `--edgar data` uses a frozen catalog from `DATA_DIR` instead.
+
 What the build needs that is not in git (the script supplies both; override with `DATA_DIR` and `MODEL_DIR`):
 
 | Build context | What it is | Default |
 |---|---|---|
-| `data` | the four classification `.feather` files and `edgar_10x_catalog.feather` | the repository's `tmp/`, or `COMPANY_DNS_DATA_DIR` |
+| `data` | the four classification `.feather` files (and `edgar_10x_catalog.feather` only with `--edgar data`) | the repository's `tmp/`, or `COMPANY_DNS_DATA_DIR` |
 | `model` | the fastembed cache holding all-MiniLM-L6-v2 (`models--Qdrant--all-MiniLM-L6-v2-onnx`) | `v4/.fastembed_cache`; run the server once to create it |
 
-Two gates run in the build, so a bad input fails the build and never becomes an image: `check_ic_feather.py` on every classification
-file (plus a row and quarter check on the EDGAR catalog), and a SHA-256 check of the model weights. The runtime is `debian:trixie-slim`
+The classification files can instead come from a URL: `v4/scripts/docker-build.sh --data-source url:https://HOST/DIR/` (a header file in `DATA_AUTH_FILE` is passed as a BuildKit secret). `v4/scripts/fetch_data.py` does the fetching, from `dir:PATH` or `url:BASE`, and checks each file's SHA-256 against `v4/data-manifest.json`; when a new delivery arrives, check it with `check_ic_feather.py`, then update the manifest hash on purpose.
+
+Gates run in the build, so a bad input fails the build and never becomes an image: the manifest hashes, `check_ic_feather.py` on every classification
+file, a row and quarter check on the EDGAR catalog, and a SHA-256 check of the model weights. The runtime is `debian:trixie-slim`
 (glibc), because the ONNX runtime fastembed uses has no musl build. The process runs as UID 10001. A volume mounted at `/app/data`
 replaces the data without a rebuild. The image carries `THIRD_PARTY_NOTICES.md` and the Redoc licence under `/usr/share/doc/company-dns/`.
 The ONNX runtime is downloaded during the Rust build, so the build itself needs network access (the running container does not).

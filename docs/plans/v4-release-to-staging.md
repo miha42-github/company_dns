@@ -38,7 +38,8 @@ Step 5 was picked up first, by choice, because its measurements (where the bytes
 | **5. Thin the binary** | **Measurement and options done; acceptance pending** | The size spike (component map, nine variants, latency, memory, the 51-case battery); two named profiles `release-lean` (89.2 MiB) and `release-small` (62.3 MiB) and the DataFusion feature trim in `v4/Cargo.toml`, built and verified; results in this doc. | Linux amd64 sizes, the regression check against the step 4 baseline, the model's packaging decision, and the lean-or-small choice (after step 6). |
 | **6. Docker builds, V3 and V4** | **Both V4 images built and smoke-tested on arm64 (2026-10-09); amd64 and the V3 comparison still to do** | `v4/Dockerfile` (build arg selects the profile; **the embedding model is baked in**, decided 2026-10-08; data files baked in with a volume override; two build gates: `check_ic_feather.py` on every classification file plus an EDGAR catalog check, and a SHA-256 check of the model weights; non-root UID 10001; healthcheck; notices included; Debian 13 for build and runtime), `v4/scripts/docker-build.sh`, `v4/scripts/docker-smoke.sh`. **Built on the Mac (linux/arm64, Docker VM 15.8 GB):** `release-lean` image 684 MB, binary 104,429,784 bytes (99.6 MiB), cargo build 5 m 24 s; `release-small` image 599 MB, binary 74,217,624 bytes (70.8 MiB), 4 m 44 s. **Both** start healthy with `--network none`, answer an embedding-backed search offline, and pass the offline test layers (50 tests, 3 skipped). Linux binaries are larger than the macOS numbers in step 5 (89.2 and 62.3 MiB); step 5's Linux-size item is now answered for arm64 (lean 99.6, small 70.8 MiB), amd64 still to measure. **Findings:** (1) the prebuilt ONNX runtime does not link on Debian 12 (`__cxa_call_terminate` and `std::string` symbols); (2) the fat-LTO link needs more than Docker Desktop's default 8 GB VM; the `--lto off` build switch exists for small VMs and its output must never be benchmarked or published. | Build on an amd64 node; `docker-compose.compare.yml` with V3; the V3-versus-V4 run with equal limits; diff the suite against the step 4 baseline; the lean-or-small choice. |
 | **7. Staging** | **Not started** | `k8s/prod/` only; no `k8s/staging/`. | Needs step 6. |
-| **A. Data-integrity gate** | **Not started** | `check_ic_feather.py` exists and works by hand. | Wire into the V4 build (step 6). |
+| **A. Data-integrity gate** | **Done in the image build (2026-10-09)** | `check_ic_feather.py` runs on all four classification files in the Docker build and fails it on a bad file; the EDGAR catalog gets a row and quarter check; the model weights are SHA-256 pinned. | Wire the same checks into CI (item D). |
+| **H. Data supply** | **Stub built and proven (2026-10-09); delivery location still open** | `v4/scripts/fetch_data.py` pulls the SIC feather files from `dir:PATH` or `url:BASE` and checks SHA-256 against `v4/data-manifest.json`; the Docker build calls it (`DATA_SOURCE`); the **EDGAR catalog is now made during the image build** with `ingest-edgar`, as V3's `makedb.py` does (14 s, 72,813 rows). Proven: dir source, a local URL source inside a real build, a tampered hash fails. | Mediumroast decides where the SIC files are delivered; then point `DATA_SOURCE` at it and update the manifest on each delivery. |
 | **B. Security and CORS review** | **Not started** | CORS is still `permissive()`. | Decide the CORS policy; secrets audit. |
 | **C. Release hygiene** | **Not started** | | Version, changelog, migration note. |
 | **D. CI for V4** | **Not started** | No V4 workflow. | A workflow running tests and the fast suite layers. |
@@ -116,7 +117,8 @@ aliases and for all the new non-US ones. **Not yet checked against V3: the `/V3.
 | 6 | Docker builds of V3 and V4 side by side on amd64 (and arm64) | Keep; add a definition of "fair" | Equal resource limits, same test runner, same data, cold and warm. **Decided (Q2, Q8): the two amd64 worker nodes plus the Mac Studio for arm64, no quiet-window constraint.** Includes the data-integrity gate from `v4-deployment.md`. |
 | 7 | Deploy on staging | Keep; add what has to be true first | Wiring for profiles, the SQL capacity test, the §3.6 platform-parity checks, and go/no-go criteria for later promotion. |
 | New E | Build the 15 per-system non-US endpoints and the two `/v2/` aliases | Add (decided, Q3) | Ahead of step 3, because the V3 inventory and the parity matrix include them. See §4. |
-| New A | Data-integrity gate | Add | `check_ic_feather.py` as a build gate (already planned, not wired; see step 6). |
+| New A | Data-integrity gate | Add | `check_ic_feather.py` as a build gate (wired into the image build 2026-10-09). |
+| New H | Data supply | Add | Fetch the SIC feather files from a directory or a URL with a pinned manifest, and make the EDGAR catalog during the image build like V3 (built as a stub 2026-10-09, not waiting for a CI workflow). |
 | New B | Security and CORS review | Add | Before staging holds real credentials. |
 | New C | Release hygiene | Add | Version, changelog, V3-to-V4 migration notes, tagging. |
 | New D | CI for V4 | Add | There is no CI for V4 yet (roadmap §6). Steps 3 and 6 need it. |
@@ -476,7 +478,7 @@ creates it.
 **Build requirements (V4):** multi-stage; runtime image carries only the stripped binary, the data directory
 (`COMPANY_DNS_DATA_DIR`), the model (§0.1), and a numeric non-root UID (as V3 does, for Kubernetes `runAsNonRoot`); `HEALTHCHECK`
 on `/health`; built for `linux/amd64` first (the platform that matters), `linux/arm64` second. Data-integrity gate (New A):
-`check_ic_feather.py` runs on every classification file in the build and fails the build on a bad file. The image must also carry `v4/THIRD_PARTY_NOTICES.md` and the licence files in `v4/crates/server/assets/redoc/` (the vendored Redoc is MIT and requires its notice to travel with any redistribution).
+`check_ic_feather.py` runs on every classification file in the build and fails the build on a bad file. Data supply (New H): the EDGAR catalog is made during the build with `ingest-edgar`, like V3's `makedb.py`, and the SIC files come from `fetch_data.py` (a directory or a URL). The image must also carry `v4/THIRD_PARTY_NOTICES.md` and the licence files in `v4/crates/server/assets/redoc/` (the vendored Redoc is MIT and requires its notice to travel with any redistribution).
 
 **The hosts (decided, Q2, Q8 and Q9, 2026-10-06): run the images on the Mac Studio and on the amd64 nodes.**
 - **amd64 worker nodes** (two nodes, each over 20 cores and at least 384GB of memory): the authoritative `linux/amd64` numbers, the same
@@ -554,7 +556,19 @@ hierarchy columns, so these are lookups over data it has.
 
 **A. Data-integrity gate.** `check_ic_feather.py` validates the four classification feather files (counts, nesting, text encoding, and
 each defect that previously got through). It is already planned as a build step in `v4-deployment.md` §3.2.4 and Steps C and D. It needs only
-`pyarrow`. Wire it into the V4 build in step 6 so a bad file fails the build.
+`pyarrow`. **Wired into the V4 image build (2026-10-09)**: a bad file fails the build. Still to do: the same checks in CI (item D).
+
+**H. Data supply (added 2026-10-09, decided: do it now, not after a GitHub workflow).** V3 prepares everything at image build: `RUN python makedb.py` builds its EDGAR
+database, so the image is ready the moment it starts. The V4 build now does the same, and the SIC feather files no longer have to be hand-staged in a gitignored `tmp/`.
+- **EDGAR catalog:** `ingest-edgar` runs in the image build (`EDGAR_CATALOG=ingest`, the default; `EDGAR_CATALOG=data` takes a frozen file instead, for a like-for-like comparison against a baseline).
+  Measured: 14 s, 72,813 rows, 2024Q4 to 2026Q3 (the same as the file made on 2026-10-04). A failed quarter fails the build. `EDGAR_REFRESH` (the build script sets today's date) stops Docker's layer
+  cache from serving an old catalog. The build needs `sec.gov` reachable, as V3's does.
+- **SIC files (stub):** `v4/scripts/fetch_data.py --source dir:PATH | url:BASE --out DIR`, standard library only, used by the Docker build, a developer or a node alike. It checks each file's SHA-256 against
+  `v4/data-manifest.json` (the pin for a release; a new delivery means updating the hash on purpose, after `check_ic_feather.py` passes) and fails on a mismatch or a missing file. A header file (a BuildKit secret in the build)
+  authenticates URL fetches. **The delivery location from Mediumroast is still undecided**, so there is no default URL; `--source` is required. `docker-build.sh --data-source url:https://BASE/` or `dir:/in` (the default).
+- **Proven (2026-10-09):** dir mode, a URL mode build against a local server (four files fetched and verified inside the build), a tampered manifest and a missing file both fail with exit 1, and the resulting
+  image starts healthy offline and passes the offline layers.
+- **What this retires:** `v4-deployment.md` §3.2 point 3 ("staged by hand in `tmp/`") and its consequence that a CI runner cannot see the SIC data. The remaining open item is only where the files live.
 
 **B. Security and configuration review (before staging holds credentials).** Roadmap §8's secrets audit (no test or placeholder secret
 left in the tree), a deliberate **CORS** decision (replace `permissive()` with an explicit policy, or document why not), confirm TLS is enforced at the

@@ -1,0 +1,15 @@
+# Overlay for docker-compose.compare.yml: gives V4 the throwaway no-rate-limit profile from v4/scripts/perf-profile.sh, so a
+# performance or parity run measures the server and not V4's rate limiter. Use it only for those runs.
+#
+#   v4/scripts/perf-profile.sh /abs/path/perf-secrets
+#   PERF_SECRETS_DIR=/abs/path/perf-secrets docker compose -f v4/docker-compose.compare.yml -f v4/docker-compose.perf.yml --profile v4 up -d
+#
+# (V3 has no rate limiter in force, so it needs nothing.)
+services:
+  v4:
+    volumes:
+      - ${PERF_SECRETS_DIR:?set PERF_SECRETS_DIR to the directory perf-profile.sh wrote}/credentials:/run/secrets/credentials:ro
+      - ${PERF_SECRETS_DIR}/rules.json:/run/secrets/rules.json:ro
+    environment:
+      COMPANY_DNS_CREDENTIALS_FILE: /run/secrets/credentials
+      COMPANY_DNS_RULES_FILE: /run/secrets/rules.json

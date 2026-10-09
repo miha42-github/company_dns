@@ -84,3 +84,6 @@ v4/crates/server/.fastembed_cache/
 
 # Local test credentials for the experimental SQL endpoint (v4/scripts/sql-try.sh)
 v4/.local/
+
+# throwaway profile for performance runs (v4/scripts/perf-profile.sh)
+v4/perf-secrets/
