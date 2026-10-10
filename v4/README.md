@@ -94,7 +94,7 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 `SIC_DATA_PATH`, `JAPAN_SIC_DATA_PATH`, `EU_NACE_DATA_PATH`, `ISIC_DATA_PATH`,
 `EDGAR_CATALOG_PATH`, plus `SIC_MODELS`
 (`all_minilm_l6_v2` default, per `go-duckdb-rewrite.md` §7.8), `PORT`
-(default `4000`), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
+(default `4000`), `COMPANY_DNS_QUERY_PARALLELISM` (partitions per lookup query; default: the host's CPUs, at most 4. The classification and EDGAR tables are read into memory once at start, and a lookup is split into a few partitions, not one per CPU: on these small tables more partitions cost more than they save), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
 "## Docker
 
 The image is self-contained: the binary, the UI, the data files and the embedding model are all inside it, so a pod starts with no
