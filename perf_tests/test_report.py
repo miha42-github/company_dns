@@ -137,6 +137,7 @@ class Figures(unittest.TestCase):
                 self.assertIn(want, names)
                 self.assertGreater((out / want).stat().st_size, 15_000, want)
             self.assertEqual(ctx.skipped, [])
+            self.assertEqual(ctx.overlaps, [], "heading, conditions or panel titles overlap")
             idx = (out / "index.md").read_text()
             self.assertIn("p1-latency-cold-limited.png", idx)
             self.assertIn("DRAFT", idx)

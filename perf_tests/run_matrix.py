@@ -13,7 +13,7 @@ service runs at a time. A finished run is skipped on restart (`--resume` is the 
 
 Layout written under --out (read by report_data.load_matrix):
     manifest.json
-    raw/<regime>/<image>/run<k>/{sequential-cold.json, sequential-warm.json, concurrency.json, container.json, resources.csv}
+    raw/<regime>/<image>/run<k>/{sequential-cold.json, sequential-warm.json, concurrency.json, container.json, resources.csv, server.log}
     specs/{v3,v4}-openapi.json    parity/<image>.json    suite/<image>.json      (with --extras)
 
 V4 is called with a throwaway profile that has no rate limit (v4/scripts/perf-profile.sh) so the limiter is not what is measured; V3 has none in force.
@@ -253,6 +253,9 @@ def do_run(a, regime: str, image: str, k: int, manifest: dict) -> None:
         sampler.stop_flag.set()
         sampler.join(timeout=15)
         sampler.write(d / "resources.csv")
+        # Keep what the service itself said (restarts keep the log), so an error status in the results can be traced to its cause.
+        logs = sh(["docker", "logs", container])
+        (d / "server.log").write_text(logs.stdout + logs.stderr)
         insp = sh(["docker", "inspect", container])
         info = json.loads(insp.stdout)[0] if insp.returncode == 0 and insp.stdout.strip() else {}
         compose(env, "--profile", "v3", "--profile", "v4", "down", "-v", "--remove-orphans")
