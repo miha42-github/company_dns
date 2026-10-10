@@ -78,21 +78,53 @@ async fn get_with_backoff(
     for attempt in 0..=max_retries {
         let resp = client.get(url).query(&params).send().await?;
         let status = resp.status();
+        let retry_after = resp
+            .headers()
+            .get("Retry-After")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(2u64.pow(attempt as u32))
+            .min(MAX_RETRY_WAIT_SECS);
         if (status.as_u16() == 429 || status.as_u16() == 503) && attempt < max_retries {
-            let retry_after = resp
-                .headers()
-                .get("Retry-After")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(2u64.pow(attempt as u32));
             tokio::time::sleep(Duration::from_secs(retry_after)).await;
             last_status = Some(status);
             continue;
         }
         let body = resp.error_for_status()?.json::<serde_json::Value>().await?;
+        // MediaWiki reports a lagged server (the `maxlag` parameter above), a rate limit or a read-only database as HTTP 200 with an `error`
+        // object, not as 429 or 503. Handing that body back as data produced answers with nothing in them, which the cache then kept.
+        if let Some(code) = api_error_code(&body).filter(|c| RETRYABLE_API_ERRORS.contains(c)) {
+            if attempt < max_retries {
+                tokio::time::sleep(Duration::from_secs(retry_after)).await;
+                last_status = Some(status);
+                continue;
+            }
+            anyhow::bail!("MediaWiki API error ({code}) persisted after {max_retries} retries: {}", api_error_info(&body));
+        }
         return Ok(body);
     }
     anyhow::bail!("exhausted retries, last status: {:?}", last_status)
+}
+
+/// MediaWiki API errors that clear by themselves: a lagged database server, a rate limit, a read-only moment.
+const RETRYABLE_API_ERRORS: &[&str] = &["maxlag", "ratelimited", "readonly"];
+/// Never wait longer than this for one retry, whatever `Retry-After` says.
+const MAX_RETRY_WAIT_SECS: u64 = 10;
+
+fn api_error_code(body: &serde_json::Value) -> Option<&str> {
+    body.get("error").and_then(|e| e.get("code")).and_then(|c| c.as_str())
+}
+
+fn api_error_info(body: &serde_json::Value) -> String {
+    body.get("error").and_then(|e| e.get("info")).and_then(|c| c.as_str()).unwrap_or("").to_string()
+}
+
+/// An API error body that is not a legitimate "nothing there" answer is a failure: the caller must see it, and nothing built from it may be cached.
+fn fail_on_api_error(body: &serde_json::Value, what: &str) -> anyhow::Result<()> {
+    if let Some(code) = api_error_code(body) {
+        anyhow::bail!("{what}: MediaWiki API error ({code}): {}", api_error_info(body));
+    }
+    Ok(())
 }
 
 /// Narrowed action=parse request - only `parsetree`, not wptools' full
@@ -122,8 +154,12 @@ async fn fetch_infobox(
     )
     .await?;
 
-    if data.get("error").is_some() {
-        return Ok(None);
+    if let Some(code) = api_error_code(&data) {
+        // a page that does not exist or has an invalid title has no infobox; any other error is a failure, not an answer
+        if matches!(code, "missingtitle" | "invalidtitle" | "nosuchpageid" | "pagecannotexist") {
+            return Ok(None);
+        }
+        fail_on_api_error(&data, "Wikipedia infobox")?;
     }
     let Some(parsetree) = data
         .get("parse")
@@ -182,6 +218,7 @@ async fn fetch_query(
         ],
     )
     .await?;
+    fail_on_api_error(&data, "Wikipedia query")?;
 
     let pages = data
         .get("query")
@@ -226,9 +263,18 @@ async fn fetch_wikidata(
     client: &reqwest::Client,
     title: &str,
 ) -> anyhow::Result<HashMap<String, serde_json::Value>> {
+    fetch_wikidata_at(client, WIKIDATA_API, title).await
+}
+
+/// `fetch_wikidata` against a given API URL, so it can be tested against a mock server.
+async fn fetch_wikidata_at(
+    client: &reqwest::Client,
+    wikidata_api: &str,
+    title: &str,
+) -> anyhow::Result<HashMap<String, serde_json::Value>> {
     let data = get_with_backoff(
         client,
-        WIKIDATA_API,
+        wikidata_api,
         vec![
             ("action", "wbgetentities".into()),
             ("format", "json".into()),
@@ -239,6 +285,7 @@ async fn fetch_wikidata(
         ],
     )
     .await?;
+    fail_on_api_error(&data, "Wikidata claims")?;
 
     let Some(entities) = data.get("entities").and_then(|e| e.as_object()) else {
         return Ok(HashMap::new());
@@ -297,7 +344,7 @@ async fn fetch_wikidata(
     if !needed.is_empty() {
         let ldata = get_with_backoff(
             client,
-            WIKIDATA_API,
+            wikidata_api,
             vec![
                 ("action", "wbgetentities".into()),
                 ("format", "json".into()),
@@ -308,6 +355,7 @@ async fn fetch_wikidata(
             ],
         )
         .await?;
+        fail_on_api_error(&ldata, "Wikidata labels")?;
         if let Some(ents) = ldata.get("entities").and_then(|e| e.as_object()) {
             for (eid, ent) in ents {
                 if let Some(lbl) = ent
@@ -744,4 +792,111 @@ mod tests {
              or Totally Fictional Co Corporation]."
         );
     }
+
+    // ---- error bodies returned with HTTP 200 (found on cafe-1, 2026-10-10: V4 small returned 114 answers without a CIK in one run) ----
+    //
+    // MediaWiki answers a lagged request (the `maxlag` parameter this client sends on every call) with HTTP 200 and an `error` object, and
+    // a `Retry-After` header. The client used to look only at the HTTP status, so that body came back as if it were data: `fetch_wikidata`
+    // found no entities, built an answer without the CIK, and the one-hour cache kept it.
+
+    fn maxlag_body() -> serde_json::Value {
+        serde_json::json!({"error": {"code": "maxlag", "info": "Waiting for a database server: 6 seconds lagged."}})
+    }
+
+    fn test_client() -> reqwest::Client {
+        reqwest::Client::builder().user_agent(TEST_USER_AGENT).build().unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_maxlag_error_with_http_200_is_retried_not_returned_as_data() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).insert_header("Retry-After", "0").set_body_json(maxlag_body()))
+            .up_to_n_times(1).expect(1).mount(&server).await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"ok": true})))
+            .expect(1).mount(&server).await;
+
+        let body = get_with_backoff(&test_client(), &format!("{}/w/api.php", server.uri()), vec![("action", "query".into())])
+            .await
+            .expect("the retry should succeed");
+        assert_eq!(body, serde_json::json!({"ok": true}), "the maxlag body must not be handed back as the answer");
+    }
+
+    #[tokio::test]
+    async fn a_maxlag_that_never_clears_is_an_error_not_an_answer() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).insert_header("Retry-After", "0").set_body_json(maxlag_body()))
+            .mount(&server).await;
+
+        let r = get_with_backoff(&test_client(), &format!("{}/w/api.php", server.uri()), vec![("action", "query".into())]).await;
+        let err = r.expect_err("a lagged server that never recovers is a failure the caller must see").to_string();
+        assert!(err.contains("maxlag"), "the error names the cause: {err}");
+    }
+
+    fn claims_body() -> serde_json::Value {
+        serde_json::json!({"entities": {"Q312": {"claims": {"P5531": [{"mainsnak": {"datavalue": {"value": "0000320193"}}}]}}}})
+    }
+
+    #[tokio::test]
+    async fn a_wikidata_error_body_is_an_error_not_empty_claims() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"error": {"code": "internal_api_error_DBQueryError", "info": "x"}})))
+            .mount(&server).await;
+
+        let r = fetch_wikidata_at(&test_client(), &format!("{}/w/api.php", server.uri()), "Apple Inc.").await;
+        assert!(r.is_err(), "an error body must not become an empty claims map (an answer with no CIK); got {r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_wikidata_labels_error_is_an_error_not_unlabeled_claims() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php")).and(query_param("props", "claims"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(claims_body()))
+            .mount(&server).await;
+        Mock::given(method("GET")).and(path("/w/api.php")).and(query_param("props", "labels"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"error": {"code": "internal_api_error_DBQueryError", "info": "x"}})))
+            .mount(&server).await;
+
+        let r = fetch_wikidata_at(&test_client(), &format!("{}/w/api.php", server.uri()), "Apple Inc.").await;
+        assert!(r.is_err(), "claims without their labels are a degraded answer; got {r:?}");
+    }
+
+    #[tokio::test]
+    async fn a_wikipedia_query_error_body_is_an_error_not_a_missing_page() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"error": {"code": "internal_api_error_DBQueryError", "info": "x"}})))
+            .mount(&server).await;
+
+        let r = fetch_query(&test_client(), &format!("{}/w/api.php", server.uri()), "Apple Inc.").await;
+        assert!(r.is_err(), "an error body is not 'no such page' (which would make a real company a 404)");
+    }
+
+    // ---- what must NOT change: legitimate empty answers ----
+
+    #[tokio::test]
+    async fn a_company_with_no_wikidata_item_is_still_an_empty_answer_not_an_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"entities": {"-1": {"site": "enwiki", "title": "X", "missing": ""}}})))
+            .mount(&server).await;
+
+        let r = fetch_wikidata_at(&test_client(), &format!("{}/w/api.php", server.uri()), "X").await.expect("a missing item is a valid answer");
+        assert!(r.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_parse_error_for_a_missing_page_is_still_no_infobox() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET")).and(path("/w/api.php"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"error": {"code": "missingtitle", "info": "The page you specified doesn't exist."}})))
+            .mount(&server).await;
+
+        let r = fetch_infobox(&test_client(), &format!("{}/w/api.php", server.uri()), "Nope").await.expect("a missing page is not a failure");
+        assert!(r.is_none());
+    }
+
 }
