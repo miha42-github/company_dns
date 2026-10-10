@@ -75,11 +75,29 @@ class Phrases(unittest.TestCase):
         self.assertIn("indicative: 1 run", rp.latency_title({"improved": 1}, "cold", "x", runs=1))
         self.assertNotIn("indicative", rp.latency_title({"improved": 1}, "cold", "x", runs=3))
 
-    def test_concurrency_title(self):
-        self.assertIn("2.0x faster", rp.concurrency_title(2.0, 16, "x"))
-        self.assertIn("2.0x slower", rp.concurrency_title(0.5, 16, "x"))
-        self.assertIn("about the same", rp.concurrency_title(1.02, 16, "x"))
-        self.assertIn("no comparable data", rp.concurrency_title(float("nan"), 16, "x"))
+    def test_concurrency_title_keeps_local_routes_and_cached_upstream_routes_apart(self):
+        t = rp.concurrency_title(4.0, 1500.0, 16, "x")
+        self.assertIn("4.0x faster on routes with no upstream call", t)
+        self.assertIn("1500x faster on routes that call Wikipedia and SEC, where V4 answers repeats from its cache", t)
+        self.assertIn("2.0x slower on routes with no upstream call", rp.concurrency_title(0.5, float("nan"), 16, "x"))
+        self.assertIn("about the same speed", rp.concurrency_title(1.02, float("nan"), 16, "x"))
+        self.assertIn("no comparable data", rp.concurrency_title(float("nan"), float("nan"), 16, "x"))
+
+    def test_throughput_title(self):
+        t = rp.throughput_title(5.0, 400.0, 3.4, 16, "x")
+        self.assertIn("5.0x more requests per second on routes with no upstream call", t)
+        self.assertIn("400x more on routes that call Wikipedia and SEC", t)
+        self.assertIn("using 3.4x less average CPU", t)
+        self.assertIn("2.0x fewer requests per second", rp.throughput_title(0.5, float("nan"), 1.0, 16, "x"))
+        self.assertIn("using 2.0x more average CPU", rp.throughput_title(2.0, float("nan"), 0.5, 16, "x"))
+
+    def test_footprint_title_says_what_is_better_and_what_is_worse(self):
+        t = rp.footprint_title({"size_bytes": 1.1e9, "healthy_s": 3.0, "peak_mem": 171.0}, {"size_bytes": 5.3e8, "healthy_s": 1.5, "peak_mem": 338.0})
+        self.assertIn("its image is 2.1x smaller", t)
+        self.assertIn("it starts 2.0x faster", t)
+        self.assertIn(", but its peak memory is 2.0x higher (338 against 171 MiB)", t)
+        self.assertEqual(rp.footprint_title({"size_bytes": 100, "healthy_s": 1, "peak_mem": 10}, {"size_bytes": 101, "healthy_s": 1, "peak_mem": 10}), "V4 lean and V3 have a similar footprint")
+        self.assertTrue(rp.footprint_title({"size_bytes": 100, "peak_mem": 100}, {"size_bytes": 300, "peak_mem": 300}).startswith("V4 lean: its image is 3.0x larger"))
 
     def test_family(self):
         self.assertEqual(rp.family("japan_desc_food"), "Japan SIC")

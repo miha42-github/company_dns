@@ -57,14 +57,69 @@ def _latency_title(counts: dict[str, int], phase: str, regime_label: str) -> str
     return f"{phase.capitalize()} latency: V4 is faster on {better} of {n} routes and level on {same}, slower on none ({regime_label})"
 
 
-def concurrency_title(ratio: float, n: int, regime_label: str) -> str:
-    if ratio != ratio:
-        return f"Concurrency: no comparable data ({regime_label})"
+# Routes that make no upstream call: V4's advantage there is its code. The others call Wikipedia and SEC, where V4's result cache answers a repeat
+# and V3 has none, so averaging the two groups together would credit the cache to the code.
+LOCAL_ROUTES = ("health", "sic_lookup", "edgar_ciks")
+
+
+def _times(ratio: float) -> str:
     if ratio >= 1.1:
-        return f"Under {n} concurrent requests V4 finishes batches {ratio:.1f}x faster than V3 ({regime_label}, geometric mean over routes)"
+        return f"{ratio:.1f}x faster" if ratio < 100 else f"{ratio:.0f}x faster"
     if ratio <= 1 / 1.1:
-        return f"Under {n} concurrent requests V4 finishes batches {1 / ratio:.1f}x slower than V3 ({regime_label}, geometric mean over routes)"
-    return f"Under {n} concurrent requests V4 and V3 finish batches in about the same time ({regime_label})"
+        return f"{1 / ratio:.1f}x slower"
+    return "about the same speed"
+
+
+def concurrency_title(local_ratio: float, upstream_ratio: float, n: int, regime_label: str) -> str:
+    """Wall-time ratios V3 / V4 at the highest common concurrency level: for routes with no upstream call, and for routes that call Wikipedia and SEC."""
+    parts = []
+    if local_ratio == local_ratio:
+        parts.append(f"{_times(local_ratio)} on routes with no upstream call")
+    if upstream_ratio == upstream_ratio:
+        parts.append(f"{_times(upstream_ratio)} on routes that call Wikipedia and SEC, where V4 answers repeats from its cache")
+    if not parts:
+        return f"Concurrency: no comparable data ({regime_label})"
+    return f"At {n} concurrent requests V4 finishes batches " + " and ".join(parts) + f" ({regime_label})"
+
+
+def throughput_title(local_ratio: float, upstream_ratio: float, cpu_ratio: float, n: int, regime_label: str) -> str:
+    """Ratios V4 / V3 of requests per second (local routes; routes that call Wikipedia and SEC) and V3 / V4 of mean CPU drawn."""
+    def more(r):
+        if r >= 1.1:
+            return f"{r:.1f}x more" if r < 100 else f"{r:.0f}x more"
+        return f"{1 / r:.1f}x fewer" if r <= 1 / 1.1 else "about the same number of"
+    parts = []
+    if local_ratio == local_ratio:
+        parts.append(f"{more(local_ratio)} requests per second on routes with no upstream call")
+    if upstream_ratio == upstream_ratio:
+        parts.append(f"{more(upstream_ratio)} on routes that call Wikipedia and SEC (V4 answers repeats from its cache)")
+    if not parts:
+        return f"Throughput and CPU at {n} concurrent requests ({regime_label})"
+    s = f"At {n} concurrent requests V4 serves " + " and ".join(parts)
+    if cpu_ratio == cpu_ratio:
+        s += ", using " + (f"{cpu_ratio:.1f}x less" if cpu_ratio >= 1.1 else f"{1 / cpu_ratio:.1f}x more" if cpu_ratio <= 1 / 1.1 else "about the same") + " average CPU"
+    return s + f" ({regime_label})"
+
+
+def footprint_title(v3: dict, v4: dict) -> str:
+    """One sentence from V3's and V4's size, start time and peak memory: what is better, and what is worse."""
+    better, worse = [], []
+    if v3.get("size_bytes") and v4.get("size_bytes"):
+        r = v3["size_bytes"] / v4["size_bytes"]
+        (better if r > 1.1 else worse if r < 1 / 1.1 else []).append(f"its image is {max(r, 1 / r):.1f}x {'smaller' if r > 1 else 'larger'}")
+    if v3.get("healthy_s") and v4.get("healthy_s"):
+        r = v3["healthy_s"] / v4["healthy_s"]
+        (better if r > 1.1 else worse if r < 1 / 1.1 else []).append(f"it starts {max(r, 1 / r):.1f}x {'faster' if r > 1 else 'slower'}")
+    if v3.get("peak_mem") and v4.get("peak_mem"):
+        r = v3["peak_mem"] / v4["peak_mem"]
+        (better if r > 1.1 else worse if r < 1 / 1.1 else []).append(
+            f"its peak memory is {max(r, 1 / r):.1f}x {'lower' if r > 1 else 'higher'} ({v4['peak_mem']:.0f} against {v3['peak_mem']:.0f} MiB)")
+    if not better and not worse:
+        return "V4 lean and V3 have a similar footprint"
+    s = "V4 lean: " + ", ".join(better) if better else "V4 lean"
+    if worse:
+        s += (", but " if better else ": ") + ", ".join(worse)
+    return s
 
 
 def compare_phrase(v3_ms: float, v4_ms: float) -> str:
@@ -232,8 +287,13 @@ def fig_concurrency(ctx: Ctx, regime: str) -> None:
     routes = [r for r in ROUTE_NAMES if all(any(k[0] == r for k in tables[i]) for i in images)]
     levels = sorted(set.intersection(*[{k[1] for k in tables[i]} for i in images]))  # only levels every image was measured at
     top = levels[-1]
-    ratios = [rd.spread(tables["v3"][(r, top)]["wall"])["median"] / rd.spread(tables["lean" if "lean" in images else images[1]][(r, top)]["wall"])["median"]
-              for r in routes if (r, top) in tables["v3"] and (r, top) in tables["lean" if "lean" in images else images[1]]]
+    v4img = "lean" if "lean" in images else images[1]
+
+    def ratios(subset):
+        return [rd.spread(tables["v3"][(r, top)]["wall"])["median"] / rd.spread(tables[v4img][(r, top)]["wall"])["median"]
+                for r in routes if r in subset and (r, top) in tables["v3"] and (r, top) in tables[v4img]]
+    local_r = rd.geometric_mean(ratios(set(LOCAL_ROUTES)))
+    upstream_r = rd.geometric_mean(ratios(set(routes) - set(LOCAL_ROUTES)))
     cols = min(4, len(routes))
     rows = -(-len(routes) // cols)
     fig, axes = new_fig(rows, cols, squeeze=False)
@@ -256,9 +316,10 @@ def fig_concurrency(ctx: Ctx, regime: str) -> None:
     for ax in axes.flat[:len(routes)]:
         ax.set_xlabel("concurrent requests")
     legend_for(fig, images)
-    finish(ctx, fig, name, concurrency_title(rd.geometric_mean(ratios), top, ctx.regime_label(regime)),
+    finish(ctx, fig, name, concurrency_title(local_r, upstream_r, top, ctx.regime_label(regime)),
            f"A batch is N requests sent at the same moment; its wall time is the slowest one. Lines are medians over {ctx.repeats(regime)} run{'s' if ctx.repeats(regime) != 1 else ''}, shaded bands the lowest and highest run. "
-           f"Lower is better. Caches are warm for V4 here (the batches follow the warm pass).")
+           f"Lower is better. Ratios in the title are geometric means of V3 wall time over V4's at the highest level every image was measured at. V4's caches are warm here (the batches follow the warm pass), "
+           f"so on the upstream routes V4 answers from memory and V3 does the full work every time.")
 
 
 # ------------------------------------------------------------------ P4: throughput and CPU
@@ -275,6 +336,11 @@ def fig_throughput(ctx: Ctx, regime: str) -> None:
     routes = [r for r in ROUTE_NAMES if all((r, top) in tables[i] for i in images)]
     fig, (a1, a2) = new_fig(1, 2)
     width = 0.8 / len(images)
+    v4img = "lean" if "lean" in images else next((i for i in images if i != "v3"), None)
+
+    def cps_ratio(subset):  # V4 over V3, geometric mean over routes
+        vals = [rd.spread(tables[v4img][(r, top)]["cps"])["median"] / rd.spread(tables["v3"][(r, top)]["cps"])["median"] for r in routes if r in subset]
+        return rd.geometric_mean(vals)
     for j, img in enumerate(images):
         xs = [k + (j - (len(images) - 1) / 2) * width for k in range(len(routes))]
         a1.bar(xs, [rd.spread(tables[img][(r, top)]["cps"])["median"] for r in routes], width * 0.92, color=COLORS[img])
@@ -284,11 +350,13 @@ def fig_throughput(ctx: Ctx, regime: str) -> None:
     a1.set_title("Throughput", loc="left", fontsize=12)
     style_axis(a1)
     lim = (ctx.m.get("manifest") or {}).get("regimes", {}).get(regime)
+    mean_cpu = {}
     for j, img in enumerate(images):
         res = [rd.resource_summary(r["resources"]) for r in ctx.runs(regime, img) if r.get("resources")]
         if not res:
             continue
         mean = sum(x["mean_cpu"] for x in res) / len(res)
+        mean_cpu[img] = mean
         peak = max(x["peak_cpu"] for x in res)
         a2.bar(j - 0.18, mean, 0.34, color=COLORS[img])
         a2.bar(j + 0.18, peak, 0.34, color=COLORS[img], alpha=0.5)
@@ -296,12 +364,18 @@ def fig_throughput(ctx: Ctx, regime: str) -> None:
         a2.text(j + 0.18, peak, f"{peak:.0f}", ha="center", va="bottom", fontsize=9)
     if lim:
         a2.axhline(float(lim[0]) * 100, color="#111827", linestyle="--", linewidth=1)
-        a2.text(len(images) - 0.5, float(lim[0]) * 100, f"CPU limit {lim[0]}", ha="right", va="bottom", fontsize=9)
+        a2.text(-0.45, float(lim[0]) * 100 * 1.03, f"CPU limit {lim[0]} core", ha="left", va="bottom", fontsize=9)
+        a2.set_ylim(top=max(float(lim[0]) * 100, max((x for x in [rd.resource_summary(r["resources"]).get("peak_cpu", 0) for i in images for r in ctx.runs(regime, i) if r.get("resources")]), default=0)) * 1.2)
     a2.set_xticks(range(len(images)), [LABELS[i] for i in images], fontsize=9)
     a2.set_ylabel("CPU, % of one core (docker stats)")
     a2.set_title("CPU over the whole run: mean (solid) and peak (pale)", loc="left", fontsize=12)
     style_axis(a2)
-    finish(ctx, fig, name, f"Throughput at {top} concurrent requests and the CPU each image used ({ctx.regime_label(regime)})",
+    if v4img and "v3" in images:
+        cpu_r = mean_cpu["v3"] / mean_cpu[v4img] if mean_cpu.get("v3") and mean_cpu.get(v4img) else float("nan")
+        title = throughput_title(cps_ratio(set(LOCAL_ROUTES)), cps_ratio(set(routes) - set(LOCAL_ROUTES)), cpu_r, top, ctx.regime_label(regime))
+    else:
+        title = f"Throughput at {top} concurrent requests and the CPU each image used ({ctx.regime_label(regime)})"
+    finish(ctx, fig, name, title,
            f"Higher throughput is better; CPU is what the container drew, with the limit marked. Medians over {ctx.repeats(regime)} run{'s' if ctx.repeats(regime) != 1 else ''}.")
 
 
@@ -317,19 +391,21 @@ def fig_footprint(ctx: Ctx) -> None:
     mb = 1e6
     ax = axes[0]
     ax.bar(range(len(images)), [facts[i]["size_bytes"] / mb for i in images], color=[COLORS[i] for i in images])
-    ax.set_title("Image size, MB", loc="left", fontsize=12)
+    ax.set_title("Image size, MB", loc="left", fontsize=11)
     ax = axes[1]
     for k, i in enumerate(images):
         if "binary_bytes" in facts[i]:
             ax.bar(k, facts[i]["binary_bytes"] / mb, color=COLORS[i])
             ax.bar(k, facts[i].get("onnx_library_bytes", 0) / mb, bottom=facts[i]["binary_bytes"] / mb, color=COLORS[i], alpha=0.45)
-    ax.set_title("Server binary + ONNX Runtime library, MB", loc="left", fontsize=12)
+    ax.set_title("Server binary (solid)\n+ ONNX library (pale), MB", loc="left", fontsize=11)
+    if "binary_bytes" not in facts.get("v3", {}):
+        ax.text(0, 6, "V3 is Python:\nno binary", ha="center", va="bottom", fontsize=9, color=GREY)
     ax = axes[2]
     for k, i in enumerate(images):
         t = [r["container"]["time_to_healthy_s"] for r in ctx.runs(regime, i) if r.get("container")]
         if t:
             ax.bar(k, sorted(t)[len(t) // 2], color=COLORS[i])
-    ax.set_title("Time to healthy, s", loc="left", fontsize=12)
+    ax.set_title("Time to healthy, s", loc="left", fontsize=11)
     ax = axes[3]
     for k, i in enumerate(images):
         res = [rd.resource_summary(r["resources"]) for r in ctx.runs(regime, i) if r.get("resources")]
@@ -338,13 +414,19 @@ def fig_footprint(ctx: Ctx) -> None:
             peak = max(x["peak_mem_mib"] for x in res)
             ax.bar(k - 0.18, idle, 0.34, color=COLORS[i])
             ax.bar(k + 0.18, peak, 0.34, color=COLORS[i], alpha=0.5)
-    ax.set_title("Memory, MiB: idle (solid) and peak (pale)", loc="left", fontsize=12)
+    ax.set_title("Memory, MiB\nidle (solid), peak (pale)", loc="left", fontsize=11)
     for ax in axes:
         ax.set_xticks(range(len(images)), [LABELS[i].replace(" (production image)", "") for i in images], fontsize=9)
         style_axis(ax)
     sizes = {i: facts[i]["size_bytes"] / mb for i in images}
     sub = ", ".join(f"{LABELS[i].replace(' (production image)', '')} {sizes[i]:.0f} MB" for i in images)
-    finish(ctx, fig, name, "What each image costs to carry and to start", f"Image sizes as Docker reports them ({sub}); memory and start time at the {ctx.regime_label(regime)}. Smaller is better.")
+    def fact(img):
+        healthy = [r["container"]["time_to_healthy_s"] for r in ctx.runs(regime, img) if r.get("container")]
+        res = [rd.resource_summary(r["resources"]) for r in ctx.runs(regime, img) if r.get("resources")]
+        return {"size_bytes": facts.get(img, {}).get("size_bytes"), "healthy_s": sorted(healthy)[len(healthy) // 2] if healthy else None,
+                "peak_mem": max((x["peak_mem_mib"] for x in res), default=None)}
+    title = footprint_title(fact("v3"), fact("lean")) if "v3" in images and "lean" in images else "What each image costs to carry and to start"
+    finish(ctx, fig, name, title, f"Image sizes as Docker reports them ({sub}); memory and start time at the {ctx.regime_label(regime)}. Smaller is better.")
 
 
 # ------------------------------------------------------------------ P6: reliability
