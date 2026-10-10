@@ -142,6 +142,7 @@ class Ctx:
         self.m, self.out, self.ext, self.draft = matrix, out, ext, draft
         self.evidence, self.differences = evidence, differences
         self.skipped: list[tuple[str, str]] = []
+        self.overlaps: list[str] = []  # figures whose heading, conditions or panel titles collide
         self.made: list[tuple[str, str, str]] = []  # file, title, conditions
         self.regimes = [r for r in ("limited", "headroom") if any(k[0] == r for k in matrix["runs"])]
 
@@ -174,11 +175,26 @@ class Ctx:
 
 def finish(ctx: Ctx, fig, name: str, title: str, conditions: str) -> None:
     import textwrap
-    t_lines = textwrap.fill(title, 80).count("\n") + 1
-    c_text = textwrap.fill(conditions, 170)
-    fig.text(0.02, 0.985, textwrap.fill(title, 80), ha="left", va="top", fontsize=16.5, fontweight="bold", linespacing=1.15)
-    y_sub = 0.985 - 0.052 * t_lines - 0.008
-    fig.text(0.02, y_sub, c_text, ha="left", va="top", fontsize=10, color=GREY, linespacing=1.25)
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    fig_h = fig.bbox.height
+
+    def frac(artist, edge):
+        bb = artist.get_window_extent(renderer)
+        return (bb.y0 if edge == "bottom" else bb.y1 - bb.y0) / fig_h
+    t = fig.text(0.02, 0.985, textwrap.fill(title, 80), ha="left", va="top", fontsize=16.5, fontweight="bold", linespacing=1.15)
+    y_sub = frac(t, "bottom") - 0.012
+    sub = fig.text(0.02, y_sub, textwrap.fill(conditions, 170), ha="left", va="top", fontsize=10, color=GREY, linespacing=1.25)
+    # The plots start below the subtitle, with room for the tallest panel title.
+    titles = [a for ax in fig.axes for a in (ax.title, ax._left_title) if a.get_text()]
+    room = max((frac(a, "height") for a in titles), default=0) + 0.02
+    top = frac(sub, "bottom") - room
+    if fig.axes and top < fig.subplotpars.top:
+        fig.subplots_adjust(top=top)
+    fig.canvas.draw()
+    boxes = [a.get_window_extent(renderer) for a in [t, sub] + titles]
+    if any(boxes[i].overlaps(boxes[j]) for i in range(len(boxes)) for j in range(i + 1, len(boxes))):
+        ctx.overlaps.append(name)
     fig.text(0.02, 0.012, ctx.footer(), ha="left", va="bottom", fontsize=7.5, color=GREY)
     if ctx.draft:
         fig.text(0.5, 0.5, "DRAFT", ha="center", va="center", fontsize=110, color="#000000", alpha=0.06, rotation=25, fontweight="bold")
@@ -188,9 +204,9 @@ def finish(ctx: Ctx, fig, name: str, title: str, conditions: str) -> None:
     ctx.made.append((path.name, title, conditions))
 
 
-def new_fig(rows=1, cols=1, **kw):
+def new_fig(rows=1, cols=1, left=0.07, **kw):
     fig, axes = plt.subplots(rows, cols, figsize=(W, H), **kw)
-    fig.subplots_adjust(top=0.76, bottom=0.17, left=0.07, right=0.98, hspace=0.45, wspace=0.25)
+    fig.subplots_adjust(top=0.76, bottom=0.17, left=left, right=0.98, hspace=0.45, wspace=0.25)
     return fig, axes
 
 
@@ -278,8 +294,9 @@ def fig_latency_cold(ctx: Ctx, regime: str) -> None:
         ax.bar(xs, med, width * 0.92, color=COLORS[img], yerr=[lo, hi], error_kw={"elinewidth": 1.2, "capsize": 3, "ecolor": "#111827"})
         p95 = [rd.spread(stats[img][r]["p95"])["median"] for r in routes]
         ax.scatter(xs, p95, marker="D", s=22, color="white", edgecolor="#111827", zorder=5)
-        for x, m, q in zip(xs, med, p95):
-            ax.text(x, max(m, q) * 1.25, fmt_ms(m), ha="center", va="bottom", fontsize=8)
+        top = [rd.spread(stats[img][r]["median"])["max"] for r in routes]
+        for x, m, q, h in zip(xs, med, p95, top):
+            ax.text(x, max(m, q, h) * 1.25, fmt_ms(m), ha="center", va="bottom", fontsize=8)
     ax.set_yscale("log")
     ax.set_xticks(range(len(routes)), [ROUTE_NAMES[r] for r in routes], fontsize=10)
     ax.set_ylabel("median latency, ms (log scale)")
@@ -416,12 +433,12 @@ def fig_throughput(ctx: Ctx, regime: str) -> None:
         a2.text(j + 0.18, peak, f"{peak:.0f}", ha="center", va="bottom", fontsize=9)
     if lim:
         a2.axhline(float(lim[0]) * 100, color="#111827", linestyle="--", linewidth=1)
-        a2.text(-0.45, float(lim[0]) * 100 * 1.03, f"CPU limit {lim[0]} core", ha="left", va="bottom", fontsize=9)
         a2.set_ylim(top=max(float(lim[0]) * 100, max((x for x in [rd.resource_summary(r["resources"]).get("peak_cpu", 0) for i in images for r in ctx.runs(regime, i) if r.get("resources")]), default=0)) * 1.2)
     a2.set_xticks(range(len(images)), [LABELS[i] for i in images], fontsize=9)
     a2.set_ylabel("CPU, % of one core (docker stats)")
-    a2.set_title("CPU over the whole run: mean (solid) and peak (pale)", loc="left", fontsize=12)
+    a2.set_title("CPU over the whole run: mean (solid) and peak (pale)" + (f"\ndashed line = the {lim[0]}-core limit" if lim else ""), loc="left", fontsize=12)
     style_axis(a2)
+    legend_for(fig, images)
     if v4img and "v3" in images:
         cpu_r = mean_cpu["v3"] / mean_cpu[v4img] if mean_cpu.get("v3") and mean_cpu.get(v4img) else float("nan")
         title = throughput_title(cps_ratio(set(LOCAL_ROUTES)), cps_ratio(set(routes) - set(LOCAL_ROUTES)), cpu_r, top, ctx.regime_label(regime))
@@ -451,7 +468,7 @@ def fig_footprint(ctx: Ctx) -> None:
             ax.bar(k, facts[i].get("onnx_library_bytes", 0) / mb, bottom=facts[i]["binary_bytes"] / mb, color=COLORS[i], alpha=0.45)
     ax.set_title("Server binary (solid)\n+ ONNX library (pale), MB", loc="left", fontsize=11)
     if "binary_bytes" not in facts.get("v3", {}):
-        ax.text(0, 6, "V3 is Python:\nno binary", ha="center", va="bottom", fontsize=9, color=GREY)
+        ax.text(0, 0.03, "V3 is Python:\nno binary", ha="center", va="bottom", fontsize=9, color=GREY, transform=ax.get_xaxis_transform())
     ax = axes[2]
     for k, i in enumerate(images):
         t = [r["container"]["time_to_healthy_s"] for r in ctx.runs(regime, i) if r.get("container")]
@@ -469,6 +486,7 @@ def fig_footprint(ctx: Ctx) -> None:
     ax.set_title("Memory, MiB\nidle (solid), peak (pale)", loc="left", fontsize=11)
     for ax in axes:
         ax.set_xticks(range(len(images)), [LABELS[i].replace(" (production image)", "") for i in images], fontsize=9)
+        ax.set_xlim(-0.6, len(images) - 0.4)
         style_axis(ax)
     sizes = {i: facts[i]["size_bytes"] / mb for i in images}
     sub = ", ".join(f"{LABELS[i].replace(' (production image)', '')} {sizes[i]:.0f} MB" for i in images)
@@ -499,7 +517,10 @@ def fig_reliability(ctx: Ctx) -> None:
         ax.barh(range(len(rows)), vals, left=left, color=col, label=text)
         for k, (v, t) in enumerate(zip(vals, [t for _, _, t in rows])):
             if t[key]:
-                ax.text(left[k] + v / 2, k, str(t[key]), ha="center", va="center", fontsize=9)
+                if v >= 3:
+                    ax.text(left[k] + v / 2, k, str(t[key]), ha="center", va="center", fontsize=9)
+                else:  # too narrow for its own count: write it past the end of the bar
+                    ax.text(101, k, f"{t[key]} {({'incorrect': 'incomplete', 'error': 'no answer'}).get(key, text.split(' (')[0])}", ha="left", va="center", fontsize=9)
         left = [a + b for a, b in zip(left, vals)]
     ax.set_yticks(range(len(rows)), labels, fontsize=9)
     ax.invert_yaxis()
@@ -507,22 +528,30 @@ def fig_reliability(ctx: Ctx) -> None:
     ax.legend(frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(0.5, -0.24), fontsize=9)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
+    ax.set_xlim(0, 112)
+    ax.set_xticks(range(0, 101, 20))
     errs = {i: sum(t["error"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
+    other = {i: sum(t["other_status"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
     wrong = {i: sum(t["incorrect"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
-    bad = [i for i in errs if errs[i] or wrong[i]]
+    bad = [i for i in errs if errs[i] or wrong[i] or other[i]]
     order = [i for i in ("v3", "lean", "small") if i in errs]
     if not bad:
         title = "Every image answered every request, and every answer was complete"
     else:
         def clause(i):
-            what = ([f"{errs[i]} unanswered"] if errs[i] else []) + ([f"{wrong[i]} incomplete"] if wrong[i] else [])
+            what = ([f"{errs[i]} unanswered"] if errs[i] else []) + ([f"{other[i]} error status"] if other[i] else []) + ([f"{wrong[i]} incomplete"] if wrong[i] else [])
             return f"{LABELS[i].replace(' (production image)', '')} {', '.join(what) if what else 'none'}"
-        title = "Failed or incomplete answers: " + "; ".join(clause(i) for i in order)
+        title = "Failed, errored or incomplete answers: " + "; ".join(clause(i) for i in order)
     finish(ctx, fig, name, title, "All cold, warm and concurrent calls of all runs; counts inside the bars. 'No answer' is a timeout or connection error (the request timeout is in the manifest); "
-           "'wrong or incomplete' is a 200 whose answer lacked the company's CIK, found by the check in the concurrency pass (levels 1 to 16).")
+           "'other status' is any answer that is neither 200 nor an expected 404 (for example a 500); 'wrong or incomplete' is a 200 whose answer lacked the company's CIK, found by the check in the concurrency pass (levels 1 to 16).")
 
 
 # ------------------------------------------------------------------ P7: why
+def panel_title(head: str, detail: str, width: int = 62) -> str:
+    import textwrap
+    return head + "\n" + textwrap.fill(detail, width)
+
+
 def fig_why(ctx: Ctx) -> None:
     name = "p7-why"
     regime = "limited" if "limited" in ctx.regimes else (ctx.regimes[0] if ctx.regimes else None)
@@ -533,7 +562,7 @@ def fig_why(ctx: Ctx) -> None:
     lc = rd.phase_stats(ctx.runs(regime, "lean"), "cold") if ctx.runs(regime, "lean") else {}
     lw = rd.phase_stats(ctx.runs(regime, "lean"), "warm") if ctx.runs(regime, "lean") else {}
     fig, axes = new_fig(2, 2)
-    fig.subplots_adjust(hspace=0.65, wspace=0.28)
+    fig.subplots_adjust(hspace=0.85, wspace=0.3)
     a = axes[0][0]
     vals_a = []
     if "wikipedia_firmographics" in lc and "wikipedia_firmographics" in lw and "wikipedia_firmographics" in v3w:
@@ -546,7 +575,7 @@ def fig_why(ctx: Ctx) -> None:
         a.set_xticks(range(3), ["V3", "V4 cold", "V4 repeat"], fontsize=9)
         a.set_ylim(top=max(vals_a) * 4)
     if vals_a:
-        a.set_title(f"A. Result cache  [MEASURED]\nWikipedia lookup, cold: {compare_phrase(vals_a[0], vals_a[1])}; a repeat is {vals_a[1] / vals_a[2]:.0f}x faster than cold (a cache hit)",
+        a.set_title(panel_title("A. Result cache  [MEASURED]", f"Wikipedia lookup, cold: {compare_phrase(vals_a[0], vals_a[1])}; a repeat is {vals_a[1] / vals_a[2]:.0f}x faster than cold (a cache hit)"),
                     loc="left", fontsize=10.5)
     else:
         a.set_title("A. Result cache  [MEASURED]\nneeds V3 and V4 lean cold and warm Wikipedia data", loc="left", fontsize=10.5)
@@ -559,7 +588,7 @@ def fig_why(ctx: Ctx) -> None:
             b.text(k, v * 1.03, f"{v} ms", ha="center", fontsize=9)
         b.set_xticks([0, 1], [f"plain\n{g['plain_bytes_median'] // 1000} KB", f"gzip\n{g['gzip_bytes_median'] // 1000} KB"], fontsize=9)
         b.set_ylim(0, g["plain_ms_median"] * 1.25)
-        b.set_title(f"B. gzip on the Wikidata call  [{g['status'].upper()}]\n{g['date']}: the same request, plain against gzip", loc="left", fontsize=10.5)
+        b.set_title(panel_title(f"B. gzip on the Wikidata call  [{g['status'].upper()}]", f"{g['date']}: the same request, plain against gzip"), loc="left", fontsize=10.5)
     style_axis(b)
     c = axes[1][0]
     ctrl = [r for r in ("health", "sic_lookup", "edgar_ciks") if r in v3w and r in lc]
@@ -569,8 +598,8 @@ def fig_why(ctx: Ctx) -> None:
         c.set_xticks(range(len(ctrl)), [ROUTE_NAMES[r] for r in ctrl], fontsize=9)
         c.legend(frameon=False, fontsize=9)
     if "health" in v3w and "health" in lc:
-        c.set_title(f"C. Local work and framework  [OBSERVED]\nRoutes with no upstream call; on 'health', which does no work, "
-                    f"{compare_phrase(rd.spread(v3w['health']['median'])['median'], rd.spread(lc['health']['median'])['median'])}", loc="left", fontsize=10.5)
+        c.set_title(panel_title("C. Local work and framework  [OBSERVED]", f"Routes with no upstream call; on 'health', which does no work, "
+                    f"{compare_phrase(rd.spread(v3w['health']['median'])['median'], rd.spread(lc['health']['median'])['median'])}"), loc="left", fontsize=10.5)
     else:
         c.set_title("C. Local work and framework  [OBSERVED]\nneeds V3 and V4 lean data", loc="left", fontsize=10.5)
     style_axis(c)
@@ -582,7 +611,8 @@ def fig_why(ctx: Ctx) -> None:
             d.text(k, v + 1, str(v), ha="center", fontsize=10)
         d.set_xticks([0, 1], [f"V3 {t['old_image']}\n(before the Wikipedia v2 backend)", f"V3 {t['current_image']}\n(production now)"], fontsize=9)
         d.set_ylabel(f"calls with no answer of {t['old_calls']}", fontsize=9)
-        d.set_title(f"D. V3's own improvement  [{t['status'].upper()}]\nWhy the comparison uses the current V3 image", loc="left", fontsize=10.5)
+        d.set_ylim(top=max(t['old_errors'], t['current_errors'], 1) * 1.15)
+        d.set_title(panel_title(f"D. V3's own improvement  [{t['status'].upper()}]", "Why the comparison uses the current V3 image"), loc="left", fontsize=10.5)
     style_axis(d)
     finish(ctx, fig, name, "Where V4's gains come from, and which of them we measured",
            "MEASURED = isolated with a before-and-after on the same work; OBSERVED = seen in the matrix but not isolated (for example 'health' shows the framework overhead, not its share of every gain).")
@@ -661,7 +691,7 @@ def fig_suite(ctx: Ctx) -> None:
         return ctx.skip(name, "needs suite/<image>.json from api_tests/run.py --report")
     layers = rd.suite_by_layer(rep)
     order = sorted(layers)
-    fig, ax = new_fig()
+    fig, ax = new_fig(left=0.17)
     cols = [("passed", "#009E73", "passed"), ("expected_failure", "#F0E442", "expected failure (a recorded difference)"), ("skipped", "#9ca3af", "skipped"),
             ("failed", "#D55E00", "failed"), ("error", "#8B0000", "error")]
     left = [0] * len(order)
@@ -723,7 +753,7 @@ def fig_adds(ctx: Ctx) -> None:
                 t = (op.get("tags") or ["other"])[0]
                 tags[t] = tags.get(t, 0) + 1
     names = sorted(tags, key=lambda t: -tags[t])
-    fig, ax = new_fig()
+    fig, ax = new_fig(left=0.22)
     ax.barh(range(len(names)), [tags[t] for t in names], color=COLORS["lean"])
     for k, t in enumerate(names):
         ax.text(tags[t] + 0.2, k, str(tags[t]), va="center", fontsize=10)

@@ -62,11 +62,11 @@ Higher throughput is better; CPU is what the container drew, with the limit mark
 
 Image sizes as Docker reports them (V3 1119 MB, V4 lean 528 MB, V4 small 456 MB); memory and start time at the production limits: 0.5 CPU, 1g. Smaller is better.
 
-## Failed or incomplete answers: V3 98 incomplete; V4 lean none; V4 small 114 incomplete
+## Failed, errored or incomplete answers: V3 98 incomplete; V4 lean none; V4 small 114 incomplete
 
-![Failed or incomplete answers: V3 98 incomplete; V4 lean none; V4 small 114 incomplete](p6-reliability.png)
+![Failed, errored or incomplete answers: V3 98 incomplete; V4 lean none; V4 small 114 incomplete](p6-reliability.png)
 
-All cold, warm and concurrent calls of all runs; counts inside the bars. 'No answer' is a timeout or connection error (the request timeout is in the manifest); 'wrong or incomplete' is a 200 whose answer lacked the company's CIK, found by the check in the concurrency pass (levels 1 to 16).
+All cold, warm and concurrent calls of all runs; counts inside the bars. 'No answer' is a timeout or connection error (the request timeout is in the manifest); 'other status' is any answer that is neither 200 nor an expected 404 (for example a 500); 'wrong or incomplete' is a 200 whose answer lacked the company's CIK, found by the check in the concurrency pass (levels 1 to 16).
 
 ## Where V4's gains come from, and which of them we measured
 
