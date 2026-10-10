@@ -102,6 +102,22 @@ class Summaries(unittest.TestCase):
         self.assertEqual(rd.resource_summary([]), {})
 
 
+class Outcomes(unittest.TestCase):
+    def test_incorrect_answers_are_counted_apart_from_no_answer(self):
+        runs = [{"k": 1, "cold": {"sequential_results": [call("a", 5), call("a", 9, status=404)]},
+                 "conc": {"concurrency_results": [call("a", 7, level=4, mode="concurrent"),
+                                                  call("a", 8, level=4, mode="concurrent", error="incorrect (incomplete): the answer for x lacks CIK 1"),
+                                                  call("a", 30000, status=None, level=4, mode="concurrent", error="Read timed out")]}}]
+        self.assertEqual(rd.status_totals(runs), {"ok": 2, "not_found": 1, "other_status": 0, "error": 1, "incorrect": 1})
+
+    @unittest.skipUnless(HAVE_REQUESTS, "baseline.py needs the requests package")
+    def test_classify_incorrect_tells_contamination_from_missing_data(self):
+        from baseline import classify_incorrect
+        cos = [{"key": "ibm", "cik": "51143"}, {"key": "apple", "cik": "320193"}, {"key": "tesla", "cik": "1318605"}]
+        self.assertEqual(classify_incorrect('{"name": "Apple", "cik": "Unknown"}', "320193", cos, "apple"), "incomplete")
+        self.assertEqual(classify_incorrect('{"name": "Apple", "cik": "0000051143"}', "320193", cos, "apple"), "contaminated", "another company's CIK is in the answer")
+
+
 class Matrix(unittest.TestCase):
     def test_reads_the_layout_the_harness_writes(self):
         with tempfile.TemporaryDirectory() as d:

@@ -283,6 +283,15 @@ def verify_endpoints_exist(base_url: str, timeout: float, profile: str = "v3") -
 SESSION_CONFIG = {"user_agent": "company_dns-perf-tests/1.0 (+https://github.com/miha42-github/company_dns)", "auth": None}
 
 
+def classify_incorrect(body: str, expected_cik: str, companies: list[dict], company_key: str) -> str:
+    """Why a 200 response for one company does not contain that company's CIK: 'contaminated' if it contains another company's CIK (the
+    cross-request mix-up this check was written to catch), otherwise 'incomplete' (the right company, but the data is missing, for example
+    when an upstream call inside the lookup failed and the service answered anyway)."""
+    low = body.lower()
+    others = [c["cik"] for c in companies if c["key"] != company_key and c["cik"].lower() != expected_cik.lower()]
+    return "contaminated" if any(o.lower() in low for o in others) else "incomplete"
+
+
 def new_session() -> requests.Session:
     session = requests.Session()
     session.headers["User-Agent"] = SESSION_CONFIG["user_agent"]
@@ -333,7 +342,7 @@ def run_sequential(base_url: str, calls: list[Call], delay: float, timeout: floa
 
 
 def run_concurrency_experiment(
-    base_url: str, companies, levels: list[int], repeat: int, timeout: float, profile: str = "v3"
+    base_url: str, companies, levels: list[int], repeat: int, timeout: float, profile: str = "v3", record_incorrect: bool = False
 ) -> list[CallResult]:
     results = []
     profiled = profile_endpoints(profile)
@@ -408,7 +417,13 @@ def run_concurrency_experiment(
                             status, latency_ms, error, body = result
                             if status == 200 and body is not None:
                                 expected_cik = expected_marker_by_url[call.url]
-                                if expected_cik.lower() not in body.lower():
+                                if expected_cik.lower() not in body.lower() and record_incorrect:
+                                    # Record it as an incorrect answer and carry on: the matrix compares services, so one service's wrong or incomplete
+                                    # answer must be counted, not stop the run. 'contaminated' is the cross-request mix-up; 'incomplete' is the right company
+                                    # with missing data.
+                                    kind = classify_incorrect(body, expected_cik, companies, call.company_key)
+                                    error = f"incorrect ({kind}): the answer for {call.company_key} lacks CIK {expected_cik}"
+                                elif expected_cik.lower() not in body.lower():
                                     raise AssertionError(
                                         f"CONCURRENCY CORRECTNESS FAILURE on {call.endpoint_key} "
                                         f"(concurrency={level}, run={run_index + 1}): expected "
@@ -569,6 +584,7 @@ def main():
     parser.add_argument("--delay", type=float, default=0.15, help="seconds between sequential calls, default: 0.15")
     parser.add_argument("--timeout", type=float, default=30.0, help="per-request timeout in seconds, default: 30")
     parser.add_argument("--endpoints", default=None, help="comma-separated endpoint keys to run in the sequential pass (run_matrix.py uses one route per pass so a cold start is really cold)")
+    parser.add_argument("--record-incorrect", action="store_true", help="count a 200 answer that lacks the expected CIK as an incorrect answer (contaminated or incomplete) and carry on, instead of stopping the run; run_matrix.py uses it")
     parser.add_argument("--skip-sequential", action="store_true", help="only run the concurrency experiment (run_matrix.py takes the cold and warm sequential passes separately)")
     parser.add_argument("--skip-concurrency", action="store_true", help="only run the sequential baseline")
     parser.add_argument("--user-agent", default=SESSION_CONFIG["user_agent"], help="User-Agent sent with every request (a self-identifying one gets V4's normal rate limit)")
@@ -616,7 +632,8 @@ def main():
     concurrency_results = []
     if not args.skip_concurrency:
         print(f"\n==> Running concurrency experiment: levels={args.concurrency}, repeat={args.repeat}")
-        concurrency_results = run_concurrency_experiment(args.base_url, COMPANIES, args.concurrency, args.repeat, args.timeout, args.profile)
+        concurrency_results = run_concurrency_experiment(args.base_url, COMPANIES, args.concurrency, args.repeat, args.timeout, args.profile,
+                                                         record_incorrect=args.record_incorrect)
         print_concurrency_summary(concurrency_results, sequential_results)
 
     out_path = args.out or Path(__file__).resolve().parent / "results" / f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.json"

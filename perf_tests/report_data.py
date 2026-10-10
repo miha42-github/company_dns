@@ -253,13 +253,16 @@ def concurrency_table(runs: list[dict]) -> dict[tuple[str, int], dict]:
 
 
 def status_totals(runs: list[dict]) -> dict[str, int]:
-    """Every measured call of an image, by outcome: ok (200), not_found (404), other_status, error (no response, for example a timeout)."""
-    t = {"ok": 0, "not_found": 0, "other_status": 0, "error": 0}
+    """Every measured call of an image, by outcome: ok (200), not_found (404), other_status, error (no response, for example a timeout), and incorrect
+    (a 200 whose answer lacked the expected CIK: contaminated with another company's data, or incomplete)."""
+    t = {"ok": 0, "not_found": 0, "other_status": 0, "error": 0, "incorrect": 0}
     for run in runs:
         for phase, field in (("cold", "sequential_results"), ("warm", "sequential_results"), ("conc", "concurrency_results")):
             rep = run.get(phase)
             for r in (rep or {}).get(field, []):
-                if r.get("error") or r.get("status_code") is None:
+                if str(r.get("error") or "").startswith("incorrect"):
+                    t["incorrect"] += 1  # answered 200, but the answer was wrong or incomplete (recorded by baseline.py --record-incorrect)
+                elif r.get("error") or r.get("status_code") is None:
                     t["error"] += 1
                 elif r["status_code"] == 200:
                     t["ok"] += 1
