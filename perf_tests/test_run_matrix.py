@@ -47,6 +47,7 @@ class Docker(unittest.TestCase):
         self.assertEqual(cold[cold.index("--auth") + 1], "perf:t")
         conc = rm.baseline_command("py", "http://x", Path("/o/k.json"), kind="concurrency", **kw)
         self.assertIn("--skip-sequential", conc)
+        self.assertIn("--record-incorrect", conc, "a wrong answer from one service is counted, not allowed to stop the matrix")
         self.assertEqual(conc[conc.index("--concurrency") + 1:], ["1", "4"])
         v3 = rm.baseline_command("py", "http://x", Path("/o/c.json"), kind="warm", **{**kw, "auth": None})
         self.assertNotIn("--auth", v3, "V3 is called without a credential")

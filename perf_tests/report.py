@@ -358,7 +358,7 @@ def fig_reliability(ctx: Ctx) -> None:
         return ctx.skip(name, "needs raw runs")
     fig, ax = new_fig()
     labels = [f"{LABELS[i].replace(' (production image)', '')}\n{r}" for r, i, _ in rows]
-    cols = [("ok", "#009E73", "answered 200"), ("not_found", "#F0E442", "404 (expected for unknown names)"), ("other_status", "#CC79A7", "other status"), ("error", "#D55E00", "no answer (timeout or connection error)")]
+    cols = [("ok", "#009E73", "answered 200"), ("not_found", "#F0E442", "404 (expected for unknown names)"), ("other_status", "#CC79A7", "other status"), ("incorrect", "#882255", "200 but wrong or incomplete (lacks the CIK asked for)"), ("error", "#D55E00", "no answer (timeout or connection error)")]
     left = [0.0] * len(rows)
     for key, col, text in cols:
         vals = [100.0 * t[key] / max(1, sum(t.values())) for _, _, t in rows]
@@ -370,13 +370,19 @@ def fig_reliability(ctx: Ctx) -> None:
     ax.set_yticks(range(len(rows)), labels, fontsize=9)
     ax.invert_yaxis()
     ax.set_xlabel("share of all measured calls, %")
-    ax.legend(frameon=False, ncol=4, loc="lower center", bbox_to_anchor=(0.5, -0.2), fontsize=9)
+    ax.legend(frameon=False, ncol=3, loc="lower center", bbox_to_anchor=(0.5, -0.24), fontsize=9)
     for s in ("top", "right"):
         ax.spines[s].set_visible(False)
     errs = {i: sum(t["error"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
-    bad = [LABELS[i] for i, e in errs.items() if e]
-    title = "Every image answered every request" if not bad else "Requests that got no answer: " + ", ".join(f"{LABELS[i]} {errs[i]}" for i in errs if errs[i])
-    finish(ctx, fig, name, title, "All cold, warm and concurrent calls of all runs; counts inside the bars. A timeout is counted as no answer, with the request timeout recorded in the manifest.")
+    wrong = {i: sum(t["incorrect"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
+    bad = [i for i in errs if errs[i] or wrong[i]]
+    if not bad:
+        title = "Every image answered every request, and every answer was complete"
+    else:
+        title = "Failed or incomplete answers: " + ", ".join(
+            f"{LABELS[i]} {errs[i]} unanswered" + (f", {wrong[i]} incomplete" if wrong[i] else "") for i in bad)
+    finish(ctx, fig, name, title, "All cold, warm and concurrent calls of all runs; counts inside the bars. 'No answer' is a timeout or connection error (the request timeout is in the manifest); "
+           "'wrong or incomplete' is a 200 whose answer lacked the company's CIK under concurrent load.")
 
 
 # ------------------------------------------------------------------ P7: why

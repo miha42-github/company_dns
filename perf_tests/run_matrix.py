@@ -93,7 +93,7 @@ def baseline_command(py: str, url: str, out: Path, *, auth: str | None, label: s
         if endpoint:
             cmd += ["--endpoints", endpoint]
     else:
-        cmd += ["--skip-sequential", "--repeat", str(repeat), "--concurrency", *map(str, levels)]
+        cmd += ["--skip-sequential", "--record-incorrect", "--repeat", str(repeat), "--concurrency", *map(str, levels)]
     return cmd
 
 
