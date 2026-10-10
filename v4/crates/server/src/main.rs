@@ -1,4 +1,5 @@
 mod access;
+mod cpu;
 mod docs;
 mod envelope;
 mod errors;
@@ -145,6 +146,8 @@ async fn main() -> anyhow::Result<()> {
     )
     .to_string_lossy()
     .into_owned();
+    // Fail fast, with a message, if the ONNX Runtime this build uses cannot run on this machine (docs/plans/v4-release-to-staging.md, item I).
+    cpu::preflight()?;
     tracing::info!("Loading US SIC data from {sic_path}...");
     let mut sic = SicCatalog::open(&sic_path).await?;
     if !sic.has_us_section_narrative().await {

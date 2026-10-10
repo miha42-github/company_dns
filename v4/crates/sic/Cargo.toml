@@ -10,7 +10,16 @@ serde.workspace = true
 serde_json.workspace = true
 anyhow.workspace = true
 regex.workspace = true
-fastembed = "7"
+# Which ONNX Runtime fastembed uses is a build choice (docs/plans/v4-release-to-staging.md, item I):
+#   ort-download (default)  pyke's prebuilt binaries, downloaded by the build. Fast to set up, but they need a CPU with AVX2.
+#   ort-dynamic             load Microsoft's libonnxruntime at run time from ORT_DYLIB_PATH. Runs on CPUs without AVX2
+#                           (the production amd64 nodes are 2013 Xeons); the Docker image uses this.
+fastembed = { version = "7", default-features = false, features = ["hf-hub-native-tls", "image-models"] }
+
+[features]
+default = ["ort-download"]
+ort-download = ["fastembed/ort-download-binaries-native-tls"]
+ort-dynamic = ["fastembed/ort-load-dynamic"]
 
 [dev-dependencies]
 tokio.workspace = true

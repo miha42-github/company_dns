@@ -13,7 +13,7 @@ cleanup() { docker rm -f "$name" >/dev/null 2>&1 || true; docker rm -f "$name-ne
 trap cleanup EXIT
 
 echo "== 1. offline start: --network none (the model and data must be in the image)"
-docker run -d --name "$name-net" --network none "$image" >/dev/null
+docker run -d --name "$name-net" --network none -e RUST_LOG=info "$image" >/dev/null
 for i in $(seq 1 60); do
   [ "$(docker inspect -f '{{.State.Running}}' "$name-net")" = "true" ] || { docker logs "$name-net" | tail -20; echo "container exited"; exit 1; }
   docker exec "$name-net" curl -fsS -A "$ua" http://127.0.0.1:4000/health >/dev/null 2>&1 && break
@@ -21,6 +21,7 @@ for i in $(seq 1 60); do
 done
 docker exec "$name-net" curl -fsS -A "$ua" http://127.0.0.1:4000/health >/dev/null || { docker logs "$name-net" | tail -20; echo "no health after 60 s"; exit 1; }
 echo "   healthy with no network"
+docker logs "$name-net" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -m1 "CPU:" | sed 's/^/   /' || echo "   (no CPU preflight line in the log)"
 docker exec "$name-net" curl -fsS -A "$ua" http://127.0.0.1:4000/V4.0/na/sic/code/3571 | head -c 160; echo
 docker exec "$name-net" curl -fsS -A "$ua" "http://127.0.0.1:4000/V4.0/na/sic/similarity/computers" | head -c 160; echo
 docker exec "$name-net" curl -fsS -A "$ua" -o /dev/null -w "UI /ui/: HTTP %{http_code}, %{size_download} bytes\n" http://127.0.0.1:4000/ui/

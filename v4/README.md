@@ -121,7 +121,7 @@ Gates run in the build, so a bad input fails the build and never becomes an imag
 file, a row and quarter check on the EDGAR catalog, and a SHA-256 check of the model weights. The runtime is `debian:trixie-slim`
 (glibc), because the ONNX runtime fastembed uses has no musl build. The process runs as UID 10001. A volume mounted at `/app/data`
 replaces the data without a rebuild. The image carries `THIRD_PARTY_NOTICES.md` and the Redoc licence under `/usr/share/doc/company-dns/`.
-The ONNX runtime is downloaded during the Rust build, so the build itself needs network access (the running container does not).
+The ONNX Runtime is Microsoft's official release (1.31.0, pinned by SHA-256, fetched from GitHub during the build) and is loaded at run time (`ORT_DYLIB_PATH`), so the image runs on CPUs without AVX2, such as the production nodes' 2013 Xeons. `docker-build.sh --ort download` uses pyke's prebuilt runtime instead, which needs AVX2. For local `cargo run` the default is still pyke's runtime; `cargo build --no-default-features --features ort-dynamic` with `ORT_DYLIB_PATH` set uses the dynamic one. `v4/scripts/cpu-check.sh` reports a machine's architecture and AVX2/NEON and which build fits; the server logs the same facts at start (`CPU: ...`) and refuses to start, with a message, if the runtime cannot run on that machine. The build needs network access (the running container does not).
 
 ## Observability" below).
 

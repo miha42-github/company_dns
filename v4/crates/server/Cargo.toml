@@ -8,10 +8,15 @@ publish.workspace = true
 name = "company-dns-server"
 path = "src/main.rs"
 
+[features]
+default = ["ort-download"]
+ort-download = ["company-dns-sic/ort-download"]
+ort-dynamic = ["company-dns-sic/ort-dynamic"]
+
 [dependencies]
 company-dns-cache = { path = "../cache" }
 company-dns-edgar = { path = "../edgar" }
-company-dns-sic = { path = "../sic" }
+company-dns-sic = { path = "../sic", default-features = false }
 company-dns-wikipedia = { path = "../wikipedia" }
 company-dns-firmographics = { path = "../firmographics" }
 datafusion.workspace = true
