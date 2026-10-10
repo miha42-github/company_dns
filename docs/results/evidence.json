@@ -1,0 +1,22 @@
+{
+  "_about": "Measurements quoted by the 'why' picture (P7) that the clean-run matrix does not itself produce. Each entry says what was measured, when, and where to find the raw data. Only entries marked status=measured may be drawn as causes.",
+  "gzip_wikidata": {
+    "status": "measured",
+    "claim": "Asking Wikidata for gzip cuts the claims response about 6.5x and the call about 23%",
+    "date": "2026-10-08",
+    "method": "the same Wikidata claims request for the ten companies in perf_tests/companies.py, two rounds, plain against gzip, alternating, from the development Mac",
+    "plain_ms_median": 704, "gzip_ms_median": 540,
+    "plain_bytes_median": 305963, "gzip_bytes_median": 47057,
+    "source": "docs/plans/v4-release-to-staging.md (Wikipedia uncached latency)"
+  },
+  "v3_old_image_timeouts": {
+    "status": "measured",
+    "claim": "The V3 image built before the Wikipedia v2 backend cut-over timed out on Wikipedia and merged lookups; the current production image does not",
+    "date": "2026-10-10",
+    "method": "the same perf_tests/baseline.py matrix on cafe-1 at 500m CPU and 1Gi against each V3 image; 30 s timeout on the old image, 120 s on the current one",
+    "old_image": "09262026-5", "old_calls": 208, "old_errors": 63,
+    "current_image": "09272026-1", "current_calls": 208, "current_errors": 0,
+    "cause": "V3 commit f65595b (2026-09-27 06:15) replaced the wptools request layer with direct narrowed requests",
+    "source": "docs/plans/v4-release-to-staging.md (first V3-versus-V4 perf pass)"
+  }
+}

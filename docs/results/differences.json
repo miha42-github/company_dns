@@ -1,0 +1,12 @@
+{
+  "_about": "Every intentional difference between V3's answers and V4's, for the differences ledger (F3). Sources: docs/plans/v4-release-to-staging.md and docs/plans/v4-data-gaps.md.",
+  "differences": [
+    {"area": "Japan SIC", "routes": "/V3.0/japan/sic/*", "v3": "mixed-case names, 13 entries for 'food' (a partial extract of the classification)", "v4": "the classification's own upper-case names, 18 entries", "reason": "V4 uses the corrected full file; the government's English JSIC page prints upper-case group names", "decided": "2026-10-08"},
+    {"area": "EDGAR catalog scope", "routes": "EDGAR ciks, summary, detail", "v3": "searches a larger company list", "v4": "10-K and 10-Q filers of the last eight completed quarters", "reason": "rolling window by design; a company that stopped filing before it (for example PINEAPPLE, INC.) is not returned", "decided": "2026-10-08"},
+    {"area": "Merged firmographics", "routes": "/V3.0/global/company/merged/*", "v3": "one flat 41-field record", "v4": "{edgar, wikipedia, ...}", "reason": "V3's coordinates and map links came from ArcGIS geocoding, which V4 does not do; the shape gap is recorded (plan question Q14)", "decided": "2026-10-07"},
+    {"area": "tickers", "routes": "EDGAR and Wikipedia firmographics", "v3": "['NASDAQ', 'AAPL'] (exchange mixed in)", "v4": "['AAPL'] (symbols only; the exchange is in 'exchanges')", "reason": "a formatting defect in V3 fixed for developers", "decided": "2026-10-08"},
+    {"area": "Wikipedia lineage", "routes": "Wikipedia and merged", "v3": "message ends '(v2 backend)'", "v4": "same wording without that suffix, plus performance.cache_hit and dependencies.data", "reason": "the suffix would misname the implementation; the extra fields add attribution and diagnostics", "decided": "2026-10-08"},
+    {"area": "Errors and dependencies", "routes": "all", "v3": "an HTML page for a 404; V3's dependencies block", "v4": "a JSON 404 envelope; V4's dependencies block", "reason": "consistent machine-readable errors", "decided": "2026-10-07"},
+    {"area": "UK SIC and v1 backends", "routes": "/V3.0/uk/*, .../v1/...", "v3": "served", "v4": "not served", "reason": "left out by decision (plan question Q3)", "decided": "2026-10-06"}
+  ]
+}

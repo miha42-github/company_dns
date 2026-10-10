@@ -212,3 +212,85 @@ def resource_summary(rows: list[dict]) -> dict:
         "peak_cpu": max(cpu),
         "seconds": rows[-1]["t"] - rows[0]["t"],
     }
+
+
+# ---------------------------------------------------------------- aggregation across repeated runs (inputs of the figures)
+def _by_k(runs: list[dict]) -> list[dict]:
+    return sorted(runs, key=lambda r: r["k"])
+
+
+def phase_stats(runs: list[dict], phase: str) -> dict[str, dict]:
+    """Per route, over the repeated runs of one image: {route: {"median": [per-run medians], "p95": [per-run p95s], "n": calls per run, "category": ...}}.
+    `phase` is 'cold' or 'warm'. Runs that lack the phase are skipped."""
+    out: dict[str, dict] = {}
+    for run in _by_k(runs):
+        rep = run.get(phase)
+        if not rep:
+            continue
+        for route, st in sequential_stats(rep["sequential_results"]).items():
+            d = out.setdefault(route, {"median": [], "p95": [], "n": st["n"], "category": st["category"], "k": []})
+            d["median"].append(st["median"])
+            d["p95"].append(st["p95"])
+            d["k"].append(run["k"])
+    return out
+
+
+def concurrency_table(runs: list[dict]) -> dict[tuple[str, int], dict]:
+    """Per (route, N), over the repeated runs: lists of wall time (ms), speedup and calls per second, one entry per run. Speedup uses that run's warm pass."""
+    out: dict[tuple[str, int], dict] = {}
+    for run in _by_k(runs):
+        conc, warm = run.get("conc"), run.get("warm")
+        if not conc:
+            continue
+        seq = warm["sequential_results"] if warm else []
+        for key, st in concurrency_stats(conc["concurrency_results"], seq).items():
+            d = out.setdefault(key, {"wall": [], "speedup": [], "cps": [], "errors": 0})
+            d["wall"].append(st["wall_median"])
+            d["speedup"].append(st["speedup"])
+            d["cps"].append(st["calls_per_second"])
+            d["errors"] += st["errors"]
+    return out
+
+
+def status_totals(runs: list[dict]) -> dict[str, int]:
+    """Every measured call of an image, by outcome: ok (200), not_found (404), other_status, error (no response, for example a timeout)."""
+    t = {"ok": 0, "not_found": 0, "other_status": 0, "error": 0}
+    for run in runs:
+        for phase, field in (("cold", "sequential_results"), ("warm", "sequential_results"), ("conc", "concurrency_results")):
+            rep = run.get(phase)
+            for r in (rep or {}).get(field, []):
+                if r.get("error") or r.get("status_code") is None:
+                    t["error"] += 1
+                elif r["status_code"] == 200:
+                    t["ok"] += 1
+                elif r["status_code"] == 404:
+                    t["not_found"] += 1
+                else:
+                    t["other_status"] += 1
+    return t
+
+
+def paired_verdicts(a: dict[str, dict], b: dict[str, dict]) -> dict[str, str]:
+    """The regression rule applied route by route: `a` is the baseline image's phase_stats, `b` the candidate's. Pairs repeats by run number."""
+    out = {}
+    for route in sorted(set(a) & set(b)):
+        ka, kb = a[route]["k"], b[route]["k"]
+        common = [k for k in ka if k in kb]
+        va = [a[route]["median"][ka.index(k)] for k in common]
+        vb = [b[route]["median"][kb.index(k)] for k in common]
+        # With fewer repeats than the rule's minimum the verdict is indicative: it needs every available repeat to agree.
+        out[route] = regression_verdict(va, vb, min_repeats=min(MIN_REPEATS, len(common))) if common else "not enough repeats"
+    return out
+
+
+def geometric_mean(values: list[float]) -> float:
+    import math
+    vals = [v for v in values if v and v > 0 and v == v]
+    return math.exp(sum(math.log(v) for v in vals) / len(vals)) if vals else float("nan")
+
+
+def verdict_counts(verdicts: dict[str, str]) -> dict[str, int]:
+    c = {"improved": 0, "no difference": 0, "regression": 0, "not enough repeats": 0}
+    for v in verdicts.values():
+        c[v] = c.get(v, 0) + 1
+    return c

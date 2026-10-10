@@ -8,6 +8,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import report_data as rd  # noqa: E402
 
+try:
+    import requests  # noqa: F401  (baseline.py needs it; the report virtual environment does not have it)
+    HAVE_REQUESTS = True
+except ImportError:
+    HAVE_REQUESTS = False
+
 
 def call(key, ms, status=200, error=None, level=1, run=0, mode="sequential", cat="control"):
     return {"endpoint_key": key, "category": cat, "company_key": "-", "url": "/x", "status_code": status, "latency_ms": ms,
@@ -31,6 +37,7 @@ class Latency(unittest.TestCase):
         self.assertAlmostEqual(c["speedup"], 400 / 150)
         self.assertAlmostEqual(c["calls_per_second"], 4 / 0.150)
 
+    @unittest.skipUnless(HAVE_REQUESTS, "baseline.py needs the requests package")
     def test_percentile_matches_the_baseline_tool(self):
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from baseline import percentile

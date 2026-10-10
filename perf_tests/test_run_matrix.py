@@ -7,6 +7,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_matrix as rm  # noqa: E402
 
+try:
+    import requests  # noqa: F401  (baseline.py needs it; the report virtual environment does not have it)
+    HAVE_REQUESTS = True
+except ImportError:
+    HAVE_REQUESTS = False
+
 
 class Plan(unittest.TestCase):
     def test_rotation_gives_every_image_every_position(self):
@@ -62,6 +68,7 @@ class ColdPass(unittest.TestCase):
         self.assertEqual(m["base_url"], "u")
         self.assertEqual(len(a["sequential_results"]), 1, "the inputs are not modified")
 
+    @unittest.skipUnless(HAVE_REQUESTS, "baseline.py needs the requests package")
     def test_the_route_keys_come_from_baseline_in_its_order(self):
         keys = rm.endpoint_keys()
         self.assertIn("wikipedia_firmographics", keys)

@@ -292,6 +292,24 @@ def do_extras(a, manifest: dict) -> None:
         compose(env, "--profile", "v3", "--profile", "v4", "down", "-v", "--remove-orphans")
 
 
+def image_facts(ref: str, v4: bool) -> dict:
+    """Footprint facts for the report: image id and size, and for a V4 image the size of the server binary and of the ONNX Runtime library."""
+    r = sh(["docker", "image", "inspect", "--format", "{{.Id}} {{.Size}}", ref])
+    if r.returncode != 0:
+        return {"ref": ref, "present": False}
+    image_id, size = r.stdout.split()[:2]
+    facts = {"ref": ref, "present": True, "id": image_id, "size_bytes": int(size)}
+    if v4:
+        b = sh(["docker", "run", "--rm", "--entrypoint", "sh", ref, "-c",
+                "stat -c %s /app/company-dns-server; stat -L -c %s /opt/onnxruntime/lib/libonnxruntime.so 2>/dev/null"])
+        nums = [int(x) for x in b.stdout.split() if x.isdigit()]
+        if nums:
+            facts["binary_bytes"] = nums[0]
+        if len(nums) > 1:
+            facts["onnx_library_bytes"] = nums[1]
+    return facts
+
+
 def host_facts() -> dict:
     cc = sh([str(REPO / "v4" / "scripts" / "cpu-check.sh")])
     mem = None
@@ -340,6 +358,7 @@ def main() -> int:
     manifest = {"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "host": host_facts(), "plan": [list(s) for s in steps],
                 "images": {"v3": a.v3_image, "lean": a.lean_image, "small": a.small_image}, "regimes": REGIMES,
                 "concurrency": a.concurrency, "repeat_batches": a.repeat_batches, "timeout_s": a.timeout}
+    manifest["image_facts"] = {i: image_facts({"v3": a.v3_image, "lean": a.lean_image, "small": a.small_image}[i], i != "v3") for i in images}
     (a.out / "manifest.json").write_text(json.dumps(manifest, indent=2))
     try:
         for regime, k, image in steps:
