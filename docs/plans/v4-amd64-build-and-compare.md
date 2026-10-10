@@ -105,7 +105,7 @@ export AUTH="perf:$(cat $PERF_SECRETS_DIR/token)"       # the value the test too
 **6.2 Pull V3** (the image production runs; see `k8s/prod/deployment.yaml`). The image carries its own database, so nothing is staged for it.
 
 ```bash
-docker pull ghcr.io/miha42-github/company_dns/company_dns:09262026-5
+docker pull ghcr.io/miha42-github/company_dns/company_dns:09272026-1
 ```
 
 If the pull is denied, the package is private: `docker login ghcr.io` with a token that has `read:packages`, then pull again.
@@ -142,7 +142,7 @@ python3 api_tests/compare.py api_tests/baselines/step4-unthinned-suite.json api_
 ```
 
 Expected: the parity report ends `Verdicts: {'IDENTICAL': 16, 'SAME SHAPE': 6, 'DIFFERENT': 3}` (the three are the intentional ones: Japan description search, EDGAR `ciks` scope, merged firmographics; V3 here is
-the Sep 26 image, so EDGAR filing dates can differ a little). The suite skips L5 (it starts its own server from a local binary, and there is none on the node); the SQL checks pass or skip depending on whether SQL is on (it is off here, as in production).
+the Sep 26 image, so EDGAR filing dates can differ a little). On the node the suite skips L5 (it starts its own server from a local binary, and there is none), so `compare.py` lists the 31 L5 tests as `REMOVED`; that is expected. The two SQL contract checks skip or adapt when SQL is off (the production default, and how this container runs): the route must then be absent from the spec and answer 404.
 
 ### 6b. Performance, one service at a time, equal limits
 

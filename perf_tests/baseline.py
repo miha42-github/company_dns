@@ -503,7 +503,7 @@ def print_concurrency_summary(results: list[CallResult], sequential_results: lis
 # --------------------------------------------------------------------- #
 
 
-def capture_provenance(namespace: str = "company-dns", deployment: str = "company-dns") -> dict:
+def capture_provenance(namespace: str = "company-dns", deployment: str = "company-dns", base_url: str = "", image_label: str | None = None) -> dict:
     """Best-effort record of what code was actually running when a
     measurement was taken, so a report from next month can be matched back
     to the PR(s) live at the time instead of relying on memory. Never
@@ -524,6 +524,13 @@ def capture_provenance(namespace: str = "company-dns", deployment: str = "compan
             provenance["git_commit"] = result.stdout.strip() or None
     except (OSError, subprocess.SubprocessError):
         pass
+
+    # kubectl reports what the PRODUCTION cluster runs. Asked about a container on this host (localhost) that would stamp a report
+    # with an image that was not the one measured, so a local target is stamped from --image-label instead (or left unstamped).
+    host = base_url.split("//", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    if host in ("localhost", "127.0.0.1", "::1") or image_label:
+        provenance["deployed_image"] = image_label or "local container (not stamped; pass --image-label)"
+        return provenance
 
     try:
         result = subprocess.run(
@@ -563,6 +570,7 @@ def main():
     parser.add_argument("--timeout", type=float, default=30.0, help="per-request timeout in seconds, default: 30")
     parser.add_argument("--skip-concurrency", action="store_true", help="only run the sequential baseline")
     parser.add_argument("--user-agent", default=SESSION_CONFIG["user_agent"], help="User-Agent sent with every request (a self-identifying one gets V4's normal rate limit)")
+    parser.add_argument("--image-label", default=None, help="what was measured, stamped into the report as deployed_image (for example the image tag of a local container); a localhost target is never stamped from kubectl")
     parser.add_argument("--auth", metavar="PROFILE:TOKEN", default=None, help="HTTP Basic credential for V4 (a profile with rate_limit bypass, see v4/scripts/perf-profile.sh); ignored by V3")
     parser.add_argument("--list", action="store_true", help="print the call matrix and exit, without making requests")
     parser.add_argument("--out", type=Path, default=None, help="JSON output path, default: perf_tests/results/<timestamp>.json")
@@ -579,7 +587,7 @@ def main():
         print(f"\n{len(calls)} sequential calls total.")
         return
 
-    provenance = capture_provenance()
+    provenance = capture_provenance(base_url=args.base_url, image_label=args.image_label)
     provenance["profile"] = args.profile
     print(
         f"==> Provenance: git_commit={provenance['git_commit'] or '(unavailable)'} "

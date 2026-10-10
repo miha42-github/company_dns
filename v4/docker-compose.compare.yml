@@ -14,7 +14,7 @@
 services:
   v3:
     profiles: ["v3"]
-    image: ${V3_IMAGE:-ghcr.io/miha42-github/company_dns/company_dns:09262026-5}
+    image: ${V3_IMAGE:-ghcr.io/miha42-github/company_dns/company_dns:09272026-1}
     container_name: compare-v3
     ports: ["8000:8000"]
     cpus: ${LIMIT_CPUS:-0.5}

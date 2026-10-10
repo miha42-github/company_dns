@@ -66,7 +66,14 @@ class Table(ServerTestCase):
         ours = {norm(t[0]) for t in TABLE}
         self.assertEqual(sorted(spec_gets - ours), [], "routes with no entry in the contract table")
         self.assertEqual(sorted(ours - spec_gets), [], "table entries the server does not document")
-        self.assertEqual({p for p, ops in self.spec["paths"].items() if "post" in ops}, POSTS)
+        posts = {p for p, ops in self.spec["paths"].items() if "post" in ops}
+        if "/V4.0/sql" in self.spec["paths"]:
+            self.assertEqual(posts, POSTS)
+        else:
+            # SQL is off (the production default): the route must be absent from the spec AND from the server, not just undocumented
+            self.assertEqual(posts, POSTS - {"/V4.0/sql"})
+            status, _, _ = post("/V4.0/sql", {"sql": "select 1", "dataset": "sic"})
+            self.assertEqual(status, 404, "with SQL off the route must not exist")
 
 
 class Responses(ServerTestCase):
@@ -192,6 +199,8 @@ class ErrorShapes(ServerTestCase):
                     self.envelope(status, resp)
 
     def test_the_sql_operation_documents_every_answer_it_can_give(self):
+        if "/V4.0/sql" not in self.spec["paths"]:
+            self.skipTest("SQL is off on this server (the production default); start it with COMPANY_DNS_SQL_ENABLED=true to check")
         self.assertEqual(self.documented("/V4.0/sql", "post"), {"200", "400", "401", "403", "422", "429", "504"})
 
 
