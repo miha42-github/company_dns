@@ -7,7 +7,8 @@ for `main` once the data-supply change is merged (see step 1). Everything is a c
 
 | Need | Check |
 |---|---|
-| Docker Engine 24 or newer with BuildKit and `buildx` | `docker version && docker buildx version` |
+| Nothing special about the CPU, but check what you have: the image loads Microsoft's official ONNX Runtime (`ORT_MODE=dynamic`, the default), which runs on CPUs without AVX2 such as `cafe-1`'s 2 x Xeon E5-2650 v2. (`--ort download` selects pyke's prebuilt runtime instead, which needs AVX2 and exits at start with `WARNING: This CPU does not support AVX2` without it. See plan item I.) | `v4/scripts/cpu-check.sh` (prints architecture and AVX2/NEON, and which builds fit; the server logs the same `CPU: ...` line at start) |
+| Docker Engine 24 or newer **with the `buildx` and `compose` plugins** (Ubuntu's own `docker.io` package ships without them: `sudo apt-get install -y docker-buildx docker-compose-v2`) | `docker version && docker buildx version && docker compose version` |
 | `git`, `python3` (3.9+, standard library only for the test tools), `rsync`, `curl` | `git --version && python3 --version` |
 | 20 GB free disk (build cache, images) | `df -h /var/lib/docker` |
 | 16 GB of memory for the build (fat-LTO link; the nodes have far more) | `free -g` |

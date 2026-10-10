@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the V4 image from the repository root.
 #
-#   v4/scripts/docker-build.sh [-t TAG] [-p release-lean|release-small] [--platform linux/amd64] [--lto off|thin] [--data-source dir:/in|url:BASE] [--edgar ingest|data] [--no-verify] [--load|--push]
+#   v4/scripts/docker-build.sh [-t TAG] [-p release-lean|release-small] [--platform linux/amd64] [--lto off|thin] [--data-source dir:/in|url:BASE] [--edgar ingest|data] [--ort dynamic|download] [--no-verify] [--load|--push]
 #
 # DATA_DIR  directory with the SIC feather files (default: <repo>/tmp, or COMPANY_DNS_DATA_DIR if set); used when --data-source is dir:/in
 #           (and for the EDGAR catalog when --edgar data)
@@ -16,6 +16,7 @@ while [ $# -gt 0 ]; do
     --platform) extra+=(--platform "$2"); shift 2;;
     --data-source) datasrc="$2"; extra+=(--build-arg "DATA_SOURCE=$2"); shift 2;;       # dir:/in (default, the DATA_DIR context) or url:https://BASE/
     --edgar) edgar="$2"; shift 2;;                                        # ingest (default, like V3's makedb.py) or data (a frozen file)
+    --ort) extra+=(--build-arg "ORT_MODE=$2"); shift 2;;                  # dynamic (default, Microsoft's library, runs without AVX2) or download (pyke's, needs AVX2)
     --no-verify) extra+=(--build-arg "DATA_VERIFY=0"); shift;;
     --lto) extra+=(--build-arg "CARGO_LTO=$2"); shift 2;;   # validation builds only (small Docker VM); see the Dockerfile
     --load|--push) extra+=("$1"); shift;;
@@ -31,6 +32,13 @@ if [ "${datasrc#url:}" != "$datasrc" ] && [ "$edgar" = "ingest" ]; then data="$(
 case " ${extra[*]} " in *" --load "*|*" --push "*) ;; *) extra+=(--load);; esac
 # A data URL needs a header file for private servers: DATA_AUTH_FILE (one "Name: value" line) is passed as a BuildKit secret, never as an argument.
 [ -z "${DATA_AUTH_FILE:-}" ] || extra+=(--secret "id=data_auth,src=$DATA_AUTH_FILE")
+docker buildx version >/dev/null 2>&1 || {
+  echo "docker buildx is not installed. This build needs it (named build contexts). On Ubuntu: sudo apt-get install -y docker-buildx docker-compose-v2" >&2
+  echo "(Ubuntu's own docker package ships without the buildx plugin; Docker's apt repository has docker-buildx-plugin.)" >&2
+  exit 1
+}
+# Informational: this host's architecture and features (the image targets whatever --platform says; the default is this host).
+"$repo/v4/scripts/cpu-check.sh" || echo "(cpu-check reported a problem on this build host; the image may still be fine for another platform)" >&2
 cd "$repo"
 exec docker buildx build -f v4/Dockerfile \
   --build-context "data=$data" --build-context "model=$model" \

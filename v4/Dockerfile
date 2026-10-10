@@ -22,6 +22,9 @@
 #                             EDGAR_CATALOG=data: taken from the `data` context instead (a frozen file, for a like-for-like comparison).
 #                             EDGAR_REFRESH (any string, the build script sets today's date) busts the layer cache so a rebuild re-ingests.
 #   embedding model           the `model` build context (the fastembed cache), SHA-256 checked.
+#   ONNX Runtime              ORT_MODE=dynamic (default): Microsoft's official libonnxruntime, a pinned release, loaded at run time
+#                             (ORT_DYLIB_PATH). It runs on CPUs without AVX2, such as the 2013 Xeons in the production amd64 nodes.
+#                             ORT_MODE=download: pyke's prebuilt binaries, which need AVX2 (the container exits at start without it).
 #
 # Why glibc (debian-slim) and not musl/scratch: the ONNX runtime that fastembed links is a prebuilt glibc library;
 # there is no musl build of it, so a static musl binary is not available. Why Debian 13 (trixie) and not 12: the prebuilt
@@ -83,8 +86,39 @@ RUN set -eu; \
     done
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Microsoft's official ONNX Runtime (CPU), pinned by version and SHA-256 (the digests GitHub publishes for the release assets).
+# Verified on a CPU without AVX2 (Xeon E5-2650 v2, 2026-10-09) with the same release through Python before this was wired in.
+FROM debian:trixie-slim AS ort-lib
+ARG ORT_MODE=dynamic
+ARG ORT_VERSION=1.31.0
+ARG ORT_SHA256_X64=cc5c72baf5ae5c8238a6841f0897227be2d02826b9cf98eaf02fdefaeeb03a57
+ARG ORT_SHA256_ARM64=c5b8b3cca31f3d643a3b313b8f42e2d0f16a4fcefd02cda343d97bd5306afaab
+ARG TARGETARCH
+RUN set -eu; mkdir -p /out/lib; \
+    if [ "${ORT_MODE}" = "dynamic" ]; then \
+        apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*; \
+        case "${TARGETARCH}" in \
+          amd64) arch=x64;     sha="${ORT_SHA256_X64}" ;; \
+          arm64) arch=aarch64; sha="${ORT_SHA256_ARM64}" ;; \
+          *) echo "unsupported TARGETARCH ${TARGETARCH}"; exit 1 ;; \
+        esac; \
+        f="onnxruntime-linux-${arch}-${ORT_VERSION}.tgz"; \
+        curl -fsSL --retry 3 -o "/tmp/$f" "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/$f"; \
+        echo "${sha}  /tmp/$f" | sha256sum -c -; \
+        tar -xzf "/tmp/$f" -C /tmp; \
+        cp -a "/tmp/onnxruntime-linux-${arch}-${ORT_VERSION}/lib/"libonnxruntime.so* /out/lib/; \
+        ls -l /out/lib; \
+        machine="$(od -An -tx1 -j18 -N2 "/out/lib/libonnxruntime.so.${ORT_VERSION}" | tr -d ' \n')"; \
+        case "${TARGETARCH}:${machine}" in \
+          amd64:3e00|arm64:b700) echo "library architecture matches ${TARGETARCH} (ELF machine ${machine})" ;; \
+          *) echo "ONNX Runtime library (ELF machine ${machine}) does not match target ${TARGETARCH}"; exit 1 ;; \
+        esac; \
+    fi
+
+# ---------------------------------------------------------------------------------------------------------------------
 FROM ${RUST_IMAGE} AS build
 ARG PROFILE
+ARG ORT_MODE=dynamic
 # Validation builds only: the release profiles use fat LTO, whose final link needs well over 8 GB of memory (Docker Desktop's
 # default VM on a 48 GB Mac failed with "cannot allocate memory"). `--build-arg CARGO_LTO=off` (or `thin`) lets a small VM prove
 # the rest of the image. The result is NOT the measured release-lean/release-small binary: never publish or benchmark it.
@@ -92,8 +126,8 @@ ARG CARGO_LTO=
 WORKDIR /src
 COPY v4 /src/v4
 WORKDIR /src/v4
-# The ONNX runtime is downloaded by the build (ort), so this stage needs network access. `ingest-edgar` is built with the
-# server (same profile) so the EDGAR catalog can be made below.
+# With ORT_MODE=download the build fetches pyke's ONNX Runtime binaries (cdn.pyke.io); with the default dynamic mode it fetches nothing for
+# the runtime (the library comes from the ort-lib stage). `ingest-edgar` is built with the server (same profile) so the EDGAR catalog can be made below.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/src/v4/target \
@@ -101,7 +135,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
         export CARGO_PROFILE_RELEASE_LEAN_LTO="${CARGO_LTO}" CARGO_PROFILE_RELEASE_SMALL_LTO="${CARGO_LTO}"; \
         echo "WARNING: validation build with LTO=${CARGO_LTO}; not the release binary"; \
     fi \
-    && cargo build --locked --profile "${PROFILE}" -p company-dns-server -p company-dns-edgar \
+    && if [ "${ORT_MODE}" = "dynamic" ]; then ortflags="--no-default-features --features company-dns-server/ort-dynamic"; else ortflags=""; fi \
+    && cargo build --locked --profile "${PROFILE}" -p company-dns-server -p company-dns-edgar ${ortflags} \
          --bin company-dns-server --bin ingest-edgar \
     && install -D "target/${PROFILE}/company-dns-server" /out/company-dns-server \
     && install -D "target/${PROFILE}/ingest-edgar" /out/ingest-edgar
@@ -153,6 +188,7 @@ COPY v4/crates/server/static /app/static
 COPY --from=data-gate /out /app/data
 COPY --from=edgar-gate /in/edgar_10x_catalog.feather /app/data/edgar_10x_catalog.feather
 COPY --from=model-gate /out /opt/fastembed
+COPY --from=ort-lib /out/lib /opt/onnxruntime/lib
 
 # The vendored Redoc bundle is MIT and its notice has to travel with any redistribution.
 COPY v4/THIRD_PARTY_NOTICES.md /usr/share/doc/company-dns/THIRD_PARTY_NOTICES.md
@@ -163,6 +199,7 @@ USER 10001
 
 ENV COMPANY_DNS_DATA_DIR=/app/data \
     FASTEMBED_CACHE_DIR=/opt/fastembed \
+    ORT_DYLIB_PATH=/opt/onnxruntime/lib/libonnxruntime.so \
     PORT=4000
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
