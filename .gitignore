@@ -87,3 +87,6 @@ v4/.local/
 
 # throwaway profile for performance runs (v4/scripts/perf-profile.sh)
 v4/perf-secrets/
+
+# virtual environment for perf_tests/report.py (matplotlib)
+perf_tests/.venv/
