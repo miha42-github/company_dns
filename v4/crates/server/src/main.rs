@@ -149,7 +149,11 @@ async fn main() -> anyhow::Result<()> {
     // Fail fast, with a message, if the ONNX Runtime this build uses cannot run on this machine (docs/plans/v4-release-to-staging.md, item I).
     cpu::preflight()?;
     tracing::info!("Loading US SIC data from {sic_path}...");
-    let mut sic = SicCatalog::open(&sic_path).await?;
+    // COMPANY_DNS_QUERY_PARALLELISM: partitions per lookup query (default: the host's CPUs, at most 4; docs/plans/v4-release-to-staging.md finding 2).
+    let query_parallelism = cpu::query_parallelism(std::env::var("COMPANY_DNS_QUERY_PARALLELISM").ok().as_deref(), company_dns_sic::default_query_parallelism())
+        .map_err(|m| anyhow::anyhow!(m))?;
+    tracing::info!("Lookup queries use {query_parallelism} partition(s) each");
+    let mut sic = SicCatalog::open_with_parallelism(&sic_path, query_parallelism).await?;
     if !sic.has_us_section_narrative().await {
         tracing::warn!(
             "US SIC data file {sic_path} has no `section_full_desc` column: `full_description` on the US division lookups will be empty. \
@@ -198,7 +202,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let edgar_catalog = match EdgarCatalog::open(&PathBuf::from(&edgar_catalog_path)).await {
+    let edgar_catalog = match EdgarCatalog::open_with_parallelism(&PathBuf::from(&edgar_catalog_path), query_parallelism).await {
         Ok(catalog) => {
             tracing::info!("Loaded EDGAR catalog from {edgar_catalog_path}");
             Some(catalog)

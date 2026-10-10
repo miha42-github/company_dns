@@ -238,13 +238,26 @@ pub struct EdgarCatalog {
     ctx: SessionContext,
 }
 
+/// The most partitions a catalog query is split into by default (see [`EdgarCatalog::open_with_parallelism`]).
+pub const MAX_DEFAULT_QUERY_PARTITIONS: usize = 4;
+
 impl EdgarCatalog {
     /// Loads the `.feather` catalog `write_catalog_feather` produced.
     /// Same `read_arrow`/`ArrowReadOptions` pattern
     /// `experiments/edgar-index-query/` and `experiments/df-spike/`
     /// already validated against real Mediumroast/EDGAR files.
     pub async fn open(path: &Path) -> anyhow::Result<Self> {
-        let ctx = SessionContext::new();
+        let cpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        Self::open_with_parallelism(path, cpus.min(MAX_DEFAULT_QUERY_PARTITIONS)).await
+    }
+
+    /// [`open`](Self::open) with an explicit number of partitions per query (the server's `COMPANY_DNS_QUERY_PARALLELISM`).
+    ///
+    /// The catalog is read once into memory, not re-read from the file on every query, and queries are split into a few partitions, not one
+    /// per CPU (docs/plans/v4-release-to-staging.md, finding 2: a benchmark of these queries against this file found 1.6 to 4x the throughput
+    /// and a quarter to a half of the resident memory, and lookups that no longer got slower on hosts with more CPUs).
+    pub async fn open_with_parallelism(path: &Path, partitions: usize) -> anyhow::Result<Self> {
+        let ctx = SessionContext::new_with_config(SessionConfig::new().with_target_partitions(partitions.max(1)));
         let opts = ArrowReadOptions {
             file_extension: ".feather",
             ..ArrowReadOptions::default()
@@ -252,7 +265,9 @@ impl EdgarCatalog {
         let df = ctx
             .read_arrow(path.to_string_lossy().as_ref(), opts)
             .await?;
-        ctx.register_table("edgar_catalog", df.into_view())?;
+        let schema = Arc::new(df.schema().as_arrow().clone());
+        let batches = df.collect().await?;
+        ctx.register_table("edgar_catalog", Arc::new(datafusion::datasource::MemTable::try_new(schema, vec![batches])?))?;
         Ok(Self { ctx })
     }
 
@@ -482,6 +497,26 @@ mod tests {
             accession: accession.into(),
             url: format!("https://www.sec.gov/Archives/edgar/data/{cik}/{accession}.txt"),
         }
+    }
+
+    #[tokio::test]
+    async fn an_opened_catalog_is_in_memory_with_the_requested_partitions() {
+        let dir = std::env::temp_dir().join(format!("catalog-mem-test-{}", std::process::id()));
+        let out = dir.join("cat.feather");
+        write_catalog_rows(&[row(320193, "Apple Inc.", "0000320193-25-000001", 2025, 5)], &out, std::collections::HashMap::new()).unwrap();
+
+        let cat = EdgarCatalog::open_with_parallelism(&out, 3).await.unwrap();
+        assert_eq!(cat.ctx.state().config().target_partitions(), 3, "the requested partition count, not one per CPU");
+        // Read once into memory: with the file deleted, queries still work (a file-backed table would fail here).
+        std::fs::remove_file(&out).unwrap();
+        assert_eq!(cat.find_by_name("apple").await.unwrap().len(), 1, "the catalog is in memory, not re-read from the file on every query");
+
+        let default = EdgarCatalog::open(&{
+            write_catalog_rows(&[row(1, "X", "0000000001-25-000001", 2025, 1)], &out, std::collections::HashMap::new()).unwrap();
+            out.clone()
+        }).await.unwrap();
+        assert!(default.ctx.state().config().target_partitions() <= MAX_DEFAULT_QUERY_PARTITIONS, "the default never exceeds the cap, whatever the host has");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

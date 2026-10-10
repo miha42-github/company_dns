@@ -110,6 +110,14 @@ pub fn verdict(arch: &str, features: &[(&'static str, bool)], dynamic: bool, lib
     Ok(())
 }
 
+/// `COMPANY_DNS_QUERY_PARALLELISM`: partitions per lookup query. Unset or empty keeps `default`; anything else must be a whole number of at least 1.
+pub fn query_parallelism(value: Option<&str>, default: usize) -> Result<usize, String> {
+    match value.map(str::trim) {
+        None | Some("") => Ok(default),
+        Some(s) => s.parse::<usize>().ok().filter(|n| *n >= 1).ok_or_else(|| format!("COMPANY_DNS_QUERY_PARALLELISM must be a whole number of at least 1, got {s:?}")),
+    }
+}
+
 /// Log the CPU and runtime in one line and refuse to start when the runtime cannot run here.
 pub fn preflight() -> anyhow::Result<()> {
     let arch = std::env::consts::ARCH;
@@ -191,6 +199,17 @@ mod tests {
         assert!(err.contains("x86-64") && err.contains("aarch64"), "{err}");
         let err = verdict("x86_64", &feats(true, false), true, Some(&elf(EM_AARCH64, false)), None, true).unwrap_err();
         assert!(err.contains("aarch64") && err.contains("x86-64"), "{err}");
+    }
+
+    #[test]
+    fn query_parallelism_defaults_when_unset_and_refuses_nonsense() {
+        assert_eq!(query_parallelism(None, 4), Ok(4));
+        assert_eq!(query_parallelism(Some("  "), 4), Ok(4));
+        assert_eq!(query_parallelism(Some("2"), 4), Ok(2));
+        assert_eq!(query_parallelism(Some(" 8 "), 4), Ok(8));
+        for bad in ["0", "-1", "many", "2.5"] {
+            assert!(query_parallelism(Some(bad), 4).unwrap_err().contains("COMPANY_DNS_QUERY_PARALLELISM"), "{bad}");
+        }
     }
 
     #[test]
