@@ -568,6 +568,8 @@ def main():
     parser.add_argument("--repeat", type=int, default=2, help="repeats per concurrency level, default: 2")
     parser.add_argument("--delay", type=float, default=0.15, help="seconds between sequential calls, default: 0.15")
     parser.add_argument("--timeout", type=float, default=30.0, help="per-request timeout in seconds, default: 30")
+    parser.add_argument("--endpoints", default=None, help="comma-separated endpoint keys to run in the sequential pass (run_matrix.py uses one route per pass so a cold start is really cold)")
+    parser.add_argument("--skip-sequential", action="store_true", help="only run the concurrency experiment (run_matrix.py takes the cold and warm sequential passes separately)")
     parser.add_argument("--skip-concurrency", action="store_true", help="only run the sequential baseline")
     parser.add_argument("--user-agent", default=SESSION_CONFIG["user_agent"], help="User-Agent sent with every request (a self-identifying one gets V4's normal rate limit)")
     parser.add_argument("--image-label", default=None, help="what was measured, stamped into the report as deployed_image (for example the image tag of a local container); a localhost target is never stamped from kubectl")
@@ -580,6 +582,12 @@ def main():
         SESSION_CONFIG['auth'] = tuple(args.auth.split(':', 1))
 
     calls = build_call_matrix(profile=args.profile)
+    if args.endpoints:
+        wanted = {e.strip() for e in args.endpoints.split(",") if e.strip()}
+        unknown = wanted - {c.endpoint_key for c in calls}
+        if unknown:
+            parser.error(f"unknown endpoint key(s): {sorted(unknown)}")
+        calls = [c for c in calls if c.endpoint_key in wanted]
 
     if args.list:
         for c in calls:
@@ -598,9 +606,12 @@ def main():
     print(f"==> Verifying endpoints against {args.base_url}/openapi.json")
     verify_endpoints_exist(args.base_url, args.timeout, args.profile)
 
-    print(f"\n==> Running {len(calls)} sequential calls against {args.base_url}")
-    sequential_results = run_sequential(args.base_url, calls, args.delay, args.timeout)
-    print_sequential_summary(sequential_results)
+    if args.skip_sequential:
+        sequential_results = []
+    else:
+        print(f"\n==> Running {len(calls)} sequential calls against {args.base_url}")
+        sequential_results = run_sequential(args.base_url, calls, args.delay, args.timeout)
+        print_sequential_summary(sequential_results)
 
     concurrency_results = []
     if not args.skip_concurrency:
