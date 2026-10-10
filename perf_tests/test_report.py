@@ -83,6 +83,11 @@ class Phrases(unittest.TestCase):
         self.assertIn("about the same speed", rp.concurrency_title(1.02, float("nan"), 16, "x"))
         self.assertIn("no comparable data", rp.concurrency_title(float("nan"), float("nan"), 16, "x"))
 
+    def test_scorecard_title_names_the_regressions(self):
+        t = rp.scorecard_title({"improved": 20, "no difference": 7, "regression": 1}, ["EDGAR detail, warm, headroom +11%"])
+        self.assertEqual(t, "V4 against V3 on 28 checks: faster on 20, level on 7, slower on 1 (EDGAR detail, warm, headroom +11%)")
+        self.assertEqual(rp.scorecard_title({"improved": 3, "no difference": 1, "regression": 0}, []), "V4 against V3 on 4 checks: faster on 3, level on 1, slower on 0")
+
     def test_throughput_title(self):
         t = rp.throughput_title(5.0, 400.0, 3.4, 16, "x")
         self.assertIn("5.0x more requests per second on routes with no upstream call", t)

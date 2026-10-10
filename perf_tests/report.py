@@ -206,6 +206,58 @@ def legend_for(fig, images, loc=(0.98, 0.985)):
     fig.legend(handles=handles, loc="lower center", bbox_to_anchor=(0.5, 0.028), ncol=len(handles), frameon=False, fontsize=11)
 
 
+# ------------------------------------------------------------------ P0: the regression scorecard
+def scorecard_title(counts: dict[str, int], worst: list[str]) -> str:
+    total = sum(counts.values())
+    better, same, worse = counts.get("improved", 0), counts.get("no difference", 0), counts.get("regression", 0)
+    s = f"V4 against V3 on {total} checks: faster on {better}, level on {same}, slower on {worse}"
+    if worse and worst:
+        s += " (" + "; ".join(worst) + ")"
+    return s
+
+
+def fig_scorecard(ctx: Ctx) -> None:
+    name = "p0-scorecard"
+    conds = [(reg, phase) for reg in ctx.regimes for phase in ("cold", "warm")]
+    imgs = [i for i in ("lean", "small") if any(ctx.runs(r, i) for r, _ in conds)]
+    if not imgs or not any(ctx.runs(r, "v3") for r in ctx.regimes):
+        return ctx.skip(name, "needs V3 and a V4 image")
+    routes = list(ROUTE_NAMES)
+    cols = [(img, reg, phase) for img in imgs for reg, phase in conds if ctx.runs(reg, "v3") and ctx.runs(reg, img)]
+    cell, counts, regress = {}, {"improved": 0, "no difference": 0, "regression": 0, "not enough repeats": 0}, []
+    for img, reg, phase in cols:
+        v3, v4 = rd.phase_stats(ctx.runs(reg, "v3"), phase), rd.phase_stats(ctx.runs(reg, img), phase)
+        verdicts = rd.paired_verdicts(v3, v4)
+        for r in routes:
+            if r in verdicts:
+                ratio = rd.spread(v4[r]["median"])["median"] / rd.spread(v3[r]["median"])["median"]
+                cell[(r, img, reg, phase)] = (verdicts[r], ratio)
+                if img == "lean":
+                    counts[verdicts[r]] += 1
+                    if verdicts[r] == "regression":
+                        regress.append(f"{ROUTE_NAMES[r]}, {phase}, {reg} +{(ratio - 1) * 100:.0f}%")
+    fig, ax = new_fig()
+    ax.axis("off")
+    fills = {"improved": "#bfe5d4", "no difference": "#e5e7eb", "regression": "#f4b9a5", "not enough repeats": "#ffffff"}
+    n_cols = len(cols)
+    x0, cw, ry = 0.20, 0.78 / max(1, n_cols), 0.78 / (len(routes) + 2)
+    for j, (img, reg, phase) in enumerate(cols):
+        ax.text(x0 + (j + 0.5) * cw, 0.97, f"{LABELS[img]}\n{phase}\n{reg}", ha="center", va="top", fontsize=8.5, transform=ax.transAxes, fontweight="bold")
+    for i, r in enumerate(routes):
+        y = 0.80 - i * ry
+        ax.text(0.0, y - ry / 2, ROUTE_NAMES[r], ha="left", va="center", fontsize=10.5, transform=ax.transAxes)
+        for j, (img, reg, phase) in enumerate(cols):
+            v = cell.get((r, img, reg, phase))
+            if not v:
+                continue
+            ax.add_patch(plt.Rectangle((x0 + j * cw + 0.003, y - ry + 0.006), cw - 0.006, ry - 0.012, color=fills[v[0]], transform=ax.transAxes))
+            ax.text(x0 + (j + 0.5) * cw, y - ry / 2, "<0.01x" if v[1] < 0.01 else f"{v[1]:.2f}x", ha="center", va="center", fontsize=9.5, transform=ax.transAxes)
+    ax.text(0.0, 0.80 - len(routes) * ry - 0.03, "Cell = V4's median latency divided by V3's (below 1 is faster). Green: faster by more than 10% in at least 2 of the 3 repeated runs; grey: level; red: slower by more than 10% in at least 2 of 3.",
+            ha="left", va="top", fontsize=9, color=GREY, transform=ax.transAxes, wrap=True)
+    finish(ctx, fig, name, scorecard_title(counts, regress),
+           f"Counts are for V4 lean against V3 over every route and condition (cold and warm, each resource regime). Medians over {max((ctx.repeats(r) for r in ctx.regimes), default=0)} runs per cell.")
+
+
 # ------------------------------------------------------------------ P1 / P2: latency
 def fig_latency_cold(ctx: Ctx, regime: str) -> None:
     name = f"p1-latency-cold-{regime}"
@@ -458,13 +510,16 @@ def fig_reliability(ctx: Ctx) -> None:
     errs = {i: sum(t["error"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
     wrong = {i: sum(t["incorrect"] for r, im, t in rows if im == i) for i in {x[1] for x in rows}}
     bad = [i for i in errs if errs[i] or wrong[i]]
+    order = [i for i in ("v3", "lean", "small") if i in errs]
     if not bad:
         title = "Every image answered every request, and every answer was complete"
     else:
-        title = "Failed or incomplete answers: " + ", ".join(
-            f"{LABELS[i]} {errs[i]} unanswered" + (f", {wrong[i]} incomplete" if wrong[i] else "") for i in bad)
+        def clause(i):
+            what = ([f"{errs[i]} unanswered"] if errs[i] else []) + ([f"{wrong[i]} incomplete"] if wrong[i] else [])
+            return f"{LABELS[i].replace(' (production image)', '')} {', '.join(what) if what else 'none'}"
+        title = "Failed or incomplete answers: " + "; ".join(clause(i) for i in order)
     finish(ctx, fig, name, title, "All cold, warm and concurrent calls of all runs; counts inside the bars. 'No answer' is a timeout or connection error (the request timeout is in the manifest); "
-           "'wrong or incomplete' is a 200 whose answer lacked the company's CIK under concurrent load.")
+           "'wrong or incomplete' is a 200 whose answer lacked the company's CIK, found by the check in the concurrency pass (levels 1 to 16).")
 
 
 # ------------------------------------------------------------------ P7: why
@@ -692,6 +747,7 @@ def build(matrix_dir: Path, out: Path, ext: str = "png", draft: bool = False, ev
     out.mkdir(parents=True, exist_ok=True)
     ctx = Ctx(m, out, ext, draft, ev, diff)
     plt.rcParams.update({"font.size": 10, "axes.titlesize": 12, "figure.facecolor": "white", "axes.facecolor": "white"})
+    fig_scorecard(ctx)
     for regime in ctx.regimes:
         fig_latency_cold(ctx, regime)
         fig_latency_warm(ctx, regime)
