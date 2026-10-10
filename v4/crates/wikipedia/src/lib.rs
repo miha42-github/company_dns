@@ -147,3 +147,24 @@ impl WikipediaClient {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use company_dns_cache::new_cache;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    /// The Wikipedia lookup relies on this: a lookup that fails is not stored, so the next request fetches again instead of being served the
+    /// failure (or a degraded answer) for the cache's lifetime. Found on cafe-1 (2026-10-10) when an answer built from an error body was cached.
+    #[tokio::test]
+    async fn a_failed_load_is_not_cached_and_the_next_request_loads_again() {
+        let cache = new_cache::<String, Arc<u32>>(10, Duration::from_secs(3600));
+        let first = cache.try_get_with("apple".to_string(), async { Err::<Arc<u32>, &str>("upstream lagged") }).await;
+        assert!(first.is_err());
+        let second = cache.try_get_with("apple".to_string(), async { Ok::<Arc<u32>, &str>(Arc::new(7)) }).await;
+        assert_eq!(*second.unwrap(), 7, "the earlier failure must not be remembered");
+        // and a success is kept
+        let third = cache.try_get_with("apple".to_string(), async { Ok::<Arc<u32>, &str>(Arc::new(99)) }).await;
+        assert_eq!(*third.unwrap(), 7);
+    }
+}
