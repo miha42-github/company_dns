@@ -7,6 +7,7 @@ mod errors;
 mod logging;
 mod rate_limit;
 mod sic_endpoints;
+mod total;
 mod v3_edgar;
 mod sql_endpoint;
 mod trusted_origin;
@@ -494,7 +495,9 @@ async fn main() -> anyhow::Result<()> {
         .layer(RequestBodyLimitLayer::new(64 * 1024))
         .layer(cors::layer(cors_origins))
         // outermost: every error, including axum's own rejections, is the JSON envelope (errors.rs)
-        .layer(axum::middleware::from_fn(errors::json_errors));
+        .layer(axum::middleware::from_fn(errors::json_errors))
+        // outermost of all, so error envelopes get a total too: `total` on every /V4.0/ answer (total.rs)
+        .layer(axum::middleware::from_fn(total::add_total));
 
     let port: u16 = std::env::var("PORT")
         .ok()

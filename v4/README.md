@@ -385,6 +385,8 @@ level that can be raised or lowered on a live, already-running process
 
 ## Endpoints
 
+**Response shape.** Every answer is the JSON envelope `{code, message, module, data, dependencies}`. Every `/V4.0/` answer also carries a top-level **`total`**: how many results `data` holds (a list gives its length, a single record 1, no match or an error 0), so a client can read the count without looking inside `data`. It is added in one place (`crates/server/src/total.rs`), so no route can forget it. `/V3.0/` and `/V2.0/` keep V3's exact shape and do not add it (the SIC lookups there carry their own `total` inside `data`); `/health`, the docs and the UI are not envelopes.
+
 V3-parity: same URL shape with `/V3.0/` changed to `/V4.0/` (`v4-server-prototype.md` §5.2/§5.3/§10).
 Every one of them is also served at its original `/V3.0/` path, and those paths answer in **V3's exact
 response shape** (a dictionary keyed by code with a `total`, V3's field names, messages and module strings), so an

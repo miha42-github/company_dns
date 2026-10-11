@@ -41,6 +41,10 @@ pub struct ApiEnvelope {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub performance: Option<Value>,
+    /// Present on every `/V4.0/` answer (not on `/V3.0/` or `/V2.0/`, which keep V3's exact shape): how many results `data` holds. A list gives its
+    /// length, a single record gives 1, no match or an error gives 0.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total: Option<u64>,
 }
 
 pub fn envelope(code: u16, message: impl Into<String>, module: &str, data: Value) -> Value {
