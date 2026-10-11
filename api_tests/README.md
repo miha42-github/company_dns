@@ -6,7 +6,7 @@ step 3. Standard library only, so a laptop or a CI runner runs them unchanged. P
 ```sh
 python3 api_tests/run.py                                   # everything, against a server on http://localhost:4000
 python3 api_tests/run.py --layers L0,L1                    # just the fast layers
-python3 api_tests/run.py --base-url https://staging-company-dns.mediumroast.io --profile ID --token TOKEN
+python3 api_tests/run.py --base-url https://company-dns-staging.mediumroast.io --profile ID --token TOKEN
 python3 api_tests/run.py --network                         # also the tests that make the server call Wikipedia and SEC
 python3 api_tests/run.py --report results/v4.json          # a JSON report stamped with the commit
 python3 api_tests/compare.py before.json after.json        # what changed between two runs; exits 1 on a regression

@@ -73,7 +73,7 @@ order of work:
 3. **Package — phase 1: a single Docker image, delivered multi-platform**
    (`linux/amd64` and `linux/arm64`), run first with plain `docker run`
    (§3.5 step 2).
-4. **Phase 2: stage it at `staging-company-dns.mediumroast.io`** on the
+4. **Phase 2: stage it at `company-dns-staging.mediumroast.io`** on the
    `microk8s` cluster, to check stability and functionality *before* anything
    is promoted to production (§3.4–3.6).
 
@@ -444,7 +444,7 @@ three-namespace convention (§1.3) rather than inventing a new pattern.
   256Mi/100m. Redeployed freely, expected to break sometimes. Answers
   "does it run on the real cluster at all" — cheap and fast, not the
   platform-parity gate.
-- **staging** (*phase 2, `staging-company-dns.mediumroast.io`*): mirrors prod's *shape* as closely as the 2-node budget
+- **staging** (*phase 2, `company-dns-staging.mediumroast.io`*): mirrors prod's *shape* as closely as the 2-node budget
   allows — real `microk8s`, real Ingress, real ConfigMap mounts,
   **2 replicas** (not 4 — enough to exercise multi-pod behavior, e.g.
   `rate_limit.rs`'s per-pod quota division at `v4-security-hardening.md`
@@ -495,7 +495,7 @@ the image/binary" from "is it something K8s-specific":
 3. **Deploy to `company-dns-dev`** *(not part of phases 1–2, §0.1 — skipped
    for now; the first real-`microk8s` test is staging)*. Real-`microk8s`,
    real-ConfigMap-mount test with fast iteration, not a hard gate.
-4. **Promote to `company-dns-staging`** (`staging-company-dns.mediumroast.io`,
+4. **Promote to `company-dns-staging`** (`company-dns-staging.mediumroast.io`,
    phase 2). §3.6's full platform-parity
    suite runs here — the actual gate.
 5. **Promote to `company-dns` (prod)** only after staging passes.
@@ -543,6 +543,8 @@ or flaky one.
 
 ### 3.8 K8s manifests, mirroring the proven `k8s/prod/` shape
 
+> **2026-10-10:** the staging half of this section is now planned as work packages in [`v4-staging-rollout.md`](v4-staging-rollout.md) (V4 listens on 4000, not 8000, so the prod manifests are a pattern, not a copy; the rate limiter's replica count must become a setting before two replicas are meaningful).
+
 `k8s/prod/`'s existing pattern (`namespace.yaml`, `deployment.yaml`,
 `service.yaml`, `ingress.yaml`, `middleware-redirect.yaml`,
 `certificate.yaml` — authored during V3's migration, proven live) gets
@@ -551,7 +553,7 @@ a `dev/` and `staging/` sibling each, same shape, different sizing:
 ```
 k8s/
   dev/      (designed, not scheduled - 1 replica, relaxed resources, hostname not chosen)
-  staging/  (phase 2 - 2 replicas, staging-company-dns.mediumroast.io)
+  staging/  (phase 2 - 2 replicas, company-dns-staging.mediumroast.io)
   prod/     (existing, unchanged)
 ```
 
@@ -682,7 +684,7 @@ inoperable.
    it replaces V3's or runs alongside it during the transition
    (`v4-server-prototype.md` scope question, not decided here).
 
-**Step E — phase 2: staging at `staging-company-dns.mediumroast.io`**
+**Step E — phase 2: staging at `company-dns-staging.mediumroast.io`**
 
 8. Add `k8s/staging/` (§3.8), sized by §4.7's real capacity check; its own
    `MEDIUMROAST_SHARED_SECRET` SealedSecret (§3.4); DNS and a `letsencrypt-prod`
@@ -711,7 +713,7 @@ SIC files in CI, §3.2.3), wire it in following §3.1's pattern.
   variable, files copied into the image, a mounted volume can replace them.
 - ~~Real production-scale SIC/embedding data size.~~ Measured: about 17MB with
   four systems and the two-year EDGAR window (§1.2); not a deciding factor.
-- ~~Hostnames.~~ Staging is `staging-company-dns.mediumroast.io`; prod stays
+- ~~Hostnames.~~ Staging is `company-dns-staging.mediumroast.io`; prod stays
   `company-dns.mediumroast.io`. (No dev hostname chosen — the dev tier is not
   scheduled.)
 - ~~EDGAR catalog refresh cadence.~~ Quarterly, rolling two-year window (§3.2.4).
