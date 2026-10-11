@@ -22,7 +22,7 @@ footprint of the single Azure Container App revision this replaces.
 
 ## Cluster DNS (not a manifest here)
 
-CoreDNS answers the cluster's public host names with Traefik's LAN address (`192.168.1.200`), because pods cannot reach the router's public address and cert-manager's self-check of an HTTP-01 challenge needs to. It is a manual edit of `kube-system`'s `coredns` ConfigMap, so it is **not** in this directory; it is recorded, with the host list and the rules for keeping it right, in [docs/plans/onprem-k8s-migration.md](../docs/plans/onprem-k8s-migration.md) ("In-cluster DNS for the public names"). Add a host there and in the ConfigMap whenever a site with a certificate is added.
+CoreDNS answers the cluster's public host names with Traefik's LAN address (`<traefik-lan-ip>`), because pods cannot reach the router's public address and cert-manager's self-check of an HTTP-01 challenge needs to. It is a manual edit of `kube-system`'s `coredns` ConfigMap, so it is **not** in this directory; it is recorded, with the host list and the rules for keeping it right, in [docs/plans/onprem-k8s-migration.md](../docs/plans/onprem-k8s-migration.md) ("In-cluster DNS for the public names"). Add a host there and in the ConfigMap whenever a site with a certificate is added.
 
 ## Staging (V4): `k8s/staging/`
 
@@ -49,7 +49,7 @@ k8s/staging/
 ```bash
 ./scripts/seal-secrets-v4.sh            # once: tokens (outside the repo) and k8s/staging/sealedsecret-credentials.yaml; commit only that file
 ./scripts/build-and-deploy-v4.sh --check   # preflight: lists everything missing, changes nothing
-./scripts/build-and-deploy-v4.sh        # build, push, deploy, verify (run on cafe-1)
+./scripts/build-and-deploy-v4.sh        # build, push, deploy, verify (run on the build node)
 ./scripts/build-and-deploy-v4.sh --status  # what is running (tag, commit, digest, time)
 ```
 

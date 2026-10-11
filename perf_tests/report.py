@@ -138,8 +138,9 @@ def fmt_ms(v: float) -> str:
 
 # ------------------------------------------------------------------ context
 class Ctx:
-    def __init__(self, matrix: dict, out: Path, ext: str, draft: bool, evidence: dict, differences: list[dict]):
+    def __init__(self, matrix: dict, out: Path, ext: str, draft: bool, evidence: dict, differences: list[dict], host_label: str = "benchmark node"):
         self.m, self.out, self.ext, self.draft = matrix, out, ext, draft
+        self.host_label = host_label
         self.evidence, self.differences = evidence, differences
         self.skipped: list[tuple[str, str]] = []
         self.overlaps: list[str] = []  # figures whose heading, conditions or panel titles collide
@@ -160,7 +161,8 @@ class Ctx:
         man = self.m.get("manifest") or {}
         host = man.get("host", {})
         imgs = man.get("images", {})
-        parts = [f"host {host.get('hostname', '?')} ({host.get('system', '?')}, {host.get('cpus', '?')} CPUs)",
+        # the machine's own host name is internal and these figures are published: show a label instead (--host-label), never the name
+        parts = [f"host {self.host_label} ({host.get('system', '?')}, {host.get('cpus', '?')} CPUs)",
                  f"commit {host.get('git_commit', '?')}{'+dirty' if host.get('git_dirty') else ''}"]
         parts += [f"{k}: {v.rsplit('/', 1)[-1]}" for k, v in imgs.items()]
         parts.append(f"run {str(man.get('started', '?'))[:16]}")
@@ -766,7 +768,7 @@ def fig_adds(ctx: Ctx) -> None:
 
 
 # ------------------------------------------------------------------ driver
-def build(matrix_dir: Path, out: Path, ext: str = "png", draft: bool = False, evidence_path: Path | None = None, differences_path: Path | None = None) -> Ctx:
+def build(matrix_dir: Path, out: Path, ext: str = "png", draft: bool = False, evidence_path: Path | None = None, differences_path: Path | None = None, host_label: str = "benchmark node") -> Ctx:
     if plt is None:
         raise SystemExit("matplotlib is not installed: use perf_tests/.venv (see perf_tests/requirements-report.txt)")
     m = rd.load_matrix(matrix_dir)
@@ -775,7 +777,7 @@ def build(matrix_dir: Path, out: Path, ext: str = "png", draft: bool = False, ev
     diff = (json.loads((differences_path or root / "differences.json").read_text()).get("differences", [])
             if (differences_path or root / "differences.json").exists() else [])
     out.mkdir(parents=True, exist_ok=True)
-    ctx = Ctx(m, out, ext, draft, ev, diff)
+    ctx = Ctx(m, out, ext, draft, ev, diff, host_label)
     plt.rcParams.update({"font.size": 10, "axes.titlesize": 12, "figure.facecolor": "white", "axes.facecolor": "white"})
     fig_scorecard(ctx)
     for regime in ctx.regimes:
@@ -810,8 +812,9 @@ def main(argv=None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--format", choices=["png", "jpg"], default="png")
     p.add_argument("--draft", action="store_true")
+    p.add_argument("--host-label", default="benchmark node", help="what the picture footers call the machine (never its real host name: the figures are published)")
     a = p.parse_args(argv)
-    ctx = build(a.matrix, a.out, a.format, a.draft)
+    ctx = build(a.matrix, a.out, a.format, a.draft, host_label=a.host_label)
     for f, title, _ in ctx.made:
         print(f"{f}: {title}")
     for n, why in ctx.skipped:

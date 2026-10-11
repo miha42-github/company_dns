@@ -19,12 +19,12 @@ This document links to the plans that own each design decision rather than resta
 
 | Fact | Source | Consequence for staging |
 |---|---|---|
-| The V4 image builds for `linux/amd64` on `cafe-1`, starts healthy with no network, and is **self-contained** (binary, UI, SIC data, EDGAR catalog, embedding model, Microsoft ONNX Runtime loaded at run time, so it runs on the nodes' CPUs without AVX2). | `v4/Dockerfile`, `v4/scripts/docker-build.sh`, results report | Nothing to mount for data; a pod needs no network to start. |
+| The V4 image builds for `linux/amd64` on the build node, starts healthy with no network, and is **self-contained** (binary, UI, SIC data, EDGAR catalog, embedding model, Microsoft ONNX Runtime loaded at run time, so it runs on the nodes' CPUs without AVX2). | `v4/Dockerfile`, `v4/scripts/docker-build.sh`, results report | Nothing to mount for data; a pod needs no network to start. |
 | It listens on **4000** (V3 listens on 8000), runs as UID 10001, has a `/health` endpoint and a `HEALTHCHECK`. | `v4/Dockerfile` | `k8s/staging/` cannot be a copy of `k8s/prod/`: port, probes and the security context differ. |
 | Measured at production limits (0.5 CPU, 1 GiB): idle about 160 MiB, **peak 187 MiB**; at headroom peak 255 MiB; ready in 1 to 2 s. Faster than V3 on 26 of 28 checks. | `docs/results/2026-10-10-rerun/` | Size staging at the production limits (requests 100m / 256Mi, limits 500m / 1Gi): it is the tested regime, and there is room to spare. |
 | **The rate limiter divides quotas by a hard-coded `REPLICA_COUNT = 4`.** | `v4/crates/server/src/rate_limit.rs:57` | Two staging replicas would each grant a quarter of the fleet quota, so the fleet allows **double** the intended rate, and the §3.6 check of rate limiting at two replicas cannot pass. A code change is needed first (work package 1). |
 | Runtime configuration is environment variables plus two mounted files (credentials, rules) and an optional log-level file. No YAML or `.env` loader. | `v4/README.md`, `v4-deployment.md` §2 | Staging config is: env in the Deployment, a Secret for credentials, ConfigMaps for rules and log level. |
-| Cluster: MicroK8s, two schedulable amd64 workers (`cafe-1`, `espresso-1`; `cafe-1` also runs production pods), Traefik ingress at `192.168.1.200`, `letsencrypt-prod` ClusterIssuer, SealedSecrets controller, `microk8s-hostpath` and NFS storage classes. Namespaces `company-dns` (V3 prod) exist; `company-dns-staging` does not. | `v4-deployment.md` §1.3, `k8s/prod/` | Staging shares nodes with production: it must stay small and never be able to starve prod. |
+| Cluster: MicroK8s, two schedulable amd64 workers (the build node, the second worker node; the build node also runs production pods), Traefik ingress at `<traefik-lan-ip>`, `letsencrypt-prod` ClusterIssuer, SealedSecrets controller, `microk8s-hostpath` and NFS storage classes. Namespaces `company-dns` (V3 prod) exist; `company-dns-staging` does not. | `v4-deployment.md` §1.3, `k8s/prod/` | Staging shares nodes with production: it must stay small and never be able to starve prod. |
 | `k8s/prod/` has namespace, Deployment, Service, Ingress (HTTPS and an HTTP redirect), Middleware, Certificate. `scripts/build-and-deploy.sh` builds V3's root `Dockerfile`, pushes to GHCR, `sed`-bumps the tag, applies, waits. | `k8s/`, `scripts/` | The staging scripts follow the same shape and conventions, for V4's Dockerfile. |
 | No V4 image has been pushed to a registry. No V4 CI exists. | repo | Publishing is part of this work. |
 
@@ -42,9 +42,9 @@ plus the documented prerequisites produces the same running staging.
 | S1 | **DECIDED: public** (2026-10-10). **Image name and visibility.** A new GHCR package such as `ghcr.io/miha42-github/company_dns/company_dns_v4`, public or private? | A **separate package** (V3's `company_dns` package and prod stay untouched). **Public**, as V3's is, unless the baked-in SIC data's licence restricts redistribution; if it does, private plus an `imagePullSecret` (extra work package). | The image contains Mediumroast's SIC files. If they cannot be public, the image cannot be. |
 | S2 | **Image variant.** Lean or small. | **Small** (rerun data: equal latency, CPU and memory; 72 MB smaller; 9 minutes faster to build). | Recorded in the plan; staging runs one variant. |
 | S3 | **Tag scheme.** | `MMDDYYYY-<git sha7>` (V3's date convention plus the commit, so a tag always names its source); pinned, never `latest`. | Rollback and "what is running" must be unambiguous. |
-| S4 | **Who builds and where.** | Build on `cafe-1` (native amd64, the same machine the comparison used) with a script now; a GitHub workflow later (plan item D) once the data location is decided. | Avoids waiting on CI, as decided for item H. |
+| S4 | **Who builds and where.** | Build on the build node (native amd64, the same machine the comparison used) with a script now; a GitHub workflow later (plan item D) once the data location is decided. | Avoids waiting on CI, as decided for item H. |
 | S5 | **SQL endpoint on in staging**, off in prod (Q6). | On, with staging-only credentials. | The capacity test needs it. |
-| S6 | **DONE** (2026-10-10). **DNS.** `company-dns-staging.mediumroast.io` is registered and resolves to 75.80.225.46, the same address as `company-dns.mediumroast.io`. (The plans previously said `staging-company-dns`; every reference now uses the registered name.) | Nothing left; the certificate can issue once the Ingress exists. | HTTP-01 needs the name to resolve to the cluster. |
+| S6 | **DONE** (2026-10-10). **DNS.** `company-dns-staging.mediumroast.io` is registered and resolves to <public-ip>, the same address as `company-dns.mediumroast.io`. (The plans previously said `staging-company-dns`; every reference now uses the registered name.) | Nothing left; the certificate can issue once the Ingress exists. | HTTP-01 needs the name to resolve to the cluster. |
 | S7 | **Rate limit replicas.** Make `REPLICA_COUNT` a setting (`COMPANY_DNS_REPLICAS`, default 4 so production behaviour is unchanged) set from the Deployment. | Yes; this is the only application change on the critical path. | Section 1, fourth row. |
 | S8 | **DECIDED** (2026-10-10). **CORS** (item B). | **Lookups stay open to any origin** (read-only public data, as V3; no existing browser client breaks). **Credentialed routes (SQL and profile-gated) get an allow-list**, set by `COMPANY_DNS_CORS_ORIGINS` (comma-separated; default: the `mediumroast.io` origins and localhost). The open lookup policy is the default, so nothing changes for current clients. WP1 first confirms the routers allow two policies. | Auth is a Basic header, not cookies, so open CORS does not expose credentials; the allow-list covers the routes where it matters. |
 
@@ -58,12 +58,12 @@ Each has a deliverable and a way to see it is done. Branches are small and indep
   gain a line. **Done when:** `cargo test --workspace` passes and a server started with `COMPANY_DNS_REPLICAS=2` reports per-pod quotas of double the default's.
 - CORS per S8: open for lookups, allow-list (`COMPANY_DNS_CORS_ORIGINS`) on the credentialed routes; tests for a foreign origin on a lookup (allowed), on a credentialed route (blocked: no `Access-Control-Allow-Origin`), an allowed origin, and the preflight. Settings reference for every variable (the gap noted on 2026-10-10): name, default, effect, where to set it per deployment.
 
-### WP2. Publish script: `v4/scripts/build-and-push.sh` (written 2026-10-10; to be run on `cafe-1`) (superseded 2026-10-11: now step 1 to 4 of `scripts/build-and-deploy-v4.sh`)
+### WP2. Publish script: `v4/scripts/build-and-push.sh` (written 2026-10-10; to be run on the build node) (superseded 2026-10-11: now step 1 to 4 of `scripts/build-and-deploy-v4.sh`)
 
 Builds the amd64 image with `docker-build.sh` (small profile by default), runs `docker-smoke.sh` on it, tags it per S3, logs in to GHCR with the PAT in the
 repository's gitignored `.env` (the V3 script's convention), pushes, and prints the digest and a one-line record (tag, commit, profile, data manifest hash)
 to `v4/.build-log` (gitignored). It refuses to push if the smoke test fails or the tree is dirty without `--allow-dirty`.
-**Done when:** a run on `cafe-1` produces a pullable image and a second machine can `docker pull` it by tag (anonymously if public).
+**Done when:** a run on the build node produces a pullable image and a second machine can `docker pull` it by tag (anonymously if public).
 
 ### WP3. Manifests: `k8s/staging/`
 
@@ -105,7 +105,7 @@ prints pod status and the first `/health`. Routine redeploys apply everything. `
 
 ### WP6. First rollout, as a runbook (written into `k8s/README.md`, run by you with me alongside) (superseded 2026-10-11: it is `docs/v4-bringup.md`)
 
-1. Merge WP1 to WP5; run WP2 on `cafe-1` (image pushed).
+1. Merge WP1 to WP5; run WP2 on the build node (image pushed).
 2. You create the DNS record (S6) and confirm it resolves.
 3. Run `deploy.sh` (first-time mode): pods ready; port-forward smoke passes.
 4. Ingress, middleware and certificate apply; `kubectl -n company-dns-staging get certificate -w` until ready.
@@ -143,7 +143,7 @@ WP1, WP2 and WP3 can be written in parallel as three branches. I would start wit
 
 ## 6. Risks
 
-- **Shared nodes.** `cafe-1` carries production. Staging requests stay small, limits match the tested regime, anti-affinity spreads the pods, and the production restart count is watched. If production degrades the soak stops.
+- **Shared nodes.** the build node carries production. Staging requests stay small, limits match the tested regime, anti-affinity spreads the pods, and the production restart count is watched. If production degrades the soak stops.
 - **Slow embeddings on the 2013 CPUs.** The offline suite took about 10 s there against 1.8 s on the Mac. A search-heavy soak may need its request rate tuned; this is expected, not a defect.
 - **Public image with licensed data.** Decision S1 must come first, or a push could publish files that cannot be redistributed.
 - **The replica count drifting from `replicas`.** WP3's manifest test enforces that the two agree.

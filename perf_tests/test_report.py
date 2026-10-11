@@ -166,6 +166,17 @@ class Figures(unittest.TestCase):
             ctx = rp.build(root, out, "png", False)
             self.assertIn("p1-latency-cold-limited", {n for n, _ in ctx.skipped})
 
+    def test_the_footer_names_a_label_never_the_hosts_real_name(self):
+        # the figures are published: the manifest's host name (testhost in this fixture) is internal
+        with tempfile.TemporaryDirectory() as d:
+            root, out = Path(d) / "m", Path(d) / "out"
+            make_matrix(root)
+            ctx = rp.build(root, out, "png", False)
+            self.assertNotIn("testhost", ctx.footer())
+            self.assertIn("host benchmark node", ctx.footer())
+            ctx = rp.build(root, out, "png", False, host_label="lab machine")
+            self.assertIn("host lab machine", ctx.footer())
+
     def test_jpg_output(self):
         with tempfile.TemporaryDirectory() as d:
             root, out = Path(d) / "m", Path(d) / "out"

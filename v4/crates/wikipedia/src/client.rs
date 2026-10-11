@@ -793,7 +793,7 @@ mod tests {
         );
     }
 
-    // ---- error bodies returned with HTTP 200 (found on cafe-1, 2026-10-10: V4 small returned 114 answers without a CIK in one run) ----
+    // ---- error bodies returned with HTTP 200 (found on the build node, 2026-10-10: V4 small returned 114 answers without a CIK in one run) ----
     //
     // MediaWiki answers a lagged request (the `maxlag` parameter this client sends on every call) with HTTP 200 and an `error` object, and
     // a `Retry-After` header. The client used to look only at the HTTP status, so that body came back as if it were data: `fetch_wikidata`

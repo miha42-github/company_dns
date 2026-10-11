@@ -1,6 +1,6 @@
 # V4 staging scripts: follow the established pattern, automate more, fold into `svc_ctl.sh` later
 
-Status: **Implemented (2026-10-11): steps A to D below are done; step E, the first real run on `cafe-1`, is next.** The scripts are tested against stubs only (`python3 scripts/test_v4_scripts.py`, 45 tests); neither has run against a registry or the cluster yet. Decisions in section 5: apply-time tag with the cluster as the record, one run on `cafe-1`, tokens sealed on `cafe-1`.
+Status: **Implemented (2026-10-11): steps A to D below are done; step E, the first real run on the build node, is next.** The scripts are tested against stubs only (`python3 scripts/test_v4_scripts.py`, 45 tests); neither has run against a registry or the cluster yet. Decisions in section 5: apply-time tag with the cluster as the record, one run on the build node, tokens sealed on the build node.
 Owner: michael.hay@mediumroast.io
 Replaces the script parts of work packages WP2, WP4 and WP5 in [`v4-staging-rollout.md`](v4-staging-rollout.md) (the manifests, WP3, stay as they are).
 Goal: **V4 operable on staging** (`https://company-dns-staging.mediumroast.io`). Some technical debt is accepted to get there; section 6 sketches paying it off.
@@ -26,7 +26,7 @@ Decisions:
 
 | Convention in the V3 script | V4 script |
 |---|---|
-| One script, run from the repository root, builds from the current checkout and deploys with `kubectl` on the same machine | **Keep.** Run it on `cafe-1`, which has Docker, the data and `microk8s kubectl`. |
+| One script, run from the repository root, builds from the current checkout and deploys with `kubectl` on the same machine | **Keep.** Run it on the build node, which has Docker, the data and `microk8s kubectl`. |
 | Header comment with usage, arguments, what it does **not** do | **Keep**, same shape. |
 | `set -euo pipefail`; `SCRIPT_DIR`, `REPO_ROOT`, constants at the top (`REGISTRY`, `NAMESPACE`, `MANIFEST_DIR`...) | **Keep.** |
 | Positional `TAG`, always pinned, never `latest` | **Keep.** Default `MMDDYYYY-<git sha7>` (decision S3: the tag names its source). |
@@ -93,9 +93,9 @@ Idempotent: run again and nothing changes unless you ask (`--rotate`, or `--rese
 |---|---|---|
 | A | This plan and the draft `docs/v4-bringup.md` merged. | **Done** (PR #122) |
 | B | `scripts/seal-secrets-v4.sh` and its tests. | **Done** (2026-10-11) |
-| C | `scripts/build-and-deploy-v4.sh` and its tests. | **Done** (2026-10-11); its `--dry-run` against the real cluster is the first check on `cafe-1` |
+| C | `scripts/build-and-deploy-v4.sh` and its tests. | **Done** (2026-10-11); its `--dry-run` against the real cluster is the first check on the build node |
 | D | Remove the #121 scripts and runbook (section 4); update `k8s/README.md` and the rollout plan. | **Done** (2026-10-11): `k8s/staging/` holds only configuration, and a manifest test keeps it so |
-| E | **The first real run on `cafe-1`, following `docs/v4-bringup.md` literally.** Every place the guide or a script is wrong is fixed in the guide or the script, and the guide is dated as proven. | **Next.** Done when V4 serves `https://company-dns-staging.mediumroast.io` from two pods and the guide's verification section passes. |
+| E | **The first real run on the build node, following `docs/v4-bringup.md` literally.** Every place the guide or a script is wrong is fixed in the guide or the script, and the guide is dated as proven. | **Next.** Done when V4 serves `https://company-dns-staging.mediumroast.io` from two pods and the guide's verification section passes. |
 
 Built as planned, with these additions that the tests surfaced: **the authenticated check gives curl its credentials on standard input** (`-K -`), because `-u user:token` would have put the token on a command
 line visible to other users of the node (a test caught this in the first draft); `--allow-dirty`; `--reseal`; the waits and the smoke-test retries are environment variables (`V4_WAIT_PUBLIC_SECS`,
@@ -105,10 +105,10 @@ line visible to other users of the node (a test caught this in the first draft);
 
 - **The tag is applied, not committed.** Apply-time substitution plus annotations on the Deployment and the build log as the record (section 3, "Where the truth lives"). This replaces the V3 convention of editing
   the manifest, as asked, to take the commit-afterwards step away.
-- **One run on `cafe-1` does build, push and deploy.** What only you can do first: a `GITHUB_PAT` (write:packages) in `.env` on `cafe-1`; `kubeseal` installed there; set the new GHCR package
+- **One run on the build node does build, push and deploy.** What only you can do first: a `GITHUB_PAT` (write:packages) in `.env` on the build node; `kubeseal` installed there; set the new GHCR package
   `company_dns_v4` to Public once after the first push (the script waits for it); save the staging tokens in the password manager; merge the pull request that adds the sealed secret; check
-  `kubectl` reaches the cluster from `cafe-1`. The data, the model and buildx are already there.
-- **Tokens are sealed on `cafe-1`**, so `~/company_dns-staging-secrets/tokens` is on the same machine as the script: the automatic 200 check works, and `--suite` (off by default) works when asked, with the
+  `kubectl` reaches the cluster from the build node. The data, the model and buildx are already there.
+- **Tokens are sealed on the build node**, so `~/company_dns-staging-secrets/tokens` is on the same machine as the script: the automatic 200 check works, and `--suite` (off by default) works when asked, with the
   token passed through the environment. The cost: plaintext staging tokens (mode 600, staging-only) sit in one home directory on a node that also runs production. A Mac can still run `--check`, the
   stubbed tests, and the suite by hand with a token from the password manager.
 

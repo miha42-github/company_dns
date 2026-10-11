@@ -22,7 +22,7 @@
 #   Reads GITHUB_PAT from .env in the repo root (gitignored) and logs in to ghcr.io
 #   automatically, exactly as scripts/build-and-deploy.sh does. The PAT needs write:packages.
 #
-# Run it from the root of this repo ON cafe-1 (native amd64, Docker with buildx, the data in
+# Run it from the root of this repo ON the build node (native amd64, Docker with buildx, the data in
 # tmp/, and `kubectl` or `microk8s kubectl` for the cluster). One run does everything and asks
 # nothing; a problem stops it with the exact fix.
 #
@@ -114,7 +114,7 @@ FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${TAG}"
 # --- Helpers ---
 say() { echo "==> $*"; }
 die() { echo "ERROR: $*" >&2; exit 1; }
-need_kubectl() { [[ ${#KUBECTL[@]} -gt 0 ]] || die "kubectl not found (or microk8s kubectl): run this on a machine that reaches the cluster, such as cafe-1"; }
+need_kubectl() { [[ ${#KUBECTL[@]} -gt 0 ]] || die "kubectl not found (or microk8s kubectl): run this on a machine that reaches the cluster, such as the build node (the machine that runs this script)"; }
 
 annotation() {   # value of one of our annotations on the Deployment, or "none"
   local v
@@ -127,7 +127,7 @@ token_of() { [[ -f "${SECRETS_DIR}/tokens" ]] && awk -F: -v p="$1" '$1 == p {pri
 # --- Preflight: every problem at once ---
 preflight() {
   local problems=() warnings=()
-  [[ ${#KUBECTL[@]} -gt 0 ]] || problems+=("kubectl not found (or microk8s kubectl): run this on a machine that reaches the cluster, such as cafe-1")
+  [[ ${#KUBECTL[@]} -gt 0 ]] || problems+=("kubectl not found (or microk8s kubectl): run this on a machine that reaches the cluster, such as the build node (the machine that runs this script)")
   command -v curl >/dev/null 2>&1 || problems+=("curl is not installed")
   command -v python3 >/dev/null 2>&1 || problems+=("python3 is not installed")
   if [[ "${BUILD}" -eq 1 ]]; then
@@ -146,7 +146,7 @@ preflight() {
     [[ -d "${data}" ]] || problems+=("the SIC data directory ${data} does not exist (set DATA_DIR): docs/plans/v4-amd64-build-and-compare.md, step 0")
     [[ -d "${data}" ]] && ! ls "${data}"/*.feather >/dev/null 2>&1 && problems+=("no .feather data files in ${data}")
     [[ -n "$(model_dir)" ]] || problems+=("the embedding model cache was not found (looked in \$MODEL_DIR, tmp/.fastembed_cache, v4/.fastembed_cache)")
-    [[ "$(uname -m)" == "x86_64" || "$(uname -m)" == "amd64" ]] || warnings+=("this host is $(uname -m): a ${PLATFORM} build is emulated and very slow; build on cafe-1")
+    [[ "$(uname -m)" == "x86_64" || "$(uname -m)" == "amd64" ]] || warnings+=("this host is $(uname -m): a ${PLATFORM} build is emulated and very slow; build on a native amd64 host")
     if [[ "${DIRTY}" -eq 1 && "${ALLOW_DIRTY}" -eq 0 ]]; then
       problems+=("uncommitted changes in the working tree: a tag must name its source (commit them, or pass --allow-dirty for a throwaway build)")
     fi
@@ -171,7 +171,7 @@ preflight() {
     else
       case "${ip}" in
         10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|127.*) ;;
-        *) warnings+=("${STAGING_HOST} resolves to the public address ${ip}. From INSIDE the cluster that address is usually unreachable (hairpin NAT), so cert-manager's own check of the HTTP-01 challenge times out and the certificate never issues. Make the name resolve to Traefik's LAN address (192.168.1.200) inside the cluster: add it to CoreDNS's hosts block (docs/v4-bringup.md, prerequisites), or enable NAT reflection on the router.");;
+        *) warnings+=("${STAGING_HOST} resolves to the public address ${ip}. From INSIDE the cluster that address is usually unreachable (hairpin NAT), so cert-manager's own check of the HTTP-01 challenge times out and the certificate never issues. Make the name resolve to Traefik's LAN address (the Ingress's load balancer address) inside the cluster: add it to CoreDNS's hosts block (docs/v4-bringup.md, prerequisites), or enable NAT reflection on the router.");;
       esac
     fi
   fi
