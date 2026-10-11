@@ -2,8 +2,8 @@
 
 From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.io` from two pods**, verified. Follow it top to bottom.
 
-> **Status: draft, written ahead of the scripts (2026-10-11).** Steps 3 to 6 use `scripts/seal-secrets-v4.sh` and `scripts/build-and-deploy-v4.sh`, which are planned in
-> [`docs/plans/v4-staging-scripts.md`](plans/v4-staging-scripts.md) and not written yet; the commands show their intended interface. Everything else works today. The guide is marked
+> **Status: scripts written and tested against stubs (2026-10-11); not yet run for real.** `scripts/seal-secrets-v4.sh` and `scripts/build-and-deploy-v4.sh` (plan:
+> [`docs/plans/v4-staging-scripts.md`](plans/v4-staging-scripts.md)) pass 45 stub tests, but no script has yet talked to the registry or the cluster. The guide is marked
 > **proven** (with a date) only after someone has followed it end to end on `cafe-1` (plan step E), fixing whatever it got wrong.
 
 ## What you end up with
@@ -178,6 +178,7 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 | The build is killed or the link fails | Docker's VM or the host is short of memory (the fat-LTO link needs about 16 GB). |
 | `ImagePullBackOff` | The package is still private: set `company_dns_v4` to Public (GitHub, Packages, Package settings), or the tag was never pushed. |
 | Pods `ContainerCreating` for a long time, event says secret `company-dns-credentials` not found | The sealed credentials were not applied, or the controller cannot open them: `kubectl -n company-dns-staging describe sealedsecret company-dns-credentials`; re-run step 3. |
+| `ERROR: uncommitted changes in the working tree` | A tag must name its source: commit, or pass `--allow-dirty` for a throwaway build (its tag ends in `-dirty`; do not leave it deployed). |
 | The server exits at start with "rules name profile(s) with no credential" | `configmap-rules.yaml` names a profile with no token: run `seal-secrets-v4.sh` again (it covers every profile in the rules). |
 | The server exits at start with a message about `COMPANY_DNS_REPLICAS` or `COMPANY_DNS_CORS_ORIGINS` | A bad value: the message says what is accepted (`v4/README.md`). |
 | Certificate stays `False` | DNS does not point at the cluster, or the HTTP-01 challenge cannot reach Traefik: `kubectl -n company-dns-staging describe certificate,challenge`. The workload still works through a port-forward meanwhile. |
