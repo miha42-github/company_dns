@@ -92,7 +92,7 @@ class Total(ServerTestCase):
         if data is None:
             return 0
         if isinstance(data, dict):
-            for key in ("total", "totalCompanies"):
+            for key in ("total", "totalCompanies", "row_count"):
                 if isinstance(data.get(key), int):
                     return data[key]
         return 1

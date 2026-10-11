@@ -42,7 +42,7 @@ pub struct ApiEnvelope {
     #[schema(value_type = Option<Object>)]
     pub performance: Option<Value>,
     /// Present on every answer: how many results `data` holds. A list gives its length, a V3-shaped dictionary the count it already carries
-    /// (`data.total`, or EDGAR's `data.totalCompanies`), any other single record gives 1, and no match or an error gives 0.
+    /// (`data.total`, EDGAR's `data.totalCompanies`, the SQL endpoint's `data.row_count`), any other single record gives 1, and no match or an error gives 0.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total: Option<u64>,
 }

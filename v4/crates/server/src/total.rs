@@ -1,8 +1,8 @@
 //! `total` on every answer (decided 2026-10-11, extended to the V3-shaped paths the same day).
 //!
 //! Every answer is the JSON envelope `{code, message, module, data, dependencies}`; this layer, applied outermost so it also sees error
-//! envelopes, adds one more top-level field, `total`: **how many results `data` holds.** A list gives its length; a V3-shaped dictionary that
-//! already counts its results (`data.total`, or EDGAR's `data.totalCompanies`) gives that count; any other single record (a company's firmographics,
+//! envelopes, adds one more top-level field, `total`: **how many results `data` holds.** A list gives its length; a dictionary that
+//! already counts its results (`data.total`, EDGAR's `data.totalCompanies`, the SQL endpoint's `data.row_count`) gives that count; any other single record (a company's firmographics,
 //! a match report) gives 1; and `null` (no match, or an error) gives 0. A client can read the count without looking inside `data`, and the same
 //! field will carry the full match count once results are paged.
 //!
@@ -26,8 +26,8 @@ pub fn total_of(data: &Value) -> u64 {
     match data {
         Value::Array(items) => items.len() as u64,
         Value::Null => 0,
-        // V3's dictionaries already say how many results they hold
-        Value::Object(map) => ["total", "totalCompanies"].iter().find_map(|k| map.get(*k).and_then(Value::as_u64)).unwrap_or(1),
+        // dictionaries that already say how many results they hold: V3's (`total`, EDGAR's `totalCompanies`) and the SQL endpoint's `row_count`
+        Value::Object(map) => ["total", "totalCompanies", "row_count"].iter().find_map(|k| map.get(*k).and_then(Value::as_u64)).unwrap_or(1),
         _ => 1,
     }
 }
@@ -130,6 +130,13 @@ mod tests {
         assert_eq!(v["data"], json!({"sics": [1, 2], "total": 2}), "V3's data is untouched");
         assert_eq!(json_of("/V3.0/ciks").await["total"], 7, "EDGAR's totalCompanies");
         assert_eq!(json_of("/V3.0/record").await["total"], 1);
+    }
+
+    #[test]
+    fn a_sql_result_counts_its_rows_not_one() {
+        // regression found while reviewing: a 500-row SQL answer is one object, and "1" would have been a misleading total
+        assert_eq!(total_of(&json!({"columns": [], "row_count": 500, "truncated": false, "rows": []})), 500);
+        assert_eq!(total_of(&json!({"name": "no count here"})), 1);
     }
 
     #[tokio::test]
