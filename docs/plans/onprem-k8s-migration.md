@@ -695,6 +695,42 @@ Not a blocker for Azure teardown or repo cleanup — those only need Phase 1
 working. This phase has no target date in this plan; it's a follow-up
 cleanup step, done manually, at the user's discretion.
 
+## In-cluster DNS for the public names: the CoreDNS `hosts` block (added 2026-10-11)
+
+**A manual change to the cluster, not a file in `k8s/`, so it is recorded here.** Without it, cert-manager cannot issue or renew any certificate on this cluster.
+
+**Why it exists.** cert-manager checks an HTTP-01 challenge itself, from inside the cluster, by fetching `http://<host>/.well-known/acme-challenge/<token>` before it asks Let's Encrypt to validate. The public names resolve to the home router's public address (`75.80.225.46`). On 2026-10-11 the router's port mapping was changed from a node (earlier `cafe-1`, then `espresso-1`) to Traefik's MetalLB address `192.168.1.200`. From then on the LAN, including every pod, **could not reach the public address** (the Firewalla does not loop LAN traffic back; its staff say loopback is automatic and not configurable, so we could not turn it on). cert-manager's self-check timed out for every name (`failed to perform self check GET request ... context deadline exceeded`), which blocked the new `company-dns-staging` certificate and would have blocked every renewal (the earliest was `dex-staging-tls`, due 2026-10-19). Reaching Traefik from outside still works (the public name, ports 80 and 443 forwarded to `192.168.1.200`): verified from a phone on 5G.
+
+**The change.** In `kube-system`'s `coredns` ConfigMap, a `hosts` block above the `forward` line answers the cluster's public names with Traefik's LAN address, for pods only:
+
+```
+    hosts {
+      192.168.1.200 company-dns-staging.mediumroast.io company-dns.mediumroast.io dev.mediumroast.io staging.mediumroast.io www.mediumroast.io dex.mediumroast.io mediumroast.io
+      fallthrough
+    }
+```
+
+applied with `kubectl -n kube-system edit configmap coredns` and `kubectl -n kube-system rollout restart deploy/coredns`. Checked from a pod: the names resolve to `192.168.1.200` and Traefik answers (a `301` to HTTPS for a path that is not a challenge token); the staging certificate then issued on cert-manager's next retry.
+
+**Rules for keeping it right**
+- **Add a name here whenever the cluster gets a new site with an HTTP-01 certificate** (`kubectl get ingress -A` lists the hosts). List names explicitly: a wildcard would capture names served elsewhere. Today's list is every host in the table below.
+- **`microk8s disable dns` / `enable dns` resets manual CoreDNS edits.** Re-apply the block if that is ever run.
+- It affects pods only. LAN devices still see the public address (Pi-hole `192.168.1.29` is their resolver; its upstreams are Google and Cloudflare). They can reach the sites only if the router loops back or the Pi-hole answers these names with `192.168.1.200` (Settings, Local DNS Records); that is optional and not needed for certificates.
+- If the router later gains working NAT loopback, this block becomes unnecessary and can be removed.
+
+| Host | Namespace | Certificate (renewal, 2026-10-11) |
+|---|---|---|
+| `company-dns.mediumroast.io` | `company-dns` | `company-dns-io-tls` (2026-11-25) |
+| `company-dns-staging.mediumroast.io` | `company-dns-staging` | `company-dns-staging-io-tls` (issued 2026-10-11) |
+| `dev.mediumroast.io` | `mediumroast-dev` | `dev-mediumroast-io-tls` (2026-11-26) |
+| `staging.mediumroast.io` | `mediumroast-staging`, `vault-staging` | `staging-mediumroast-io-tls` (2026-11-19) |
+| `www.mediumroast.io`, `mediumroast.io` | `mediumroast-web`, `vault-prod` | `mediumroast-io-tls` (2026-11-18) |
+| `dex.mediumroast.io` | `vault-staging` | `dex-staging-tls` (**2026-10-19**) |
+
+(The bare `mediumroast.io` also has a second public address, `192.64.119.33`, which Let's Encrypt may be sent to at renewal. A separate thing to check before 2026-11-18.)
+
+The V4 procedure that uses this is in `docs/v4-bringup.md` ("The CoreDNS block").
+
 ## Teardown plan — Azure Container App
 
 **Requires Azure CLI + credentials not available in this session — to be run

@@ -20,6 +20,10 @@ k8s/prod/
 Single environment (prod only) - no dev/staging tiers, matching the
 footprint of the single Azure Container App revision this replaces.
 
+## Cluster DNS (not a manifest here)
+
+CoreDNS answers the cluster's public host names with Traefik's LAN address (`192.168.1.200`), because pods cannot reach the router's public address and cert-manager's self-check of an HTTP-01 challenge needs to. It is a manual edit of `kube-system`'s `coredns` ConfigMap, so it is **not** in this directory; it is recorded, with the host list and the rules for keeping it right, in [docs/plans/onprem-k8s-migration.md](../docs/plans/onprem-k8s-migration.md) ("In-cluster DNS for the public names"). Add a host there and in the ConfigMap whenever a site with a certificate is added.
+
 ## Staging (V4): `k8s/staging/`
 
 V4 at `https://company-dns-staging.mediumroast.io`, two replicas in the `company-dns-staging` namespace, on the same cluster. It is **not** a copy of
