@@ -82,11 +82,24 @@ def total_of(data):
 
 
 class Total(ServerTestCase):
-    """Every /V4.0/ answer carries a top-level `total` (the count of results in `data`); /V3.0/ and /V2.0/ keep V3's exact shape and do not."""
+    """Every answer carries a top-level `total`: the count of results in `data`. A list gives its length; a V3-shaped dictionary gives the count it
+    already carries (`data.total`, or EDGAR's `totalCompanies`); any other single record gives 1; no match or an error gives 0."""
 
-    def test_every_v4_route_answers_with_a_total_that_matches_its_data(self):
+    @staticmethod
+    def expected(data):
+        if isinstance(data, list):
+            return len(data)
+        if data is None:
+            return 0
+        if isinstance(data, dict):
+            for key in ("total", "totalCompanies"):
+                if isinstance(data.get(key), int):
+                    return data[key]
+        return 1
+
+    def test_every_route_answers_with_a_total_that_matches_its_data(self):
         for template, ok, no, needs_network in TABLE:
-            if needs_network and not NETWORK or not template.startswith("/V4.0/"):
+            if needs_network and not NETWORK or template == "/health":
                 continue
             for label, path in (("match", ok), ("no match", no)):
                 if path is None:
@@ -95,30 +108,28 @@ class Total(ServerTestCase):
                     status, body, _ = get(path)
                     self.assertIn(status, (200, 404), path)
                     self.assertIn("total", body, f"{path}: no total in {sorted(body)}")
-                    self.assertEqual(body["total"], total_of(body["data"]), path)
+                    self.assertEqual(body["total"], self.expected(body["data"]), path)
                     if status == 404:
                         self.assertEqual(body["total"], 0, path)
 
     def test_the_post_routes_carry_a_total_too(self):
         status, body, _ = post("/V4.0/global/sic/match", {"text": "We make software for community banks."})
         self.assertEqual(status, 200, body)
-        self.assertEqual(body["total"], total_of(body["data"]))
+        self.assertEqual(body["total"], self.expected(body["data"]))
         status, body, _ = post("/V4.0/global/sic/match", {})
         self.assertEqual(status, 400)
         self.assertEqual(body["total"], 0, "an error answer has a total of 0")
 
-    def test_an_unknown_v4_route_and_a_wrong_method_are_enveloped_with_a_total_of_zero(self):
+    def test_an_unknown_route_is_enveloped_with_a_total_of_zero(self):
         status, body, _ = get("/V4.0/no/such/route")
         self.assertEqual((status, body["total"]), (404, 0))
 
-    def test_v3_and_v2_paths_keep_v3s_exact_shape_without_a_top_level_total(self):
-        for template, ok, no, needs_network in TABLE:
-            if needs_network and not NETWORK or template.startswith("/V4.0/") or template == "/health":
-                continue
-            with self.subTest(path=ok):
-                status, body, _ = get(ok)
-                self.assertEqual(status, 200, ok)
-                self.assertNotIn("total", body, f"{ok}: V3's envelope has no top-level total")
+    def test_the_v3_dictionary_inside_data_is_untouched(self):
+        # the only difference from V3's envelope is the added top-level key
+        status, body, _ = get("/V3.0/na/sic/code/3571")
+        self.assertEqual(status, 200)
+        self.assertEqual(sorted(body["data"]), ["sics", "total"])
+        self.assertEqual(body["total"], body["data"]["total"])
 
     def test_health_is_not_an_envelope(self):
         status, body, _ = get("/health")

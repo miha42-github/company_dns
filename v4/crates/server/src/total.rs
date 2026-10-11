@@ -1,12 +1,14 @@
-//! `total` on every `/V4.0/` answer (decided 2026-10-11).
+//! `total` on every answer (decided 2026-10-11, extended to the V3-shaped paths the same day).
 //!
-//! Every `/V4.0/` response is the JSON envelope `{code, message, module, data, dependencies}`; this layer, applied outermost so it also sees
-//! error envelopes, adds one more top-level field, `total`: **how many results `data` holds.** A list gives its length, a single record
-//! (an EDGAR filing, a company's firmographics, a match report) gives 1, and `null` (no match, or an error) gives 0. A client can read the count
-//! without looking inside `data`, and the same field will carry the full match count once results are paged.
+//! Every answer is the JSON envelope `{code, message, module, data, dependencies}`; this layer, applied outermost so it also sees error
+//! envelopes, adds one more top-level field, `total`: **how many results `data` holds.** A list gives its length; a V3-shaped dictionary that
+//! already counts its results (`data.total`, or EDGAR's `data.totalCompanies`) gives that count; any other single record (a company's firmographics,
+//! a match report) gives 1; and `null` (no match, or an error) gives 0. A client can read the count without looking inside `data`, and the same
+//! field will carry the full match count once results are paged.
 //!
-//! One place, rather than every handler, so no current or future `/V4.0/` route can forget it. It does not touch `/V3.0/`, `/V2.0/` or `/v2/`
-//! (their shape is V3's, byte for byte, and parity-tested), `/health`, the docs or the UI, and it leaves any body that is not an envelope alone.
+//! One place, rather than every handler, so no current or future route can forget it. On the `/V3.0/`, `/V2.0/` and `/v2/` paths it is the one
+//! deliberate, additive difference from V3's exact envelope (recorded in the differences ledger); a client that reads only the fields V3 had
+//! is unaffected. It leaves any body that is not an envelope alone (`/health`, the OpenAPI document), and non-JSON (the docs, the UI).
 
 use axum::{
     body::{to_bytes, Body},
@@ -24,6 +26,8 @@ pub fn total_of(data: &Value) -> u64 {
     match data {
         Value::Array(items) => items.len() as u64,
         Value::Null => 0,
+        // V3's dictionaries already say how many results they hold
+        Value::Object(map) => ["total", "totalCompanies"].iter().find_map(|k| map.get(*k).and_then(Value::as_u64)).unwrap_or(1),
         _ => 1,
     }
 }
@@ -41,11 +45,7 @@ fn with_total(body: &[u8]) -> Option<Vec<u8>> {
 }
 
 pub async fn add_total(request: Request<Body>, next: Next) -> Response {
-    let applies = request.uri().path().starts_with("/V4.0/");
     let response = next.run(request).await;
-    if !applies {
-        return response;
-    }
     let is_json = response
         .headers()
         .get(header::CONTENT_TYPE)
@@ -81,6 +81,8 @@ mod tests {
             .route("/V4.0/notenvelope", get(|| async { Json(json!({"hello": "world"})) }))
             .route("/V4.0/text", get(|| async { "plain" }))
             .route("/V3.0/list", get(move || async move { envelope(json!({"sics": [1, 2], "total": 2})) }))
+            .route("/V3.0/ciks", get(move || async move { envelope(json!({"companies": ["a"], "totalCompanies": 7})) }))
+            .route("/V3.0/record", get(move || async move { envelope(json!({"name": "Apple Inc."})) }))
             .route("/health", get(|| async { Json(json!({"status": "healthy"})) }))
             .layer(axum::middleware::from_fn(add_total))
     }
@@ -122,10 +124,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn v3_shaped_and_other_routes_are_left_alone() {
+    async fn v3_shaped_dictionaries_report_the_count_they_already_carry() {
         let v = json_of("/V3.0/list").await;
-        assert!(v.get("total").is_none(), "V3.0 keeps V3's exact envelope: {v}");
-        assert_eq!(v["data"]["total"], 2);
+        assert_eq!(v["total"], 2);
+        assert_eq!(v["data"], json!({"sics": [1, 2], "total": 2}), "V3's data is untouched");
+        assert_eq!(json_of("/V3.0/ciks").await["total"], 7, "EDGAR's totalCompanies");
+        assert_eq!(json_of("/V3.0/record").await["total"], 1);
+    }
+
+    #[tokio::test]
+    async fn health_is_not_an_envelope_and_is_left_alone() {
         assert!(json_of("/health").await.get("total").is_none());
     }
 
