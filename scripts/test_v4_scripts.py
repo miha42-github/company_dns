@@ -118,7 +118,14 @@ OPENSSL = '''#!/usr/bin/env bash
 exec /usr/bin/openssl "$@"
 '''
 BUILD_STUB = '#!/usr/bin/env bash\necho "$(basename "$0") $* [MODEL_DIR=${MODEL_DIR:-}]" >> "$STUB_STATE/calls.log"\n[ "${STUB_BUILD:-ok}" = fail ] && [[ "$(basename "$0")" == docker-build.sh ]] && exit 1\n[ "${STUB_SMOKE_IMAGE:-ok}" = fail ] && [[ "$(basename "$0")" == docker-smoke.sh ]] && exit 1\nexit 0\n'
-SUITE_STUB = '#!/usr/bin/env python3\nimport json, os, sys\nopen(os.environ["STUB_STATE"] + "/suite.json", "w").write(json.dumps({"argv": sys.argv[1:], "env": {k: os.environ.get(k) for k in ("BASE_URL", "API_TESTS_PROFILE", "API_TESTS_TOKEN")}}))\n'
+SUITE_STUB = '''#!/usr/bin/env python3
+import json, os, socket, sys
+try:
+    resolved = socket.getaddrinfo("company-dns-staging.mediumroast.io", 443)[0][4][0]
+except OSError:
+    resolved = None
+open(os.environ["STUB_STATE"] + "/suite.json", "w").write(json.dumps({"argv": sys.argv[1:], "resolved": resolved, "env": {k: os.environ.get(k) for k in ("BASE_URL", "API_TESTS_PROFILE", "API_TESTS_TOKEN")}}))
+'''
 
 
 def exe(path: Path, text: str) -> None:
@@ -433,6 +440,17 @@ class Deploy(Base):
         self.assertNotIn("s3cr3tT0ken", " ".join(run["argv"]))
         self.assertNotIn("s3cr3tT0ken", "\n".join(self.calls()) + r.stdout + r.stderr, "the token must not appear in any command line, including curl's")
         self.assertIn("s3cr3tT0ken", (self.state / "curl-config").read_text(), "curl gets the credentials on its standard input")
+
+    def test_the_suite_resolves_the_staging_name_to_traefik_for_its_own_process_only(self):
+        # regression from the first real run: the suite ran by name from a node that cannot reach the public address, and every test was skipped with "timed out"
+        self.write_tokens()
+        r = self.run_script("10112026-abc1234", "--suite")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        run = json.loads((self.state / "suite.json").read_text())
+        self.assertEqual(run["resolved"], "192.168.1.200")
+        self.assertEqual(run["env"]["BASE_URL"], "https://company-dns-staging.mediumroast.io", "TLS and routing keep using the real host name")
+        self.assertEqual(run["argv"][:2], ["--layers", "L0,L1,L2,L4"])
+        self.assertFalse(any("/etc/hosts" in c for c in self.calls()), "nothing on the machine is edited")
 
     def test_the_suite_is_off_by_default_and_skipped_without_a_token(self):
         self.write_tokens()
