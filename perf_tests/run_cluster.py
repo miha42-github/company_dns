@@ -21,9 +21,11 @@ import argparse
 import json
 import os
 import re
+import resource
 import subprocess
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -104,6 +106,10 @@ class Cluster:
     def lb_ip(self) -> str:
         return self.run("get", "ingress", DEPLOYMENT, "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}", check=False).strip()
 
+    def placement(self) -> dict:
+        """Pod name -> the node it runs on (what the scheduler chose; the Deployment only prefers to spread pods)."""
+        return {p["metadata"]["name"]: p["spec"].get("nodeName", "") for p in self.pods()}
+
     def apply_patch(self, patch: dict) -> None:
         self.run("patch", "deployment", DEPLOYMENT, "--type", "strategic", "-p", json.dumps(patch))
         self.run("rollout", "status", f"deployment/{DEPLOYMENT}", "--timeout=300s")
@@ -175,27 +181,34 @@ def token(secrets_dir: Path) -> str | None:
 
 
 def run_configs(cluster: Cluster, configs: list[dict], mixes: list[str], levels: list[int], duration: float, warmup: float, pause: float,
-                target: load.Target, auth: str, log=print, settle: float = 10.0) -> dict:
+                target: load.Target, auth: str, log=print, settle: float = 10.0, processes: int = 4) -> dict:
     live = cluster.deployment()
     container = next(c for c in live["spec"]["template"]["spec"]["containers"] if c["name"] == CONTAINER)
     original = {"replicas": live["spec"]["replicas"], "resources": container.get("resources", {}),
                 "replicas_env": next((e.get("value") for e in container.get("env", []) if e["name"] == "COMPANY_DNS_REPLICAS"), str(live["spec"]["replicas"]))}
     prod_before = cluster.restarts(PROD_NAMESPACE)
-    results = {"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "original": original, "runs": [], "aborted": None}
+    results = {"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "original": original, "runs": [], "aborted": None, "placements": {}, "generator_processes": processes}
     try:
         for cfg in configs:
             log(f"== {cfg['name']}: patching the staging Deployment")
             cluster.apply_patch(patch_for(cfg["replicas"], resources_for(cfg), str(cfg["replicas"])))
             cluster.wait_ready()
             time.sleep(settle)
+            results["placements"][cfg["name"]] = cluster.placement()
+            counts = sorted(Counter(results["placements"][cfg["name"]].values()).values(), reverse=True)
+            log(f"   pods per node: {' + '.join(str(c) for c in counts)}")
             for mix in mixes:
                 for n in levels:
                     before = cluster.cgroup()
                     t0 = time.monotonic()
-                    r = load.run_level(target, mix, n, duration, warmup, auth)
+                    cpu0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+                    r = load.run_level(target, mix, n, duration, warmup, auth, processes=processes)
                     seconds = time.monotonic() - t0
+                    cpu1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+                    # CPU the load generator itself used (its worker processes), in cores: near `processes` means the generator, not the server, is the limit
+                    generator = round((cpu1.ru_utime + cpu1.ru_stime - cpu0.ru_utime - cpu0.ru_stime) / seconds, 2) if seconds else None
                     after = cluster.cgroup()
-                    r.update({"config": cfg["name"], "mix": mix, "total_cpu_cores": cfg["replicas"] * cfg["cpu_m"] / 1000.0,
+                    r.update({"config": cfg["name"], "mix": mix, "total_cpu_cores": cfg["replicas"] * cfg["cpu_m"] / 1000.0, "generator_cores": generator,
                               "pods": cgroup_delta(before, after, seconds)})
                     results["runs"].append(r)
                     log(f"   {mix:9s} N={n:<3d} {r['rps']:8.1f} rps  p50 {r['p50_ms']:7.1f}  p95 {r['p95_ms']:7.1f}  p99 {r['p99_ms']:7.1f} ms  "
@@ -225,12 +238,12 @@ def summary(results: dict) -> str:
     if results.get("aborted"):
         lines += [f"**ABORTED: {results['aborted']}**", ""]
     for mix in sorted({r["mix"] for r in results["runs"]}):
-        lines += [f"## {mix}", "", "| configuration | N | requests/s | p50 ms | p95 ms | p99 ms | errors | 429s | CPU cores used | throttled | peak memory MiB |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+        lines += [f"## {mix}", "", "| configuration | N | requests/s | p50 ms | p95 ms | p99 ms | errors | 429s | CPU cores used | throttled | peak memory MiB | generator cores |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
         runs = [r for r in results["runs"] if r["mix"] == mix]
         for r in runs:
             p = r["pods"]
             lines.append(f"| {r['config']} | {r['concurrency']} | {r['rps']} | {r['p50_ms']} | {r['p95_ms']} | {r['p99_ms']} | {r['errors']} | {r['rate_limited']} | "
-                         f"{p['cpu_cores_used']} | {p['throttled_share']} | {p['mem_peak_mib_max']} |")
+                         f"{p['cpu_cores_used']} | {p['throttled_share']} | {p['mem_peak_mib_max']} | {r.get('generator_cores')} |")
         lines += ["", "Best sustained (error rate at most 1% and p95 at most 1 s), by configuration:", "", "| configuration | total CPU limit | best requests/s | at N | p95 ms | requests/s per core of limit |", "|---|---|---|---|---|---|"]
         for cfg in dict.fromkeys(r["config"] for r in runs):
             best = best_sustained([r for r in runs if r["config"] == cfg])
@@ -239,6 +252,13 @@ def summary(results: dict) -> str:
             else:
                 lines.append(f"| {cfg} | | none met the bar | | | |")
         lines.append("")
+    procs = results.get("generator_processes", 4)
+    hot = [r for r in results["runs"] if (r.get("generator_cores") or 0) >= 0.8 * procs]
+    if hot:
+        lines += [f"**The load generator used at least 80% of its {procs} processes in {len(hot)} runs (see the generator cores column): the server may not have been the limit there. Re-run with more --processes or from a bigger machine.**", ""]
+    if results.get("placements"):
+        lines += ["Pods per node (largest first), by configuration:", ""] + [
+            f"- {cfg}: {' + '.join(str(c) for c in sorted(Counter(pods.values()).values(), reverse=True))}" for cfg, pods in results["placements"].items()] + [""]
     lines += ["Production restarts before and after: " + " -> ".join(str(x) for x in results.get("production_restarts_before_after", [])), ""]
     return "\n".join(lines)
 
@@ -251,7 +271,8 @@ def main(argv=None) -> int:
     ap.add_argument("--duration", type=float, default=30.0)
     ap.add_argument("--warmup", type=float, default=5.0)
     ap.add_argument("--pause", type=float, default=10.0)
-    ap.add_argument("--max-concurrency", type=int, default=128)
+    ap.add_argument("--max-concurrency", type=int, default=256, help="refuse higher concurrency (staging shares nodes with production)")
+    ap.add_argument("--processes", type=int, default=4, help="load generator processes (use more for hundreds of concurrent requests)")
     ap.add_argument("--out", type=Path, default=Path("perf_tests/results") / f"cluster-{time.strftime('%Y%m%d-%H%M')}")
     ap.add_argument("--secrets-dir", type=Path, default=Path(os.environ.get("V4_SECRETS_DIR", Path.home() / "company_dns-staging-secrets")))
     ap.add_argument("--dry-run", action="store_true")
@@ -294,7 +315,7 @@ def main(argv=None) -> int:
         return 0
     a.out.mkdir(parents=True, exist_ok=True)
     target = load.Target(f"https://{HOST}", connect_to=lb)
-    results = run_configs(cluster, configs, mixes, a.concurrency, a.duration, a.warmup, a.pause, target, f"{TEST_PROFILE}:{tok}")
+    results = run_configs(cluster, configs, mixes, a.concurrency, a.duration, a.warmup, a.pause, target, f"{TEST_PROFILE}:{tok}", processes=a.processes)
     (a.out / "results.json").write_text(json.dumps(results, indent=1))
     text = summary(results)
     (a.out / "summary.md").write_text(text)

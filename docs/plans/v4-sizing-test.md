@@ -72,3 +72,17 @@ The lookups mix tests the opposite case: small, many-way-parallel queries where 
 - The lookups mix is the cheap routes; the embedding mix is the heavy ones. Real traffic is some blend: `--mixes mixed` approximates one.
 - Memory is checked for headroom only (V4 idles near 160 MiB and peaked under 260 MiB in the earlier matrix); it is not the variable under test.
 - A bigger change than sizing (a pool of embedders, an explicit ONNX thread count) would be a code change and is out of scope here; the results may argue for it.
+
+## Larger replicas (hackathon sizing)
+
+The first round (2x500m, 4x500m, 2x1000m) showed that half-core pods are heavily CPU-throttled and that fewer, larger pods did better at equal total CPU. To test larger pods:
+
+```bash
+python3 perf_tests/run_cluster.py --configs 3x4000m/4Gi,6x2000m/2Gi,12x1000m/1Gi --concurrency 32 64 128 256 --processes 8
+```
+
+- The CPU limit may go up to 4000m per pod and the memory limit up to 16Gi; `COMPANY_DNS_REPLICAS` follows the replica count.
+- `--processes` sets the load generator's worker processes. The summary shows the generator's own CPU use per run and flags runs where it used 80% or more of its processes: there the generator, not the server, may have been the limit.
+- `--max-concurrency` (default 256) guards the nodes that production shares.
+- The scheduler decides which node each pod lands on (the Deployment only prefers to spread pods). The summary gives the pods per node for each configuration (for example `2 + 1`), and `results.json` has the pod-to-node map. A deliberate split by node size needs node labels and node affinity in the manifest; that is a deployment decision, not a test switch.
+- Two things to watch at four cores per pod: embeddings are serialized per pod (one at a time, so N pods run at most N embeddings at once), and query partitions are capped at 4. If `3x4000m` does not beat `6x2000m` on embeddings, the cores of the large pods are not being used.
