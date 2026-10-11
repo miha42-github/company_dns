@@ -3,7 +3,7 @@
 
     python3 api_tests/run.py                                  # everything, against http://localhost:4000
     python3 api_tests/run.py --layers L0,L1                   # just the fast layers
-    python3 api_tests/run.py --base-url https://staging-company-dns.mediumroast.io --profile ID --token TOKEN
+    python3 api_tests/run.py --base-url https://company-dns-staging.mediumroast.io --profile ID --token TOKEN
     python3 api_tests/run.py --network                        # also the tests that make the server call Wikipedia and SEC
     python3 api_tests/run.py --report results/v4.json         # write a JSON report (diff two with compare.py)
     python3 api_tests/run.py test_contract.py                 # or name files directly
