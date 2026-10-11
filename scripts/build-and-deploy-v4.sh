@@ -313,7 +313,7 @@ verify_https() {
   # The name itself resolves to the PUBLIC address, which a machine inside the LAN usually cannot reach (no NAT loopback), so a check
   # by name from here would hang. This still proves the Ingress, the routing and the certificate; reaching the site from the internet
   # is a separate check (docs/v4-bringup.md, step 5).
-  lb="$(k get ingress "${DEPLOYMENT}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+  lb="$(lb_ip)"
   local C=(--connect-timeout 5 --max-time 20)
   if [[ -n "${lb}" ]]; then C+=(--resolve "${STAGING_HOST}:443:${lb}"); say "Verifying through HTTPS, via Traefik at ${lb}"; else say "Verifying through HTTPS (by name)"; fi
   local cert; cert="$(k get certificate "${CERTIFICATE}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
@@ -333,13 +333,30 @@ verify_https() {
   return "${rc}"
 }
 
+# Traefik's LAN address: the Ingress's load balancer IP ("" if it has none yet)
+lb_ip() { k get ingress "${DEPLOYMENT}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true; }
+
+# Run the suite with the staging name resolving to Traefik's LAN address, for this one process: the name itself resolves to the public
+# address, which a machine inside the LAN cannot reach. Only name resolution changes, so TLS (SNI, certificate check) and routing still use
+# the real host name. Python's own resolver is patched; nothing on the machine (no /etc/hosts) is touched.
+RESOLVE_OVERRIDE='import runpy, socket, sys
+ip, host, script = sys.argv[1:4]
+real = socket.getaddrinfo
+def getaddrinfo(h, *a, **k):
+    return real(ip if h == host else h, *a, **k)
+socket.getaddrinfo = getaddrinfo
+sys.argv = [script] + sys.argv[4:]
+runpy.run_path(script, run_name="__main__")'
+
 run_suite() {
-  local token; token="$(token_of "${TEST_PROFILE}")"
+  local token lb; token="$(token_of "${TEST_PROFILE}")"; lb="$(lb_ip)"
   if [[ -z "${token}" ]]; then echo "WARNING: --suite skipped: no ${TEST_PROFILE} token in ${SECRETS_DIR}/tokens" >&2; return 0; fi
   say "Running the API test suite (L0, L1, L2, L4) against ${STAGING_HOST}"
   # the profile and token go in the environment, never on a command line another user could read
+  local run=(python3 "${REPO_ROOT}/api_tests/run.py")
+  [[ -z "${lb}" ]] || run=(python3 -c "${RESOLVE_OVERRIDE}" "${lb}" "${STAGING_HOST}" "${REPO_ROOT}/api_tests/run.py")
   BASE_URL="https://${STAGING_HOST}" API_TESTS_PROFILE="${TEST_PROFILE}" API_TESTS_TOKEN="${token}" \
-    python3 "${REPO_ROOT}/api_tests/run.py" --layers L0,L1,L2,L4 --report "${REPO_ROOT}/v4/.staging-suite.json"
+    "${run[@]}" --layers L0,L1,L2,L4 --report "${REPO_ROOT}/v4/.staging-suite.json"
 }
 
 record() {   # stamp the Deployment with what is running, and append to the build log
