@@ -21,7 +21,7 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 
 | Need | How to check |
 |---|---|
-| A machine that is both a Docker build host and a cluster client: **`cafe-1`** (native amd64, Docker with buildx, `microk8s kubectl`) | `docker buildx version && kubectl get nodes` (or `microk8s kubectl get nodes`) |
+| A machine that is both a Docker build host and a cluster client: **`cafe-1`** (native amd64, Docker with buildx, `microk8s kubectl`). **Do every step on `cafe-1`**: the staging tokens are made there, and the script's checks and `--suite` read them from there. | `docker buildx version && kubectl get nodes` (or `microk8s kubectl get nodes`) |
 | This repository on `main` | `git pull` |
 | A GitHub PAT with `write:packages` in `.env` in the repository root (gitignored) | `grep -c '^GITHUB_PAT=' .env` prints 1 |
 | The SIC data files in `tmp/` and the embedding model in `tmp/.fastembed_cache` | `ls tmp/*.feather tmp/.fastembed_cache`. Anything missing: [`v4-amd64-build-and-compare.md`](plans/v4-amd64-build-and-compare.md) §0 and §1 say where each comes from. |
@@ -50,7 +50,8 @@ again until it is clean. (It reports the sealed credentials as missing until ste
 
 It finds the sealed-secrets controller itself, makes a token for each staging profile (`mediumroast.io`, `staging-test`), and writes:
 
-- `~/company_dns-staging-secrets/tokens`: `profile:TOKEN`, mode 600, **the only copy**. Put each token in the password manager now. Nothing is printed.
+- `~/company_dns-staging-secrets/tokens`: `profile:TOKEN`, mode 600, **the only copy**. Put each token in the password manager now. Nothing is printed. It lives on `cafe-1`, next to the deploy script,
+  so the script's HTTPS checks and `--suite` can use it (staging tokens only; production's never exist here).
 - `k8s/staging/sealedsecret-credentials.yaml`: the hashes, encrypted for the cluster, valid only as `company-dns-staging/company-dns-credentials`.
 
 Then commit **only** the sealed file:
@@ -76,16 +77,16 @@ One command, no questions. About 15 to 25 minutes the first time (the Rust build
 2. **Builds** the `release-small` amd64 image from this checkout, and **smoke-tests** it with no network (a failure stops here, before anything is pushed).
 3. **Pushes** it, then pulls it back with no credentials. **First time only:** a new GHCR package starts private. The script prints the link to the package settings, and waits (up to 10
    minutes) for you to set `company_dns_v4` to **Public**; it continues by itself when the pull works. (The image is meant to be public: production and staging pods pull it without a secret.)
-4. Writes the tag into `k8s/staging/deployment.yaml` (the same convention as the V3 script). **Commit that change** afterwards.
-5. Applies, in order: the namespace, the sealed credentials (waiting for the Secret), the ConfigMaps, the Deployment and Service, then waits for the rollout. **A failed rollout is rolled
+4. Prints what was running and what it is about to deploy. **The repository is not edited**: the tag is put into the Deployment as it is applied, so there is nothing to commit afterwards.
+5. Applies, in order: the namespace, the sealed credentials (waiting for the Secret), the ConfigMaps, the Deployment (with the tag) and Service, then waits for the rollout. **A failed rollout is rolled
    back automatically** and the script exits with an error.
 6. Port-forward smoke test (`/health` and a lookup, no Ingress involved). Only then the Ingress, the HTTP redirect and the Certificate; **the first time** it waits (up to 10 minutes) for the
    certificate to become ready (it needs the DNS name to point at the cluster, which it does).
 7. Verifies through HTTPS: `/health`, a SIC lookup, **401** on `/V4.0/sql` with no credentials, and **200** with the `staging-test` token if `~/company_dns-staging-secrets/tokens` is present.
-8. Prints the summary: tag, image digest, pods, URL, and appends a line to `v4/.build-log`.
+8. **Records** what is running (annotations on the Deployment: tag, commit, image digest, time) and appends a line to `v4/.build-log`; prints the summary (tag, digest, pods, URL).
 
-Useful variants: `--dry-run` (preflight plus a server-side dry run of every manifest, changes nothing; do this once before the first real run), `--no-build TAG` (deploy a tag already
-pushed), `--suite` (also run the API test suite), `--rollback` (back to the previous revision) or `--rollback TAG`.
+Useful variants: `--status` (what is running, from the Deployment's annotations; changes nothing), `--dry-run` (preflight plus a server-side dry run of every manifest, changes nothing; do this once before the first real run), `--no-build TAG` (deploy a tag already
+pushed), `--suite` (also run the API test suite with the staging token, which the script passes through the environment, never on a command line), `--rollback` (back to the previous revision) or `--rollback TAG`.
 
 ## 5. Check by hand that it is really up
 
@@ -93,6 +94,7 @@ pushed), `--suite` (also run the API test suite), `--rollback` (back to the prev
 H=https://company-dns-staging.mediumroast.io
 curl -s $H/health
 curl -s -A "bringup-check/1.0 (you@mediumroast.io)" $H/V4.0/na/sic/code/3571 | head -c 200; echo
+./scripts/build-and-deploy-v4.sh --status             # the tag, commit, image digest and time of what is running (read from the Deployment's annotations)
 kubectl -n company-dns-staging get pods -o wide        # two pods Running and Ready, on different nodes if the scheduler could
 kubectl -n company-dns-staging get certificate         # READY True
 kubectl -n company-dns-staging logs deploy/company-dns --tail=20     # includes the "CPU:" line (no AVX2 on cafe-1 is normal) and the replica and CORS settings
@@ -156,7 +158,8 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 
 | To do this | Run |
 |---|---|
-| Deploy a new build | `./scripts/build-and-deploy-v4.sh` (then commit the tag change in `k8s/staging/deployment.yaml`) |
+| Deploy a new build | `./scripts/build-and-deploy-v4.sh` (nothing to commit: the tag is applied, not written into the repository) |
+| See what is running | `./scripts/build-and-deploy-v4.sh --status` |
 | Redeploy a tag already pushed | `./scripts/build-and-deploy-v4.sh --no-build TAG` |
 | Roll back | `./scripts/build-and-deploy-v4.sh --rollback` |
 | Change the log level on a live pod | Edit the `company-dns-log-level` ConfigMap (step 6.2) |
@@ -189,7 +192,8 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 | The two scripts | `scripts/build-and-deploy-v4.sh`, `scripts/seal-secrets-v4.sh` (the V3 equivalent is `scripts/build-and-deploy.sh`) |
 | Staging configuration (no scripts) | `k8s/staging/` |
 | The image's tooling | `v4/Dockerfile`, `v4/scripts/docker-build.sh`, `v4/scripts/docker-smoke.sh` |
-| What was built and pushed | `v4/.build-log` (gitignored, one JSON line per run) |
-| Tokens | `~/company_dns-staging-secrets/` on the machine that ran the seal script, and the password manager |
+| What is running now | The annotations on the Deployment (`--status` prints them). The committed `k8s/staging/deployment.yaml` keeps the placeholder tag `UNSET` on purpose: do not edit it, and a manual `kubectl apply -f k8s/staging/` cannot replace a good image with a broken one (the placeholder cannot be pulled, and the running pods keep serving). |
+| What was built and pushed | `v4/.build-log` (gitignored, one JSON line per run) on the machine that ran the script |
+| Tokens | `~/company_dns-staging-secrets/` on `cafe-1` (mode 600, staging-only), and the password manager |
 | Settings reference | `v4/README.md`, "Settings reference" |
 | Plans | [`v4-staging-rollout.md`](plans/v4-staging-rollout.md) (the outcome and the verification gate), [`v4-staging-scripts.md`](plans/v4-staging-scripts.md) (the scripts) |

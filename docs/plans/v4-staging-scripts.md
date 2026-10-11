@@ -1,6 +1,6 @@
 # V4 staging scripts: follow the established pattern, automate more, fold into `svc_ctl.sh` later
 
-Status: **Proposed (2026-10-11), nothing implemented yet except the draft bring-up guide [`docs/v4-bringup.md`](../v4-bringup.md).**
+Status: **Approach decided (2026-10-11); nothing implemented yet except the draft bring-up guide [`docs/v4-bringup.md`](../v4-bringup.md).** Decisions in section 5: apply-time tag with the cluster as the record, one run on `cafe-1`, tokens sealed on `cafe-1`.
 Owner: michael.hay@mediumroast.io
 Replaces the script parts of work packages WP2, WP4 and WP5 in [`v4-staging-rollout.md`](v4-staging-rollout.md) (the manifests, WP3, stay as they are).
 Goal: **V4 operable on staging** (`https://company-dns-staging.mediumroast.io`). Some technical debt is accepted to get there; section 6 sketches paying it off.
@@ -32,14 +32,14 @@ Decisions:
 | Positional `TAG`, always pinned, never `latest` | **Keep.** Default `MMDDYYYY-<git sha7>` (decision S3: the tag names its source). |
 | `GITHUB_PAT` from the gitignored `.env`; login to `ghcr.io` automatically | **Keep**, identical. |
 | `==> step` progress lines | **Keep**, the same wording and order. |
-| **Edits the image tag in the Deployment manifest with `sed`**, then applies the directory | **Keep (the established way).** Known debt: it leaves a modified working tree that must be committed, and the V3 manifest once drifted from what production ran. The V4 script prints the reminder and, after a successful rollout, checks that the manifest and the running image agree. |
+| **Edits the image tag in the Deployment manifest with `sed`**, then applies the directory | **Changed on purpose (decided 2026-10-11).** That step leaves a modified working tree that has to be committed, and the V3 manifest once drifted from what production ran. V4 puts the tag in **as the manifest is applied** (`sed` on the stream; the file in the repository keeps its `UNSET` placeholder) and records what is running **in the cluster**: see "Where the truth lives" below. Everything else keeps the V3 shape. |
 | Applies the whole manifest directory, then `rollout status`, then lists pods | **Keep** the shape; section 3 adds ordering and checks around it. |
 
 ## 3. What V4 adds (the lights-out part), without changing the shape
 
 Everything below runs unattended after one command. Nothing asks a question; a problem stops the script with the exact fix.
 
-**`scripts/build-and-deploy-v4.sh [TAG] [--check] [--no-build] [--dry-run] [--rollback [TAG]] [--suite]`**
+**`scripts/build-and-deploy-v4.sh [TAG] [--check] [--status] [--no-build] [--dry-run] [--rollback [TAG]] [--suite]`**
 
 | Step | What it does |
 |---|---|
@@ -47,13 +47,19 @@ Everything below runs unattended after one command. Nothing asks a question; a p
 | 1. Authenticate | As V3. |
 | 2. Build | `v4/scripts/docker-build.sh` (small profile, `linux/amd64`) from the checkout, then `docker-smoke.sh` (no network, offline layers). A failed smoke stops before any push. |
 | 3. Push | As V3, then **pulls the image back with no credentials**. A new GHCR package starts private; if the pull fails the script prints the one-click fix (the package settings URL) and **polls for up to 10 minutes** for it to become public, then continues by itself. |
-| 4. Sync the tag | `sed` into `k8s/staging/deployment.yaml`, as V3. |
-| 5. Apply, in the safe order | namespace, sealed secret (waits for the controller to create the Secret), ConfigMaps, Deployment and Service, `rollout status`. **First run is detected, not flagged** (no Certificate yet): the Ingress, redirect and certificate are applied only after the port-forward smoke test passes, then it waits up to 10 minutes for the certificate to become ready. |
-| 6. Verify | Port-forward smoke test; then through HTTPS: `/health`, a SIC lookup, no credentials gives 401 on `/V4.0/sql`, and with the staging token (if the token file is present) 200. `--suite` runs the API test suite (L0, L1, L2, L4) with the staging profile. |
+| 4. Name the tag | Prints `was running <tag>, deploying <tag>` (read from the Deployment's annotations). **The repository is not edited**: the tag is put into the Deployment as it is applied (step 5). |
+| 5. Apply, in the safe order | namespace, sealed secret (waits for the controller to create the Secret), ConfigMaps, Deployment (tag substituted on the stream) and Service, `rollout status`. **First run is detected, not flagged** (no Certificate yet): the Ingress, redirect and certificate are applied only after the port-forward smoke test passes, then it waits up to 10 minutes for the certificate to become ready. |
+| 6. Verify | Port-forward smoke test; then through HTTPS: `/health`, a SIC lookup, no credentials gives 401 on `/V4.0/sql`, and with the staging token (if the token file is present) 200. `--suite` runs the API test suite (L0, L1, L2, L4) with the staging profile, **passing the profile and token to `run.py` in environment variables** (`API_TESTS_PROFILE`, `API_TESTS_TOKEN`), never on the command line, where another user of the node could read them from the process list. Both the 200 check and `--suite` need the token file; without it they are skipped and the report says so. |
 | 7. Safety net | **A failed rollout is rolled back automatically** (`rollout undo`) and the script exits non-zero. Pod restarts and every non-ready replica are reported. |
-| 8. Report | A short summary (tag, image digest, pods, URL) and one line appended to `v4/.build-log` (gitignored). |
+| 8. Record and report | **Stamps the Deployment** with annotations (`company-dns.mediumroast.io/deployed-tag`, `.../commit`, `.../digest`, `.../deployed-at`) and appends one line to `v4/.build-log` (gitignored). Prints a short summary: tag, digest, pods, URL. |
 
-`--no-build` deploys a tag that is already pushed. `--rollback` undoes the last rollout, or deploys a named tag. `--dry-run` runs the preflight and a server-side dry run of everything. The
+**Where the truth lives (instead of a committed manifest change).** What is running is read with `./scripts/build-and-deploy-v4.sh --status` (or
+`kubectl -n company-dns-staging get deploy company-dns -o jsonpath='{.metadata.annotations}'`): the tag, the commit, the image digest and when. The build log keeps the history. Costs and
+consequences, stated plainly: the repository no longer says which version is deployed (the annotation does); production promotion later reads "the tag that passed staging" from the annotation or the
+build log; and a manual `kubectl apply -f k8s/staging/` is harmless, because the placeholder tag cannot be pulled and `maxUnavailable: 0` keeps the running pods serving. If the repository should
+record deployed versions later (GitOps style), a tag file changed through a pull request can be added without changing this design.
+
+`--no-build` deploys a tag that is already pushed. `--status` prints what is running and changes nothing. `--rollback` undoes the last rollout, or deploys a named tag. `--dry-run` runs the preflight and a server-side dry run of everything. The
 namespace is a constant (`company-dns-staging`): the script cannot touch production, and it never deletes anything.
 
 **`scripts/seal-secrets-v4.sh [--rotate] [--apply]`**
@@ -78,7 +84,7 @@ Idempotent: run again and nothing changes unless you ask (`--rotate`).
 | `k8s/staging/CREDENTIALS.md` | **Removed**; its content is a section of `docs/v4-bringup.md`. |
 | `v4/scripts/build-and-push.sh` | **Removed**; its logic is step 1 to 4. `v4/scripts/docker-build.sh` and `docker-smoke.sh` stay: they are the Dockerfile's own tooling, and the new script calls them. |
 | `k8s/test_staging_scripts.py` | **Moved** to `scripts/test_v4_scripts.py` and re-pointed; the stub `kubectl`, `docker`, `kubeseal` and `curl` approach and every property it pins carry over (namespace constant, no `latest`, order, missing secret stops, rollback, hashes match tokens, tokens never printed, nothing written inside the repo). |
-| `k8s/test_staging_manifests.py` | **Stays** (it tests configuration). Updated for the tag convention: the manifest may carry a real tag after a deploy. |
+| `k8s/test_staging_manifests.py` | **Stays** (it tests configuration). The placeholder-tag test stays as it is: with apply-time substitution the committed Deployment keeps `UNSET`, and a test will pin that. |
 | `k8s/README.md` | Layout section only (configuration), with a pointer to `docs/v4-bringup.md`. |
 
 ## 5. Work, in order
@@ -93,11 +99,16 @@ Idempotent: run again and nothing changes unless you ask (`--rotate`).
 
 B and C can be written in parallel. E is the real test; steps A to D are only ready when E has run.
 
-Open points (my defaults apply unless you say otherwise):
+**Decisions (2026-10-11):**
 
-- **Tag in the manifest.** Follow V3 (`sed` the real tag into `deployment.yaml`; commit afterwards) as decided, accepting the drift risk, rather than my earlier apply-time substitution.
-- **Run location.** One run on `cafe-1` does build, push and deploy. A Mac can still run `--check`, `--dry-run` for `seal-secrets-v4.sh` and the tests.
-- **`--suite`** needs the staging token on the machine running the script; it is off by default.
+- **The tag is applied, not committed.** Apply-time substitution plus annotations on the Deployment and the build log as the record (section 3, "Where the truth lives"). This replaces the V3 convention of editing
+  the manifest, as asked, to take the commit-afterwards step away.
+- **One run on `cafe-1` does build, push and deploy.** What only you can do first: a `GITHUB_PAT` (write:packages) in `.env` on `cafe-1`; `kubeseal` installed there; set the new GHCR package
+  `company_dns_v4` to Public once after the first push (the script waits for it); save the staging tokens in the password manager; merge the pull request that adds the sealed secret; check
+  `kubectl` reaches the cluster from `cafe-1`. The data, the model and buildx are already there.
+- **Tokens are sealed on `cafe-1`**, so `~/company_dns-staging-secrets/tokens` is on the same machine as the script: the automatic 200 check works, and `--suite` (off by default) works when asked, with the
+  token passed through the environment. The cost: plaintext staging tokens (mode 600, staging-only) sit in one home directory on a node that also runs production. A Mac can still run `--check`, the
+  stubbed tests, and the suite by hand with a token from the password manager.
 
 ## 6. Long term: `svc_ctl.sh` as the one entry point (sketch, not for now)
 
@@ -127,7 +138,7 @@ svc_ctl.sh <command> [--service v3|v4] [--env local|staging|prod] [options]
 2. Add target files; make the V4 scripts read them instead of constants.
 3. Teach `svc_ctl.sh` the new commands for `--service v4 --env staging` by calling the V4 scripts' functions.
 4. Bring V3 under the same commands (`--service v3 --env prod`), replacing `scripts/build-and-deploy.sh` with a thin wrapper, then retire it.
-5. Fix the debts: `svc_ctl.sh`'s `latest` tag and its mediumroast.io service name; the `sed`-the-manifest step (replace with apply-time substitution once every service uses the library);
+5. Fix the debts: `svc_ctl.sh`'s `latest` tag and its mediumroast.io service name; bring V3's deploy to the same apply-time tag and annotations method V4 uses (retiring its `sed`-the-manifest step, which is how its manifest drifted from production); a stub-based test file for `svc_ctl.sh` itself.
    a stub-based test file for `svc_ctl.sh` itself.
 
 **Open questions for later:** whether `svc_ctl.sh` should be split by concern once it grows; how production promotion reads "passed staging" (the build log, a tag annotation, or a
