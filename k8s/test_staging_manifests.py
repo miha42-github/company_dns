@@ -147,6 +147,7 @@ class StagingManifests(unittest.TestCase):
         rules = json.loads(cm["data"]["rules.json"])
         self.assertEqual(set(rules["profiles"]), {"mediumroast.io", "staging-test"})
         self.assertEqual(rules["profiles"]["mediumroast.io"]["rate_limit"], {"bypass": True})
+        self.assertEqual(rules["profiles"]["staging-test"]["rate_limit"], {"bypass": True}, "the suite sends hundreds of requests in seconds; a quota throttled it to 429s")
 
     def test_the_log_level_configmap_names_the_file_the_server_watches(self):
         cm = [d for d in of_kind(self.docs, "ConfigMap") if d["metadata"]["name"] == "company-dns-log-level"][0]

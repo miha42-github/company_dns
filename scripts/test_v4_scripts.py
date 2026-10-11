@@ -27,6 +27,12 @@ S="$STUB_STATE"
 echo "kubectl $*" >> "$S/calls.log"
 args="$*"
 case "$args" in *"apply"*"-f -"*) cat > "$S/deploy.stdin";; esac
+if [[ "$args" == "apply "* || "$args" == *" apply "* ]]; then
+  # what real kubectl prints: "<kind>/<name> configured" when it changed something, "unchanged" otherwise
+  if [[ "$args" == *configmap-rules.yaml* ]]; then [ -n "${STUB_RULES_CONFIGURED:-}" ] && echo "configmap/company-dns-rules configured" || echo "configmap/company-dns-rules unchanged"
+  elif [[ "$args" == *"-f -"* ]]; then [ -n "${STUB_DEPLOYMENT_CONFIGURED:-}" ] && echo "deployment.apps/company-dns configured" || echo "deployment.apps/company-dns unchanged"
+  else echo "object unchanged"; fi
+fi
 case "$args" in
   "config current-context") echo stub-context;;
   "get nodes -o name") [ -n "${STUB_NO_CLUSTER:-}" ] && exit 1; echo node/cafe-1;;
@@ -57,6 +63,7 @@ case "$args" in
   *"jsonpath={.spec.replicas}"*) echo 2;;
   *"jsonpath={.status.readyReplicas}"*) echo "${STUB_READY:-2}";;
   *"rollout status"*) [ "${STUB_ROLLOUT:-ok}" = fail ] && exit 1;;
+  *"rollout restart"*) :;;
   *"rollout undo"*) [ "${STUB_UNDO:-ok}" = fail ] && exit 1;;
   *"create secret generic"*)
     for a in "$@"; do case "$a" in --from-file=*) cp "${a#--from-file=credentials=}" "$S/secret-source";; esac; done
@@ -125,6 +132,7 @@ try:
 except OSError:
     resolved = None
 open(os.environ["STUB_STATE"] + "/suite.json", "w").write(json.dumps({"argv": sys.argv[1:], "resolved": resolved, "env": {k: os.environ.get(k) for k in ("BASE_URL", "API_TESTS_PROFILE", "API_TESTS_TOKEN")}}))
+sys.exit(1 if os.environ.get("STUB_SUITE_FAIL") else 0)
 '''
 
 
@@ -451,6 +459,31 @@ class Deploy(Base):
         self.assertEqual(run["env"]["BASE_URL"], "https://company-dns-staging.mediumroast.io", "TLS and routing keep using the real host name")
         self.assertEqual(run["argv"][:2], ["--layers", "L0,L1,L2,L4"])
         self.assertFalse(any("/etc/hosts" in c for c in self.calls()), "nothing on the machine is edited")
+
+    def test_a_failing_suite_is_reported_as_a_suite_failure_not_an_unexpected_one(self):
+        # regression: the first real --suite run ended with "unexpected failure at line ..." instead of saying the tests failed
+        self.write_tokens()
+        r = self.run_script("10112026-abc1234", "--suite", STUB_SUITE_FAIL="1")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("the API test suite reported failures", r.stderr)
+        self.assertNotIn("unexpected failure", r.stderr)
+        self.assertIn("is running", r.stdout, "the deployment summary still prints")
+
+    def test_changed_rules_restart_the_pods_when_the_deployment_itself_did_not_change(self):
+        # regression: a change to the profiles' rules was applied to the ConfigMap but the pods kept the old rules until something else restarted them
+        r = self.run_script("10112026-abc1234", STUB_RULES_CONFIGURED="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("restarting the pods", r.stdout)
+        i_restart = self.index("rollout restart deployment/company-dns")
+        self.assertLess(self.index("apply -f -"), i_restart)
+        self.assertLess(i_restart, self.index("rollout status"))
+
+    def test_no_restart_when_nothing_changed_or_the_deployment_is_rolling_anyway(self):
+        self.run_script("10112026-abc1234")
+        self.assertNotIn("rollout restart", "\n".join(self.calls()))
+        (self.state / "calls.log").write_text("")
+        self.run_script("10112026-abc1234", STUB_RULES_CONFIGURED="1", STUB_DEPLOYMENT_CONFIGURED="1")
+        self.assertNotIn("rollout restart", "\n".join(self.calls()))
 
     def test_the_suite_is_off_by_default_and_skipped_without_a_token(self):
         self.write_tokens()
