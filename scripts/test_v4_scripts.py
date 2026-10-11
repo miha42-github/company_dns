@@ -302,6 +302,8 @@ class Deploy(Base):
         r = self.run_script("10112026-abc1234", STUB_PULL_FAILS="2")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Change visibility", r.stdout)
+        self.assertIn("https://github.com/miha42-github?tab=packages", r.stdout)
+        self.assertIn("company_dns%2Fcompany_dns_v4", r.stdout, "the link must name the V4 package, not V3's")
         self.assertGreaterEqual(len([c for c in self.calls() if c.startswith("docker pull")]), 3)
         self.assertFalse(any("DOCKER_CONFIG=]" in c for c in self.calls() if c.startswith("docker pull")), "the check must use an empty Docker config")
 

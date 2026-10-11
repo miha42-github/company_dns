@@ -51,6 +51,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 
 REGISTRY="ghcr.io/miha42-github/company_dns"
+OWNER="miha42-github"   # the GitHub account that owns the packages (the part after ghcr.io/)
 IMAGE_NAME="company_dns_v4"
 NAMESPACE="company-dns-staging"
 DEPLOYMENT="company-dns"
@@ -228,8 +229,11 @@ push_image() {
   anon="$(mktemp -d)"
   until DOCKER_CONFIG="${anon}" docker pull "${FULL_IMAGE}" >/dev/null 2>&1; do
     if [[ ${tries} -eq 0 ]]; then
-      echo "    A new GHCR package starts private. Make it public once: GitHub > your profile or organisation > Packages >"
-      echo "    company_dns/${IMAGE_NAME} > Package settings > Change visibility > Public."
+      echo "    A new GHCR package starts private. Make it public once. It is a DIFFERENT package from V3's (company_dns/company_dns): company_dns/${IMAGE_NAME}."
+      echo "    A private package is visible only to its owner, and it is not listed on the repository's Packages page until it is linked to the repository, so look under the owner's profile:"
+      echo "      https://github.com/${OWNER}?tab=packages   (sign in as the owner)"
+      echo "      or directly: https://github.com/users/${OWNER}/packages/container/package/company_dns%2F${IMAGE_NAME}"
+      echo "    Then: Package settings > Danger Zone > Change visibility > Public (it asks you to type the package name)."
       echo "    Waiting up to $((WAIT_PUBLIC_SECS / 60)) minutes for that; this script continues by itself."
     fi
     [[ ${tries} -lt ${max} ]] || { rm -rf "${anon}"; die "the image is still not pullable without credentials after waiting; make the package public and run again with: --no-build ${TAG}"; }
