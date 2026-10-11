@@ -35,7 +35,7 @@ if [[ "$args" == "apply "* || "$args" == *" apply "* ]]; then
 fi
 case "$args" in
   "config current-context") echo stub-context;;
-  "get nodes -o name") [ -n "${STUB_NO_CLUSTER:-}" ] && exit 1; echo node/cafe-1;;
+  "get nodes -o name") [ -n "${STUB_NO_CLUSTER:-}" ] && exit 1; echo node/node-a;;
   "get ingressclass traefik") [ -n "${STUB_NO_INGRESSCLASS:-}" ] && exit 1;;
   "get clusterissuer letsencrypt-prod") [ -n "${STUB_NO_ISSUER:-}" ] && exit 1;;
   "get svc -A --no-headers")
@@ -45,7 +45,7 @@ case "$args" in
     # a real cluster lists far more services than fit in a pipe buffer, after the match
     [ -n "${STUB_BIG_SVC:-}" ] && for i in $(seq 1 6000); do printf 'ns%d   svc-%d   ClusterIP   10.1.%d.%d   <none>   80/TCP   1d\n' $i $i $((i / 250)) $((i % 250)); done;;
   *"get secret company-dns-credentials"*) [ "${STUB_SECRET:-present}" = missing ] && exit 1; echo secret;;
-  *"get ingress company-dns -o jsonpath"*) [ -n "${STUB_NO_LB:-}" ] && exit 0; echo 192.168.1.200;;
+  *"get ingress company-dns -o jsonpath"*) [ -n "${STUB_NO_LB:-}" ] && exit 0; echo 192.0.2.10;;
   *"get certificate company-dns-staging-io-tls -o jsonpath"*)
     if [ -n "${STUB_CERT_FALSE_POLLS:-}" ]; then
       n=$(cat "$S/cert-polls" 2>/dev/null || echo 0); echo $((n + 1)) > "$S/cert-polls"
@@ -117,7 +117,7 @@ esac
 printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata:\n  name: company-dns-credentials\n  namespace: company-dns-staging\nspec:\n  encryptedData:\n    credentials: AgBy3i4OJSWK%s\n' "$RANDOM"
 '''
 PYTHON = '''#!/usr/bin/env bash
-if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; echo "${STUB_DNS_IP:-192.168.1.200}"; exit 0; fi
+if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; echo "${STUB_DNS_IP:-192.0.2.10}"; exit 0; fi
 exec "%s" "$@"
 ''' % sys.executable
 OPENSSL = '''#!/usr/bin/env bash
@@ -232,12 +232,12 @@ class Deploy(Base):
 
     def test_a_public_address_for_the_host_warns_about_the_certificate_check_but_does_not_stop(self):
         # regression from the first real run: the host resolved to the public address, cert-manager's self-check from inside the cluster timed out
-        r = self.run_script("--check", STUB_DNS_IP="75.80.225.46")
+        r = self.run_script("--check", STUB_DNS_IP="198.51.100.7")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("75.80.225.46", r.stderr)
+        self.assertIn("198.51.100.7", r.stderr)
         self.assertIn("hairpin", r.stderr)
-        self.assertIn("192.168.1.200", r.stderr)
-        r = self.run_script("--check", STUB_DNS_IP="192.168.1.200")
+        self.assertIn("load balancer address", r.stderr)
+        r = self.run_script("--check", STUB_DNS_IP="10.0.0.10")  # a private address: no warning
         self.assertNotIn("hairpin", r.stderr)
 
     def test_an_unreachable_cluster_is_reported(self):
@@ -409,10 +409,10 @@ class Deploy(Base):
         https = [c for c in self.calls() if c.startswith("curl") and "https://company-dns-staging.mediumroast.io" in c]
         self.assertGreaterEqual(len(https), 3)
         for c in https:
-            self.assertIn("--resolve company-dns-staging.mediumroast.io:443:192.168.1.200", c)
+            self.assertIn("--resolve company-dns-staging.mediumroast.io:443:192.0.2.10", c)
             self.assertIn("--max-time 20", c)
             self.assertIn("--connect-timeout 5", c)
-        self.assertIn("via Traefik at 192.168.1.200", r.stdout)
+        self.assertIn("via Traefik at 192.0.2.10", r.stdout)
         (self.state / "calls.log").write_text("")
         r = self.run_script("10112026-abc1234", STUB_NO_LB="1")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
@@ -455,7 +455,7 @@ class Deploy(Base):
         r = self.run_script("10112026-abc1234", "--suite")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         run = json.loads((self.state / "suite.json").read_text())
-        self.assertEqual(run["resolved"], "192.168.1.200")
+        self.assertEqual(run["resolved"], "192.0.2.10")
         self.assertEqual(run["env"]["BASE_URL"], "https://company-dns-staging.mediumroast.io", "TLS and routing keep using the real host name")
         self.assertEqual(run["argv"][:2], ["--layers", "L0,L1,L2,L4"])
         self.assertFalse(any("/etc/hosts" in c for c in self.calls()), "nothing on the machine is edited")

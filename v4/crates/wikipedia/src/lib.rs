@@ -155,7 +155,7 @@ mod tests {
     use std::time::Duration;
 
     /// The Wikipedia lookup relies on this: a lookup that fails is not stored, so the next request fetches again instead of being served the
-    /// failure (or a degraded answer) for the cache's lifetime. Found on cafe-1 (2026-10-10) when an answer built from an error body was cached.
+    /// failure (or a degraded answer) for the cache's lifetime. Found on the build node (2026-10-10) when an answer built from an error body was cached.
     #[tokio::test]
     async fn a_failed_load_is_not_cached_and_the_next_request_loads_again() {
         let cache = new_cache::<String, Arc<u32>>(10, Duration::from_secs(3600));

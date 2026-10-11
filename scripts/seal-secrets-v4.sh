@@ -71,7 +71,7 @@ else KUBECTL=(); fi
 
 # --- Preflight: every problem at once, before anything changes ---
 PROBLEMS=()
-[[ ${#KUBECTL[@]} -gt 0 ]] || PROBLEMS+=("kubectl not found (or microk8s kubectl): run this on a machine that reaches the cluster, such as cafe-1")
+[[ ${#KUBECTL[@]} -gt 0 ]] || PROBLEMS+=("kubectl not found (or microk8s kubectl): run this on a machine that reaches the cluster, such as the build node")
 if [[ ${#KUBECTL[@]} -gt 0 ]] && ! "${KUBECTL[@]}" get nodes -o name >/dev/null 2>&1; then
   PROBLEMS+=("the cluster is not reachable with ${KUBECTL[*]} (check the kubeconfig and context)")
 fi

@@ -143,8 +143,8 @@ showing the real node names below):
 
 - **Nodes**: two worker nodes actually schedule pods — `host-1`/
   `host-2` in the migration doc's own text (the *real* live cluster
-  names, confirmed since: `cafe-1`, `espresso-1`). A third node
-  (`cortado-1`) is control-plane-only, ARM/Jetson hardware, and does
+  names differ; they are not listed in this open-source repository). A third node
+  is control-plane-only, ARM/Jetson hardware, and does
   **not** schedule application workloads. **This is a hard, small
   capacity constraint** — prod already reserves 4 replicas at
   100m–500m CPU / 256Mi–1Gi memory each (`k8s/prod/deployment.yaml`)
@@ -159,7 +159,7 @@ showing the real node names below):
   company_dns pods show up in `observability` automatically via
   node-exporter/kube-state-metrics, no extra work needed.
 - **Ingress**: one Traefik `LoadBalancer` (`ingress` namespace,
-  external IP `192.168.1.200`, ports `80`/`443`) serves every app on
+  external IP `<traefik-lan-ip>`, ports `80`/`443`) serves every app on
   the cluster via per-namespace `Ingress`/`Middleware` resources,
   `ingressClassName: traefik` (three IngressClass names exist —
   `nginx`/`public`/`traefik` — but all point at the same controller;

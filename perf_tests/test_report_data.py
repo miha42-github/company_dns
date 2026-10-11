@@ -126,9 +126,9 @@ class Matrix(unittest.TestCase):
             run.mkdir(parents=True)
             (run / "sequential-cold.json").write_text(json.dumps({"sequential_results": []}))
             (run / "resources.csv").write_text("t_seconds,cpu_percent,mem_mib\n0,5.0,100\n1,7.0,110\n")
-            (root / "manifest.json").write_text(json.dumps({"host": "cafe-1"}))
+            (root / "manifest.json").write_text(json.dumps({"host": "bench-host"}))
             m = rd.load_matrix(root)
-            self.assertEqual(m["manifest"]["host"], "cafe-1")
+            self.assertEqual(m["manifest"]["host"], "bench-host")
             r = m["runs"][("limited", "v3")][0]
             self.assertEqual((r["k"], r["cold"], r["warm"]), (1, {"sequential_results": []}, None))
             self.assertEqual(r["resources"][1], {"t": 1.0, "cpu": 7.0, "mem": 110.0})

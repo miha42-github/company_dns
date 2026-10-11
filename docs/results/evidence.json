@@ -13,7 +13,7 @@
     "status": "measured",
     "claim": "The V3 image built before the Wikipedia v2 backend cut-over timed out on Wikipedia and merged lookups; the current production image does not",
     "date": "2026-10-10",
-    "method": "the same perf_tests/baseline.py matrix on cafe-1 at 500m CPU and 1Gi against each V3 image; 30 s timeout on the old image, 120 s on the current one",
+    "method": "the same perf_tests/baseline.py matrix on the build node at 500m CPU and 1Gi against each V3 image; 30 s timeout on the old image, 120 s on the current one",
     "old_image": "09262026-5", "old_calls": 208, "old_errors": 63,
     "current_image": "09272026-1", "current_calls": 208, "current_errors": 0,
     "cause": "V3 commit f65595b (2026-09-27 06:15) replaced the wptools request layer with direct narrowed requests",

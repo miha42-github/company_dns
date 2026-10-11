@@ -4,13 +4,13 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 
 > **Status: scripts written and tested against stubs (2026-10-11); not yet run for real.** `scripts/seal-secrets-v4.sh` and `scripts/build-and-deploy-v4.sh` (plan:
 > [`docs/plans/v4-staging-scripts.md`](plans/v4-staging-scripts.md)) pass 45 stub tests, but no script has yet talked to the registry or the cluster. The guide is marked
-> **proven** (with a date) only after someone has followed it end to end on `cafe-1` (plan step E), fixing whatever it got wrong.
+> **proven** (with a date) only after someone has followed it end to end on the build node (plan step E), fixing whatever it got wrong.
 
 ## What you end up with
 
 | | |
 |---|---|
-| URL | `https://company-dns-staging.mediumroast.io` (Traefik at `192.168.1.200`, certificate from `letsencrypt-prod`) |
+| URL | `https://company-dns-staging.mediumroast.io` (Traefik at `<traefik-lan-ip>`, certificate from `letsencrypt-prod`) |
 | Workload | Namespace `company-dns-staging`; Deployment `company-dns`, **2 replicas**, port 4000, 100m / 256Mi to 500m / 1Gi each, read-only root filesystem, UID 10001 |
 | Image | `ghcr.io/miha42-github/company_dns/company_dns_v4:MMDDYYYY-<sha7>` (public, `linux/amd64`, the `release-small` profile, data and model inside) |
 | Config | `k8s/staging/` (manifests only): rules and log level ConfigMaps, the sealed credentials |
@@ -21,16 +21,16 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 
 | Need | How to check |
 |---|---|
-| A machine that is both a Docker build host and a cluster client: **`cafe-1`** (native amd64, Docker with buildx, `microk8s kubectl`). **Do every step on `cafe-1`**: the staging tokens are made there, and the script's checks and `--suite` read them from there. | `docker buildx version && kubectl get nodes` (or `microk8s kubectl get nodes`) |
+| A machine that is both a Docker build host and a cluster client: **the build node** (a native amd64 worker with Docker and buildx, and `microk8s kubectl`; this guide calls it "the build node"). **Do every step on the build node**: the staging tokens are made there, and the script's checks and `--suite` read them from there. | `docker buildx version && kubectl get nodes` (or `microk8s kubectl get nodes`) |
 | This repository on `main` | `git pull` |
 | A GitHub PAT with `write:packages` in `.env` in the repository root (gitignored) | `grep -c '^GITHUB_PAT=' .env` prints 1 |
 | The SIC data files in `tmp/` and the embedding model in `tmp/.fastembed_cache` | `ls tmp/*.feather tmp/.fastembed_cache`. Anything missing: [`v4-amd64-build-and-compare.md`](plans/v4-amd64-build-and-compare.md) §0 and §1 say where each comes from. |
 | `kubeseal` (for step 3) | `kubeseal --version`. Install: the release binary from github.com/bitnami-labs/sealed-secrets, for the controller's major version. |
 | `openssl`, `python3`, `curl`, `dig` | `openssl version && python3 --version` |
-| DNS: `company-dns-staging.mediumroast.io` resolves to the public address (**done 2026-10-10**, it points where production does); ports 80 and 443 are forwarded from the router (Firewalla) to Traefik at `192.168.1.200`; **and CoreDNS answers the name with `192.168.1.200` inside the cluster** (the `hosts` block below). Without the CoreDNS block the certificate never issues: cert-manager checks its own challenge from inside the cluster, and a pod cannot reach the public address (the router does not loop LAN traffic back). Found on the first real run, after the port forward moved to `192.168.1.200`; it affects every name served by the cluster and every certificate renewal (the earliest was due 2026-10-19). | `kubectl -n kube-system get cm coredns -o yaml \| grep -A3 hosts` shows the block, and a pod resolves the name to `192.168.1.200` (below) |
+| DNS: `company-dns-staging.mediumroast.io` resolves to the public address (**done 2026-10-10**, it points where production does); ports 80 and 443 are forwarded from the router (Firewalla) to Traefik at `<traefik-lan-ip>`; **and CoreDNS answers the name with `<traefik-lan-ip>` inside the cluster** (the `hosts` block below). Without the CoreDNS block the certificate never issues: cert-manager checks its own challenge from inside the cluster, and a pod cannot reach the public address (the router does not loop LAN traffic back). Found on the first real run, after the port forward moved to `<traefik-lan-ip>`; it affects every name served by the cluster and every certificate renewal (the earliest was due 2026-10-19). | `kubectl -n kube-system get cm coredns -o yaml \| grep -A3 hosts` shows the block, and a pod resolves the name to `<traefik-lan-ip>` (below) |
 | Roughly 20 GB free disk and 16 GB memory for the build | `df -h /var/lib/docker && free -g` |
 
-Nothing about V4 needs AVX2: the image loads Microsoft's ONNX Runtime at run time, so it runs on `cafe-1`'s 2013 Xeons. Docker and buildx details for the nodes are in
+Nothing about V4 needs AVX2: the image loads Microsoft's ONNX Runtime at run time, so it runs on the build node's 2013 Xeons. Docker and buildx details for the nodes are in
 [`v4-amd64-build-and-compare.md`](plans/v4-amd64-build-and-compare.md).
 
 ### The CoreDNS block (once per cluster, and when a new site is added)
@@ -43,16 +43,16 @@ Add this above the `forward` line, listing **every** name the cluster serves tha
 
 ```
     hosts {
-      192.168.1.200 company-dns-staging.mediumroast.io company-dns.mediumroast.io dev.mediumroast.io staging.mediumroast.io www.mediumroast.io dex.mediumroast.io mediumroast.io
+      <traefik-lan-ip> company-dns-staging.mediumroast.io company-dns.mediumroast.io dev.mediumroast.io staging.mediumroast.io www.mediumroast.io dex.mediumroast.io mediumroast.io
       fallthrough
     }
 ```
 
-then `kubectl -n kube-system rollout restart deploy/coredns`. Check from a pod:
+then `kubectl -n kube-system rollout restart deploy/coredns`. `<traefik-lan-ip>` is the Ingress controller's LAN address: `kubectl get ingress -n company-dns-staging` shows it in the ADDRESS column. Check from a pod:
 
 ```bash
 kubectl -n company-dns-staging run c1 --rm -it --restart=Never --image=curlimages/curl -- curl -sv -m 10 http://company-dns-staging.mediumroast.io/.well-known/acme-challenge/test
-# resolves to 192.168.1.200 and answers a 301 redirect to https (the path is not a real challenge token)
+# resolves to <traefik-lan-ip> and answers a 301 redirect to https (the path is not a real challenge token)
 ```
 
 Re-enabling MicroK8s DNS resets manual CoreDNS edits: repeat this step if you ever run `microk8s disable dns`. (The router doing NAT loopback would make this unnecessary.)
@@ -74,7 +74,7 @@ again until it is clean. (It reports the sealed credentials as missing until ste
 
 It finds the sealed-secrets controller itself, makes a token for each staging profile (`mediumroast.io`, `staging-test`), and writes:
 
-- `~/company_dns-staging-secrets/tokens`: `profile:TOKEN`, mode 600, **the only copy**. Put each token in the password manager now. Nothing is printed. It lives on `cafe-1`, next to the deploy script,
+- `~/company_dns-staging-secrets/tokens`: `profile:TOKEN`, mode 600, **the only copy**. Put each token in the password manager now. Nothing is printed. It lives on the build node, next to the deploy script,
   so the script's HTTPS checks and `--suite` can use it (staging tokens only; production's never exist here).
 - `k8s/staging/sealedsecret-credentials.yaml`: the hashes, encrypted for the cluster, valid only as `company-dns-staging/company-dns-credentials`.
 
@@ -121,7 +121,7 @@ curl -s -A "bringup-check/1.0 (you@mediumroast.io)" $H/V4.0/na/sic/code/3571 | h
 ./scripts/build-and-deploy-v4.sh --status             # the tag, commit, image digest and time of what is running (read from the Deployment's annotations)
 kubectl -n company-dns-staging get pods -o wide        # two pods Running and Ready, on different nodes if the scheduler could
 kubectl -n company-dns-staging get certificate         # READY True
-kubectl -n company-dns-staging logs deploy/company-dns --tail=20     # includes the "CPU:" line (no AVX2 on cafe-1 is normal) and the replica and CORS settings
+kubectl -n company-dns-staging logs deploy/company-dns --tail=20     # includes the "CPU:" line (no AVX2 on the build node is normal) and the replica and CORS settings
 ```
 
 **From outside your network** (a phone on cellular, Wi-Fi off), open `$H/health` (a small JSON answer), then `$H/` (it redirects to the web UI at `/ui/`, as V3's root page did; before 2026-10-11 the bare URL was a 404, which looks like a failure but was only a missing route). The checks above run from inside the LAN; this is the one that shows the internet path works.
@@ -208,7 +208,7 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 | The server exits at start with "rules name profile(s) with no credential" | `configmap-rules.yaml` names a profile with no token: run `seal-secrets-v4.sh` again (it covers every profile in the rules). |
 | The server exits at start with a message about `COMPANY_DNS_REPLICAS` or `COMPANY_DNS_CORS_ORIGINS` | A bad value: the message says what is accepted (`v4/README.md`). |
 | Certificate stays `False`, and `describe challenge` says "failed to perform self check GET request ... context deadline exceeded" | **No route from a pod to the public address** (hit on the first real run): add the name to the CoreDNS `hosts` block (prerequisites above) and restart CoreDNS. cert-manager retries by itself; to hurry it, `kubectl -n company-dns-staging delete challenge --all` (cert-manager recreates it). Then re-run `./scripts/build-and-deploy-v4.sh --no-build TAG` (the tag is in the running Deployment's image): it waits for the certificate if needed and continues with the HTTPS checks. |
-| The challenge is `pending` with Let's Encrypt's own error, for example "Timeout during connect (likely firewall problem)" | Port 80 is not reaching Traefik from the internet: check the router's forward of 80 (and 443) to `192.168.1.200`, and test from a phone on cellular: `http://company-dns-staging.mediumroast.io/.well-known/acme-challenge/test` should answer, not hang. |
+| The challenge is `pending` with Let's Encrypt's own error, for example "Timeout during connect (likely firewall problem)" | Port 80 is not reaching Traefik from the internet: check the router's forward of 80 (and 443) to `<traefik-lan-ip>`, and test from a phone on cellular: `http://company-dns-staging.mediumroast.io/.well-known/acme-challenge/test` should answer, not hang. |
 | Certificate stays `False` for another reason | DNS does not point at the cluster, or the HTTP-01 challenge cannot reach Traefik: `kubectl -n company-dns-staging describe certificate,challenge`. The workload still works through a port-forward meanwhile. |
 | 429s on your own checks | Use a self-identifying `User-Agent` (`name/1.0 (you@example.com)`) or the `staging-test` credentials; an anonymous caller gets 5 requests a minute. |
 | 401 with the right token | The tokens file and the sealed secret are from different runs: seal again from the current tokens, redeploy (pods read credentials only at start). |
@@ -223,6 +223,6 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 | The image's tooling | `v4/Dockerfile`, `v4/scripts/docker-build.sh`, `v4/scripts/docker-smoke.sh` |
 | What is running now | The annotations on the Deployment (`--status` prints them). The committed `k8s/staging/deployment.yaml` keeps the placeholder tag `UNSET` on purpose: do not edit it, and a manual `kubectl apply -f k8s/staging/` cannot replace a good image with a broken one (the placeholder cannot be pulled, and the running pods keep serving). |
 | What was built and pushed | `v4/.build-log` (gitignored, one JSON line per run) on the machine that ran the script |
-| Tokens | `~/company_dns-staging-secrets/` on `cafe-1` (mode 600, staging-only), and the password manager |
+| Tokens | `~/company_dns-staging-secrets/` on the build node (mode 600, staging-only), and the password manager |
 | Settings reference | `v4/README.md`, "Settings reference" |
 | Plans | [`v4-staging-rollout.md`](plans/v4-staging-rollout.md) (the outcome and the verification gate), [`v4-staging-scripts.md`](plans/v4-staging-scripts.md) (the scripts) |

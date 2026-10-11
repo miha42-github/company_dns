@@ -30,7 +30,7 @@ One run is one image started from nothing, measured in a fixed order. Nothing is
 **Images measured (one at a time, never together):** V3 `09272026-1` (the production image), V4 `release-lean`, V4 `release-small`.
 **Regimes:** (a) the production pods' limits, 500m CPU and 1Gi; (b) headroom, 16 CPUs and 64Gi, which is what the large nodes can do.
 **Repeats:** three full clean runs per image per regime, in rotated order (V3, lean, small; then lean, small, V3; then small, V3, lean) so that drift on the node (load, upstream weather) is spread evenly.
-**Host:** `cafe-1` first (amd64, the production hardware class), the second node after to check repeatability; the Mac Studio for arm64 later. Results from different hosts are never mixed in one chart.
+**Host:** the build node first (amd64, the production hardware class), the second node after to check repeatability; the Mac Studio for arm64 later. Results from different hosts are never mixed in one chart.
 **V4 access:** the throwaway no-rate-limit profile, so the limiter is not what is measured. V3 has none in force.
 **Fixed inputs:** the ten companies in `perf_tests/companies.py`, the identifying User-Agent, a 120 s request timeout (so slow is not mistaken for failed), the same egress for both.
 
@@ -98,7 +98,7 @@ adds a micro-benchmark if a claim needs it.
 | 1 | `report_data.py` with unit tests, developed on the existing result files (V3 t120, V4 cold and warm) | Mac | **Done 2026-10-10**: `perf_tests/report_data.py`, 13 tests |
 | 2 | `run_matrix.py` with a dry-run mode and a tiny fixture run on a Mac container | Mac | **Done 2026-10-10**: `perf_tests/run_matrix.py`, 8 tests, and a one-image, one-repeat trial on the Mac that `report_data.load_matrix` reads back. `baseline.py` gained `--skip-sequential` and `--endpoints`. Not yet run with V3 or on an amd64 node |
 | 3 | `report.py` and the figure set, drawn first from the existing files and the 2026-10-10 parity and suite runs | Mac | **Done 2026-10-10**: `perf_tests/report.py` (12 pictures, PNG or JPG, `--draft` watermark; titles and phrases computed from the data; a figure whose inputs are missing is skipped and listed in `index.md`), `docs/results/evidence.json` and `differences.json` (each entry with its source), 10 tests. Draft pictures reviewed on a scratch matrix of real files only: V4 lean from the Mac trial, V3 stood in by the old Sep 28 file (layout check, not a comparison). Needs `perf_tests/.venv` (matplotlib, numpy) |
-| 4 | Run the matrix on `cafe-1` (about 3 images x 2 regimes x 3 repeats; hours, unattended) | node | `matrix-*` directory |
+| 4 | Run the matrix on the build node (about 3 images x 2 regimes x 3 repeats; hours, unattended) | node | `matrix-*` directory |
 | 5 | Copy the results back, generate the final figures, review each against its data | Mac | `docs/results/<date>/` |
 | 6 | Decide the cold-pass method (restart per route or ordered sets) | Mac trial | **Decided 2026-10-10: restart the container before each route's cold set.** A trial with ordered sets showed merged firmographics at 15.7 ms "cold" because the Wikipedia route had just warmed its cache; with a restart per route it is 796 ms (its true Wikipedia cost) and the warm pass 15.6 ms. |
 | 7 | Repeat on the second node; arm64 on the Mac Studio when wanted | nodes | repeatability chart |

@@ -94,7 +94,7 @@ a monthly cron (`0 12 1 * *`) and on manual dispatch, via
 |---|---|
 | Ingress controller | Traefik (`ingressClassName: traefik`) |
 | TLS | cert-manager, `ClusterIssuer/letsencrypt-prod` (cluster-wide, already exists — HTTP-01 via Traefik) |
-| LoadBalancer IPs | MetalLB pool `192.168.1.200-192.168.1.219` |
+| LoadBalancer IPs | MetalLB pool `<metallb-pool>` |
 | Scheduling | 2 effective worker nodes: `host-1`, `host-2` (pod anti-affinity spreads replicas across them) |
 | Secrets | Bitnami SealedSecrets controller (used for private creds; not needed here — image is public) |
 | Existing namespace pattern | one namespace per app+tier, e.g. `mediumroast-web` |
@@ -142,7 +142,7 @@ one new item to decide (ingress class choice).
 
 - **Nodes** (`get nodes -o wide`): 3 control-plane nodes total —
   `host-1` and `host-2` are `control-plane,worker` (schedule pods, Ubuntu
-  24.04, v1.35.6); `cortado-1` is `control-plane` only (no `worker` role,
+  24.04, v1.35.6); the control-plane node is `control-plane` only (no `worker` role,
   running on a Jetson/tegra kernel) and does **not** schedule regular
   workloads. Confirms: pod anti-affinity should target `host-1` /
   `host-2` as originally planned — no topology change.
@@ -155,7 +155,7 @@ one new item to decide (ingress class choice).
   node-exporter/kube-state-metrics, no extra work needed to get basic
   cluster metrics).
 - **Ingress**: single `traefik` Service (`LoadBalancer`) in the `ingress`
-  namespace, external IP `192.168.1.200`, ports `80`/`443` (nodePorts
+  namespace, external IP `<traefik-lan-ip>`, ports `80`/`443` (nodePorts
   `31103`/`32705`). Matches the mediumroast.io doc's MetalLB pool.
   **Resolved**: `get ingressclass` shows three IngressClasses —
   `nginx`, `public`, `traefik` — but all three point to the exact same
@@ -527,7 +527,7 @@ kubectl -n company-dns get certificate
 instructions" → "Phase 1" below for the exact record edit. Then:
 
 ```bash
-dig @1.1.1.1 +short company-dns.mediumroast.io
+dig @<public-resolver> +short company-dns.mediumroast.io
 
 kubectl -n company-dns get certificate -w
 # wait for READY=True, then Ctrl-C
@@ -612,11 +612,11 @@ back works instantly *only if* the TXT verification record is still there —
 Azure re-checks it.
 
 **Reference pattern already working on this cluster**: `www.mediumroast.io`
-is a plain Namecheap **Dynamic DNS A record**, currently `98.150.72.44`
+is a plain Namecheap **Dynamic DNS A record**, currently `<public-ip>`
 (the home router's public IP, auto-updated by a DDNS client whenever the IP
 changes — see `~/dev/mediumroast.io/CLAUDE.md`). No separate router
 port-forward is needed for `company-dns` — port 80/443 → Traefik
-(`192.168.1.200`) is already forwarded for `www`, and Traefik does
+(`<traefik-lan-ip>`) is already forwarded for `www`, and Traefik does
 host-header-based routing to pick the right Ingress (`company-dns.mediumroast.io`
 → the `company-dns` namespace's Ingress). The only thing that needs to
 change is where the DNS name resolves to.
@@ -655,10 +655,10 @@ This way `company-dns.mediumroast.io` resolves to whatever IP
 
 ```bash
 # From an external resolver (bypasses any local DNS cache)
-dig @1.1.1.1 +short company-dns.mediumroast.io
+dig @<public-resolver> +short company-dns.mediumroast.io
 # Should eventually return the same A record www.mediumroast.io resolves to
 
-dig @1.1.1.1 +short www.mediumroast.io
+dig @<public-resolver> +short www.mediumroast.io
 ```
 
 Namecheap's DNS typically propagates within minutes, but can take up to the
@@ -694,6 +694,42 @@ exist or resolve correctly.
 Not a blocker for Azure teardown or repo cleanup — those only need Phase 1
 working. This phase has no target date in this plan; it's a follow-up
 cleanup step, done manually, at the user's discretion.
+
+## In-cluster DNS for the public names: the CoreDNS `hosts` block (added 2026-10-11)
+
+**A manual change to the cluster, not a file in `k8s/`, so it is recorded here.** Without it, cert-manager cannot issue or renew any certificate on this cluster.
+
+**Why it exists.** cert-manager checks an HTTP-01 challenge itself, from inside the cluster, by fetching `http://<host>/.well-known/acme-challenge/<token>` before it asks Let's Encrypt to validate. The public names resolve to the home router's public address (`<public-ip>`). On 2026-10-11 the router's port mapping was changed from a node (earlier the build node, then the second worker node) to Traefik's MetalLB address `<traefik-lan-ip>`. From then on the LAN, including every pod, **could not reach the public address** (the Firewalla does not loop LAN traffic back; its staff say loopback is automatic and not configurable, so we could not turn it on). cert-manager's self-check timed out for every name (`failed to perform self check GET request ... context deadline exceeded`), which blocked the new `company-dns-staging` certificate and would have blocked every renewal (the earliest was `dex-staging-tls`, due 2026-10-19). Reaching Traefik from outside still works (the public name, ports 80 and 443 forwarded to `<traefik-lan-ip>`): verified from a phone on 5G.
+
+**The change.** In `kube-system`'s `coredns` ConfigMap, a `hosts` block above the `forward` line answers the cluster's public names with Traefik's LAN address, for pods only:
+
+```
+    hosts {
+      <traefik-lan-ip> company-dns-staging.mediumroast.io company-dns.mediumroast.io dev.mediumroast.io staging.mediumroast.io www.mediumroast.io dex.mediumroast.io mediumroast.io
+      fallthrough
+    }
+```
+
+applied with `kubectl -n kube-system edit configmap coredns` and `kubectl -n kube-system rollout restart deploy/coredns`. Checked from a pod: the names resolve to `<traefik-lan-ip>` and Traefik answers (a `301` to HTTPS for a path that is not a challenge token); the staging certificate then issued on cert-manager's next retry.
+
+**Rules for keeping it right**
+- **Add a name here whenever the cluster gets a new site with an HTTP-01 certificate** (`kubectl get ingress -A` lists the hosts). List names explicitly: a wildcard would capture names served elsewhere. Today's list is every host in the table below.
+- **`microk8s disable dns` / `enable dns` resets manual CoreDNS edits.** Re-apply the block if that is ever run.
+- It affects pods only. LAN devices still see the public address (Pi-hole `<local-dns-ip>` is their resolver; its upstreams are Google and Cloudflare). They can reach the sites only if the router loops back or the Pi-hole answers these names with `<traefik-lan-ip>` (Settings, Local DNS Records); that is optional and not needed for certificates.
+- If the router later gains working NAT loopback, this block becomes unnecessary and can be removed.
+
+| Host | Namespace | Certificate (renewal, 2026-10-11) |
+|---|---|---|
+| `company-dns.mediumroast.io` | `company-dns` | `company-dns-io-tls` (2026-11-25) |
+| `company-dns-staging.mediumroast.io` | `company-dns-staging` | `company-dns-staging-io-tls` (issued 2026-10-11) |
+| `dev.mediumroast.io` | `mediumroast-dev` | `dev-mediumroast-io-tls` (2026-11-26) |
+| `staging.mediumroast.io` | `mediumroast-staging`, `vault-staging` | `staging-mediumroast-io-tls` (2026-11-19) |
+| `www.mediumroast.io`, `mediumroast.io` | `mediumroast-web`, `vault-prod` | `mediumroast-io-tls` (2026-11-18) |
+| `dex.mediumroast.io` | `vault-staging` | `dex-staging-tls` (**2026-10-19**) |
+
+(The bare `mediumroast.io` also has a second public address, `<a-second-public-ip>`, which Let's Encrypt may be sent to at renewal. A separate thing to check before 2026-11-18.)
+
+The V4 procedure that uses this is in `docs/v4-bringup.md` ("The CoreDNS block").
 
 ## Teardown plan — Azure Container App
 
