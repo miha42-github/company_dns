@@ -144,6 +144,8 @@ class Base(unittest.TestCase):
         for name in (DEPLOY_SH, SEAL_SH):
             shutil.copy(REPO / "scripts" / name, self.repo / "scripts" / name) if (self.repo / "scripts").exists() else (self.repo / "scripts").mkdir(parents=True) or shutil.copy(REPO / "scripts" / name, self.repo / "scripts" / name)
         shutil.copytree(REPO / "k8s/staging", self.repo / "k8s/staging")
+        # the real sealed secret is committed now; the tests start from a repository without one (the Deploy tests add a stand-in)
+        (self.repo / "k8s/staging/sealedsecret-credentials.yaml").unlink(missing_ok=True)
         exe(self.repo / "v4/scripts/docker-build.sh", BUILD_STUB)
         exe(self.repo / "v4/scripts/docker-smoke.sh", BUILD_STUB)
         exe(self.repo / "api_tests/run.py", SUITE_STUB)
