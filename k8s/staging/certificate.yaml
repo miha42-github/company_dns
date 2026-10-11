@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: company-dns-staging-io-tls
+  namespace: company-dns-staging
+  labels:
+    app.kubernetes.io/name: company-dns
+spec:
+  secretName: company-dns-staging-io-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - company-dns-staging.mediumroast.io
+  # Renew 30 days before expiry
+  renewBefore: 720h

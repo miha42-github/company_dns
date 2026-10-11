@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: company-dns-staging
+  labels:
+    app.kubernetes.io/name: company-dns
+    environment: staging

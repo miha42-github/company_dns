@@ -1,0 +1,28 @@
+# Profiles' rules for staging: defaults and per-profile overrides, no secrets (docs/plans/v4-sql-endpoint.md 5a).
+# Every profile named here must also have a line in the staging credentials Secret, or the server refuses to
+# start. The SQL limits are first guesses: the capacity test (docs/plans/v4-staging-rollout.md WP7) sets the real ones.
+# Profiles are read at start, so a change here needs a rollout restart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: company-dns-rules
+  namespace: company-dns-staging
+  labels:
+    app.kubernetes.io/name: company-dns
+data:
+  rules.json: |
+    {
+      "defaults": {"rate_limit": {"requests_per_minute": 300, "burst": 30}},
+      "profiles": {
+        "mediumroast.io": {
+          "rate_limit": {"bypass": true},
+          "sql": {"datasets": ["sic", "edgar"],
+                  "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2, "requests_per_minute": 30}}
+        },
+        "staging-test": {
+          "rate_limit": {"requests_per_minute": 600, "burst": 60},
+          "sql": {"datasets": ["sic", "edgar"],
+                  "limits": {"max_rows": 1000, "timeout_secs": 10, "concurrency": 2, "requests_per_minute": 60}}
+        }
+      }
+    }

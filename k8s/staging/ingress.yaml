@@ -1,0 +1,55 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: company-dns
+  namespace: company-dns-staging
+  labels:
+    app.kubernetes.io/name: company-dns
+  annotations:
+    # TLS certificate managed by cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - company-dns-staging.mediumroast.io
+      secretName: company-dns-staging-io-tls
+  rules:
+    - host: company-dns-staging.mediumroast.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: company-dns
+                port:
+                  number: 80
+---
+# HTTP ingress: redirects to HTTPS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: company-dns-http
+  namespace: company-dns-staging
+  labels:
+    app.kubernetes.io/name: company-dns
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # Traefik references a Middleware as <namespace>-<name>@kubernetescrd: this namespace's own redirect-https.
+    traefik.ingress.kubernetes.io/router.middlewares: company-dns-staging-redirect-https@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: company-dns-staging.mediumroast.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: company-dns
+                port:
+                  number: 80
