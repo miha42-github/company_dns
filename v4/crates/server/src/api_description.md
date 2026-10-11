@@ -16,7 +16,7 @@ Details: [Security](https://github.com/miha42-github/company_dns/blob/main/v4/RE
 
 ## Response shape
 
-Every answer is `{code, message, module, data, dependencies}`. Every `/V4.0/` answer also carries a top-level **`total`**: how many results `data` holds (a list gives its length, a single record 1, no match or an error 0), so you can read the count without looking inside `data`. The `/V3.0/` and `/V2.0/` paths keep V3's exact shape (for the SIC lookups, `data` is a dictionary with its own `total`) and do not add this field.
+Every answer is `{code, message, module, data, dependencies}`. Every answer also carries a top-level **`total`**: how many results `data` holds (a list gives its length, a dictionary that already counts its results (V3's `total`, EDGAR's `totalCompanies`, the SQL endpoint's `row_count`) that count, any other single record 1, no match or an error 0), so you can read the count without looking inside `data`. On the `/V3.0/`, `/V2.0/` and `/v2/` paths this is the one addition to V3's exact envelope (`data` itself is unchanged, and a client that reads only the fields V3 had is unaffected).
 
 ## Experimental
 

@@ -7,6 +7,7 @@
     {"area": "tickers", "routes": "EDGAR and Wikipedia firmographics", "v3": "['NASDAQ', 'AAPL'] (exchange mixed in)", "v4": "['AAPL'] (symbols only; the exchange is in 'exchanges')", "reason": "a formatting defect in V3 fixed for developers", "decided": "2026-10-08"},
     {"area": "Wikipedia lineage", "routes": "Wikipedia and merged", "v3": "message ends '(v2 backend)'", "v4": "same wording without that suffix, plus performance.cache_hit and dependencies.data", "reason": "the suffix would misname the implementation; the extra fields add attribution and diagnostics", "decided": "2026-10-08"},
     {"area": "Errors and dependencies", "routes": "all", "v3": "an HTML page for a 404; V3's dependencies block", "v4": "a JSON 404 envelope; V4's dependencies block", "reason": "consistent machine-readable errors", "decided": "2026-10-07"},
+    {"area": "Top-level total", "routes": "every answer, including /V3.0/, /V2.0/ and /v2/", "v3": "no top-level total (the SIC lookups carry one inside data)", "v4": "a top-level total on every answer: the count of results in data", "reason": "one place to read the count without looking inside data; additive, data itself is unchanged", "decided": "2026-10-11"},
     {"area": "UK SIC and v1 backends", "routes": "/V3.0/uk/*, .../v1/...", "v3": "served", "v4": "not served", "reason": "left out by decision (plan question Q3)", "decided": "2026-10-06"}
   ]
 }

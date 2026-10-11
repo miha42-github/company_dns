@@ -41,8 +41,8 @@ pub struct ApiEnvelope {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<Object>)]
     pub performance: Option<Value>,
-    /// Present on every `/V4.0/` answer (not on `/V3.0/` or `/V2.0/`, which keep V3's exact shape): how many results `data` holds. A list gives its
-    /// length, a single record gives 1, no match or an error gives 0.
+    /// Present on every answer: how many results `data` holds. A list gives its length, a V3-shaped dictionary the count it already carries
+    /// (`data.total`, EDGAR's `data.totalCompanies`, the SQL endpoint's `data.row_count`), any other single record gives 1, and no match or an error gives 0.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub total: Option<u64>,
 }
@@ -61,6 +61,14 @@ pub fn envelope(code: u16, message: impl Into<String>, module: &str, data: Value
 
 pub fn ok(module: &str, message: impl Into<String>, data: Value) -> impl IntoResponse {
     (StatusCode::OK, Json(envelope(200, message, module, data)))
+}
+
+/// Like `ok`, for an answer whose `data` is a dictionary KEYED BY RESULT (a map of company name to CIK): the `total` layer (`total.rs`)
+/// cannot tell that from a single record, so the handler states the count itself and the layer leaves it alone.
+pub fn ok_with_total(module: &str, message: impl Into<String>, data: Value, total: u64) -> impl IntoResponse {
+    let mut body = envelope(200, message, module, data);
+    body["total"] = Value::from(total);
+    (StatusCode::OK, Json(body))
 }
 
 pub fn not_found(module: &str, message: impl Into<String>) -> impl IntoResponse {
