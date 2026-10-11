@@ -14,6 +14,10 @@ Over the limit you get `429` with a `Retry-After` header (seconds to wait). A wr
 
 Details: [Security](https://github.com/miha42-github/company_dns/blob/main/v4/README.md#security) and [Profiles](https://github.com/miha42-github/company_dns/blob/main/v4/README.md#profiles-authenticated-access).
 
+## Response shape
+
+Every answer is `{code, message, module, data, dependencies}`. Every `/V4.0/` answer also carries a top-level **`total`**: how many results `data` holds (a list gives its length, a single record 1, no match or an error 0), so you can read the count without looking inside `data`. The `/V3.0/` and `/V2.0/` paths keep V3's exact shape (for the SIC lookups, `data` is a dictionary with its own `total`) and do not add this field.
+
 ## Experimental
 
 `POST /V4.0/sql` (group `experimental`) is **experimental**: it is off unless the operator enables it, needs a profile granted SQL access, and may change or be removed without notice. It appears here only on servers where it is enabled. See [Experimental: SQL endpoint](https://github.com/miha42-github/company_dns/blob/main/v4/README.md#experimental-sql-endpoint).

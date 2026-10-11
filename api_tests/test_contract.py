@@ -76,6 +76,61 @@ class Table(ServerTestCase):
             self.assertEqual(status, 404, "with SQL off the route must not exist")
 
 
+def total_of(data):
+    """What `total` should be: a list's length, 1 for a single record, 0 for no match or an error."""
+    return len(data) if isinstance(data, list) else (0 if data is None else 1)
+
+
+class Total(ServerTestCase):
+    """Every /V4.0/ answer carries a top-level `total` (the count of results in `data`); /V3.0/ and /V2.0/ keep V3's exact shape and do not."""
+
+    def test_every_v4_route_answers_with_a_total_that_matches_its_data(self):
+        for template, ok, no, needs_network in TABLE:
+            if needs_network and not NETWORK or not template.startswith("/V4.0/"):
+                continue
+            for label, path in (("match", ok), ("no match", no)):
+                if path is None:
+                    continue
+                with self.subTest(path=path, case=label):
+                    status, body, _ = get(path)
+                    self.assertIn(status, (200, 404), path)
+                    self.assertIn("total", body, f"{path}: no total in {sorted(body)}")
+                    self.assertEqual(body["total"], total_of(body["data"]), path)
+                    if status == 404:
+                        self.assertEqual(body["total"], 0, path)
+
+    def test_the_post_routes_carry_a_total_too(self):
+        status, body, _ = post("/V4.0/global/sic/match", {"text": "We make software for community banks."})
+        self.assertEqual(status, 200, body)
+        self.assertEqual(body["total"], total_of(body["data"]))
+        status, body, _ = post("/V4.0/global/sic/match", {})
+        self.assertEqual(status, 400)
+        self.assertEqual(body["total"], 0, "an error answer has a total of 0")
+
+    def test_an_unknown_v4_route_and_a_wrong_method_are_enveloped_with_a_total_of_zero(self):
+        status, body, _ = get("/V4.0/no/such/route")
+        self.assertEqual((status, body["total"]), (404, 0))
+
+    def test_v3_and_v2_paths_keep_v3s_exact_shape_without_a_top_level_total(self):
+        for template, ok, no, needs_network in TABLE:
+            if needs_network and not NETWORK or template.startswith("/V4.0/") or template == "/health":
+                continue
+            with self.subTest(path=ok):
+                status, body, _ = get(ok)
+                self.assertEqual(status, 200, ok)
+                self.assertNotIn("total", body, f"{ok}: V3's envelope has no top-level total")
+
+    def test_health_is_not_an_envelope(self):
+        status, body, _ = get("/health")
+        self.assertNotIn("total", body)
+
+    def test_the_spec_documents_the_field(self):
+        _, spec, _ = get("/openapi.json")
+        props = spec["components"]["schemas"]["ApiEnvelope"]["properties"]
+        self.assertIn("total", props)
+        self.assertIn("total", spec["info"]["description"])
+
+
 class Responses(ServerTestCase):
     def setUp(self):
         _, self.spec, _ = get("/openapi.json")
