@@ -65,11 +65,20 @@ class LoadGenerator(unittest.TestCase):
         import random
         rng = random.Random(1)
         for name, mix in load.MIXES.items():
+            if name == "repeated":
+                continue  # repeats on purpose (next test)
             paths = {load.build_path(rng, t) for _, t, _ in mix for _ in range(40)}
             self.assertGreater(len(paths), 30, name)
             for p in paths:
                 self.assertTrue(p.startswith("/V4.0/"), p)
                 self.assertNotIn("{", p)
+
+    def test_the_repeated_mix_comes_round_again(self):
+        import random
+        rng = random.Random(2)
+        paths = [load.build_path(rng, t) for _, t, _ in load.MIXES["repeated"] for _ in range(100)]
+        self.assertLess(len(set(paths)), 60, "a small pool, so requests repeat")
+        self.assertTrue(all("{" not in p and p.startswith("/V4.0/") for p in paths))
 
     def test_a_real_run_against_a_local_server_with_the_host_name_kept(self):
         Handler.seen_hosts.clear()
@@ -161,7 +170,7 @@ class Orchestrator(unittest.TestCase):
     def test_configurations_parse_and_unsafe_ones_are_refused(self):
         c = rc.parse_config("2x1000m/2Gi")
         self.assertEqual((c["replicas"], c["cpu_m"], c["mem_mi"], c["name"]), (2, 1000, 2048, "2x1000m/2Gi"))
-        for bad in ("2x1000/2Gi", "0x500m/1Gi", "17x500m/1Gi", "2x50m/1Gi", "2x9000m/1Gi", "2x500m/64Mi", "two"):
+        for bad in ("2x1000/2Gi", "0x500m/1Gi", "33x500m/1Gi", "2x50m/1Gi", "2x9000m/1Gi", "2x500m/64Mi", "two"):
             with self.assertRaises(ValueError, msg=bad):
                 rc.parse_config(bad)
 

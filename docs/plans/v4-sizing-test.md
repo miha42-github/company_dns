@@ -81,8 +81,14 @@ The first round (2x500m, 4x500m, 2x1000m) showed that half-core pods are heavily
 python3 perf_tests/run_cluster.py --configs 3x4000m/4Gi,6x2000m/2Gi,12x1000m/1Gi --concurrency 32 64 128 256 --processes 8
 ```
 
-- The CPU limit may go up to 4000m per pod and the memory limit up to 16Gi; `COMPANY_DNS_REPLICAS` follows the replica count.
+- Up to 32 replicas, a CPU limit up to 4000m per pod and a memory limit up to 16Gi are accepted; `COMPANY_DNS_REPLICAS` follows the replica count.
 - `--processes` sets the load generator's worker processes. The summary shows the generator's own CPU use per run and flags runs where it used 80% or more of its processes: there the generator, not the server, may have been the limit.
 - `--max-concurrency` (default 256) guards the nodes that production shares.
 - The scheduler decides which node each pod lands on (the Deployment only prefers to spread pods). The summary gives the pods per node for each configuration (for example `2 + 1`), and `results.json` has the pod-to-node map. A deliberate split by node size needs node labels and node affinity in the manifest; that is a deployment decision, not a test switch.
 - Two things to watch at four cores per pod: embeddings are serialized per pod (one at a time, so N pods run at most N embeddings at once), and query partitions are capped at 4. If `3x4000m` does not beat `6x2000m` on embeddings, the cores of the large pods are not being used.
+
+### Round three: pod count and repeated lookups
+
+- Results of the larger-replica round: at equal total CPU, embedding throughput scaled with the *number* of pods (3x4000m 76 requests/s, 6x2000m 140, 12x1000m 231) because an embedding runs one at a time per pod; lookups were CPU-bound and shape-insensitive (about 1200 requests/s on 12 cores).
+- To find where more 1-core pods stop helping: `--configs 12x1000m/1Gi,16x1000m/1Gi,20x1000m/1Gi,24x1000m/1Gi --mixes lookups,repeated`. The `repeated` mix draws from a small pool, so it shows what repeated asks cost.
+- The per-IP rate limits are settings now (`COMPANY_DNS_RATE_LIMIT_*`, `v4/README.md`); with many replicas keep the burst well above the replica count.
