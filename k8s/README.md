@@ -26,7 +26,7 @@ CoreDNS answers the cluster's public host names with Traefik's LAN address (`<tr
 
 ## Staging (V4): `k8s/staging/`
 
-V4 at `https://company-dns-staging.mediumroast.io`, two replicas in the `company-dns-staging` namespace, on the same cluster. It is **not** a copy of
+V4 at `https://company-dns-staging.mediumroast.io`, twenty replicas in the `company-dns-staging` namespace, on the same cluster. It is **not** a copy of
 `k8s/prod/` (which is V3): V4 listens on **4000**, runs as UID 10001 with a read-only root filesystem, and takes its credentials, rules and log level from
 mounted files. Plan and order of work: [docs/plans/v4-staging-rollout.md](../docs/plans/v4-staging-rollout.md).
 
@@ -35,7 +35,7 @@ k8s/staging/
   namespace.yaml           company-dns-staging
   configmap-rules.yaml     profiles' rules (no secrets); every profile needs a line in the credentials Secret
   configmap-loglevel.yaml  the live log level (a directory mount, so an edit reaches the pod)
-  deployment.yaml          2 replicas, port 4000, /health probes, 100m/256Mi to 500m/1Gi, locked down
+  deployment.yaml          20 replicas, port 4000, /health probes, 500m/512Mi to 1000m/1Gi, locked down
   service.yaml             ClusterIP 80 -> 4000
   ingress.yaml             HTTPS and the HTTP redirect for company-dns-staging.mediumroast.io
   middleware-redirect.yaml

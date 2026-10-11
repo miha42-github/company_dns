@@ -75,9 +75,9 @@ class StagingManifests(unittest.TestCase):
     def test_no_script_lives_in_the_configuration_directory(self):
         self.assertEqual([p.name for p in DIR.iterdir() if p.suffix in (".sh", ".py") or p.name.endswith(".md")], [], "k8s/staging holds configuration only")
 
-    def test_two_replicas_and_the_rate_limit_setting_agrees(self):
+    def test_twenty_replicas_and_the_rate_limit_setting_agrees(self):
         replicas = self.dep["spec"]["replicas"]
-        self.assertEqual(replicas, 2)
+        self.assertEqual(replicas, 20)
         env = {e["name"]: e.get("value") for e in self.c["env"]}
         self.assertEqual(env["COMPANY_DNS_REPLICAS"], str(replicas), "the limiter divides quotas by this; it must equal replicas")
 
@@ -118,8 +118,18 @@ class StagingManifests(unittest.TestCase):
 
     def test_resources_are_the_tested_regime(self):
         r = self.c["resources"]
-        self.assertEqual((r["limits"]["cpu"], r["limits"]["memory"]), ("500m", "1Gi"))
-        self.assertEqual((r["requests"]["cpu"], r["requests"]["memory"]), ("100m", "256Mi"))
+        self.assertEqual((r["limits"]["cpu"], r["limits"]["memory"]), ("1000m", "1Gi"))
+        self.assertEqual((r["requests"]["cpu"], r["requests"]["memory"]), ("500m", "512Mi"))
+
+    def test_the_per_ip_quota_is_set_and_each_pod_keeps_a_usable_burst(self):
+        env = {e["name"]: e.get("value") for e in self.c["env"]}
+        per_minute, burst = int(env["COMPANY_DNS_RATE_LIMIT_PER_MINUTE"]), int(env["COMPANY_DNS_RATE_LIMIT_BURST"])
+        self.assertEqual((per_minute, burst), (6000, 600))
+        self.assertGreaterEqual(burst // self.dep["spec"]["replicas"], 10, "the limiter divides the burst by the replicas; a team's burst of requests must survive that")
+
+    def test_the_rollout_replaces_pods_quickly_without_losing_any(self):
+        s = self.dep["spec"]["strategy"]["rollingUpdate"]
+        self.assertEqual((s["maxSurge"], s["maxUnavailable"]), (4, 0))
 
     def test_the_pods_prefer_different_nodes(self):
         term = self.pod["affinity"]["podAntiAffinity"]["preferredDuringSchedulingIgnoredDuringExecution"][0]["podAffinityTerm"]

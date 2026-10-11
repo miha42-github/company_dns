@@ -6,17 +6,17 @@ metadata:
   labels:
     app.kubernetes.io/name: company-dns
 spec:
-  # Two replicas, not production's four: enough to exercise multi-pod behaviour (the per-pod rate-limit division)
-  # at a different N than prod, on nodes that also carry production (docs/plans/v4-deployment.md 3.4).
+  # Twenty one-core replicas, for the hackathon load: at equal CPU, many ~1-core pods beat a few large ones, and lookups kept scaling
+  # with pod count up to 20 (docs/plans/v4-sizing-test.md). Production's V3 keeps its own size until V3 is retired.
   # COMPANY_DNS_REPLICAS below must equal this: k8s/test_staging_manifests.py checks it.
-  replicas: 2
+  replicas: 20
   selector:
     matchLabels:
       app.kubernetes.io/name: company-dns
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxSurge: 1
+      maxSurge: 4       # 20 pods one at a time would take many minutes; four extra at once, still none unavailable
       maxUnavailable: 0
   template:
     metadata:
@@ -56,7 +56,13 @@ spec:
           env:
             # The Deployment's replicas: the fleet-wide rate limits are divided by it.
             - name: COMPANY_DNS_REPLICAS
-              value: "2"
+              value: "20"
+            # Per-IP quotas for callers that identify themselves (fleet-wide, divided across the replicas: 600 over 20 pods is 30 each).
+            # The anonymous tier stays at its default of 5 per minute. See v4/README.md.
+            - name: COMPANY_DNS_RATE_LIMIT_PER_MINUTE
+              value: "6000"
+            - name: COMPANY_DNS_RATE_LIMIT_BURST
+              value: "600"
             # The experimental SQL endpoint is ON in staging only, for the capacity test. Its limits are the
             # defaults until that test sets them (v4/README.md, "Experimental: SQL endpoint").
             - name: COMPANY_DNS_SQL_ENABLED
@@ -70,14 +76,15 @@ spec:
             # COMPANY_DNS_CORS_ORIGINS is left at its default (mediumroast.io, its subdomains and localhost may call
             # the SQL route from a browser; lookups answer any origin).
 
-          # Sized at the production limits, the regime the comparison measured: idle about 160 MiB, peak under 260 MiB.
+          # One core per pod, as the sizing test measured (peak memory about 250 MiB, so 1Gi has room). The CPU request is half the limit,
+          # so 20 pods reserve 10 cores and the other workloads on these nodes are not crowded out; raise it to 1000m to reserve all 20.
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "100m"
+              memory: "512Mi"
+              cpu: "500m"
             limits:
               memory: "1Gi"
-              cpu: "500m"
+              cpu: "1000m"
 
           # The model and data load at start (1 to 2 s measured on the nodes); the startup probe allows a minute.
           startupProbe:

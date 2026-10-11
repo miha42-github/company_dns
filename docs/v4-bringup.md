@@ -11,7 +11,7 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 | | |
 |---|---|
 | URL | `https://company-dns-staging.mediumroast.io` (Traefik at `<traefik-lan-ip>`, certificate from `letsencrypt-prod`) |
-| Workload | Namespace `company-dns-staging`; Deployment `company-dns`, **2 replicas**, port 4000, 100m / 256Mi to 500m / 1Gi each, read-only root filesystem, UID 10001 |
+| Workload | Namespace `company-dns-staging`; Deployment `company-dns`, **20 replicas**, port 4000, 500m / 512Mi to 1000m / 1Gi each, read-only root filesystem, UID 10001 |
 | Image | `ghcr.io/miha42-github/company_dns/company_dns_v4:MMDDYYYY-<sha7>` (public, `linux/amd64`, the `release-small` profile, data and model inside) |
 | Config | `k8s/staging/` (manifests only): rules and log level ConfigMaps, the sealed credentials |
 | Profiles | `mediumroast.io` and `staging-test`, both with **no rate limit** and SQL access (the suite sends hundreds of requests in seconds, so a quota throttles it to 429s); the SQL endpoint is **on** here and off in production |
@@ -151,13 +151,13 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
    Expect no failures. (L3, parity with live V3, is not a staging question. L5 starts its own server and does not apply to a remote one.)
 2. **Log level changes without a restart.** `kubectl -n company-dns-staging edit configmap company-dns-log-level`, set `log-level: "debug"`, and within about a minute
    `kubectl -n company-dns-staging logs deploy/company-dns` shows the level change and more detail. Set it back to `"info"`.
-3. **Rate limiting at two replicas.** The fleet allows a burst of about 20 to an identified caller (each pod 10). From one machine:
+3. **Rate limiting across the replicas.** The fleet allows an identified caller 6000 requests a minute with a burst of 600 (30 per pod over 20 pods). One sequential `curl` loop refills as fast as it spends, so use parallel requests from one machine:
 
    ```bash
-   for i in $(seq 1 40); do curl -s -o /dev/null -w "%{http_code}\n" -A "bringup-check/1.0 (you@mediumroast.io)" $H/V3.0/na/sic/code/7372; done | sort | uniq -c
+   seq 1 2000 | xargs -P 100 -I{} curl -s -o /dev/null -w "%{http_code}\n" -A "bringup-check/1.0 (you@mediumroast.io)" $H/V3.0/na/sic/code/7372 | sort | uniq -c
    ```
 
-   Expect roughly **20 `200`s and 20 `429`s**, not 40 `200`s (that would mean the limiter still thinks there are four replicas: check `COMPANY_DNS_REPLICAS` in the Deployment).
+   Expect mostly `200`s and **some `429`s** once the per-pod bursts are used up; the exact counts depend on how the requests spread across the pods. All `200`s from a much larger run would mean the limiter divides by too many replicas; a `429` after only a few dozen requests would mean it divides by too few (check `COMPANY_DNS_REPLICAS` and `COMPANY_DNS_RATE_LIMIT_*` in the Deployment, and the "Per-IP rate limits" line in the pod log).
 4. **CORS.** A browser page on another origin can call lookups; only mediumroast.io, its subdomains and localhost can call `/V4.0/sql`:
 
    ```bash
