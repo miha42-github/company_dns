@@ -120,6 +120,9 @@ class FakeCluster(rc.Cluster):
         c = patch["spec"]["template"]["spec"]["containers"][0]
         self.staging = {"replicas": patch["spec"]["replicas"], "resources": c["resources"], "env": c["env"][0]["value"]}
 
+    def placement(self):
+        return {f"p{i}": ("node-a" if i == 0 else "node-b") for i in range(self.staging["replicas"])}
+
     def wait_ready(self, timeout=300.0):
         self.calls.append((rc.NAMESPACE, "wait ready"))
 
@@ -130,7 +133,7 @@ class FakeCluster(rc.Cluster):
 
 
 def fake_run_level(cluster, fail_on=None):
-    def run_level(target, mix, n, duration, warmup, auth):
+    def run_level(target, mix, n, duration, warmup, auth, processes=4):
         cluster.runs_done += 1
         if fail_on and cluster.runs_done == fail_on:
             raise RuntimeError("the load generator failed")
@@ -231,6 +234,16 @@ class Orchestrator(unittest.TestCase):
         self.assertIn("| A | 2.0 | 50.0 | 8 | 200.0 | 25.0 |", text)
         self.assertIn("| B | 2.0 | 70.0 | 8 | 100.0 | 35.0 |", text)
         self.assertIn("Production restarts before and after: 0 -> 0", text)
+
+    def test_placement_and_generator_load_are_recorded_and_a_busy_generator_is_flagged(self):
+        res = self.go(processes=3)
+        self.assertEqual(res["placements"]["4x500m/1Gi"], {"p0": "node-a", "p1": "node-b", "p2": "node-b", "p3": "node-b"})
+        self.assertTrue(all("generator_cores" in r for r in res["runs"]))
+        text = rc.summary(res)
+        self.assertIn("- 4x500m/1Gi: 3 + 1", text)
+        self.assertNotIn("node-a", text, "node names stay in results.json, not in the summary")
+        res["runs"][0]["generator_cores"] = 2.9
+        self.assertIn("load generator used at least 80%", rc.summary(res))
 
     def test_main_refuses_unknown_mixes_and_unsafe_concurrency(self):
         self.assertEqual(rc.main(["--mixes", "nonsense"]), 2)
