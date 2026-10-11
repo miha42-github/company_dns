@@ -89,7 +89,7 @@ k8s/staging/
 `k8s/` that asserts staging uses its own namespace and hostname, never mounts a prod secret, names the V4 image package, and has the replica setting equal to `replicas`).
 **Done when:** the dry runs pass and the test is green.
 
-### WP4. Secrets: staging credentials and rules
+### WP4. Secrets: staging credentials and rules (runbook and script written 2026-10-10: [`k8s/staging/CREDENTIALS.md`](../../k8s/staging/CREDENTIALS.md), `k8s/staging/make-credentials.sh`; the sealing itself needs the cluster and is yours to run)
 
 Generate staging-only profiles (`mediumroast.io`-style and a test profile for the suite and capacity test), hash the tokens, seal with the cluster's controller (`kubeseal`),
 commit only the sealed file; plaintext tokens stay in the owner's password manager. Rules ConfigMap from `v4/rules.example.json` with staging values.

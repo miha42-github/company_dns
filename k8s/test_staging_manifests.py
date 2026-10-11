@@ -147,6 +147,17 @@ class StagingManifests(unittest.TestCase):
         volumes = {v["name"]: v for v in self.pod["volumes"]}
         self.assertEqual(volumes["log-level"]["configMap"]["name"], cm["metadata"]["name"])
 
+    def test_a_committed_sealed_secret_is_bound_to_the_staging_secret_name_and_namespace(self):
+        sealed = [d for d in of_kind(self.docs, "SealedSecret")]
+        if not sealed:
+            self.skipTest("the sealed credentials are not committed yet (k8s/staging/CREDENTIALS.md)")
+        meta = sealed[0]["metadata"]
+        self.assertEqual((meta["name"], meta["namespace"]), ("company-dns-credentials", NS))
+        self.assertNotIn("stringData", sealed[0].get("spec", {}))
+        self.assertEqual(list(sealed[0]["spec"]["encryptedData"]), ["credentials"])
+        self.assertNotIn("sealedsecrets.bitnami.com/cluster-wide", meta.get("annotations", {}), "cluster-wide scope would let it open in any namespace")
+        self.assertNotIn("sealedsecrets.bitnami.com/namespace-wide", meta.get("annotations", {}))
+
     def test_no_secret_value_is_committed(self):
         self.assertEqual(of_kind(self.docs, "Secret"), [], "credentials come from a SealedSecret, never a plain Secret in the repository")
 

@@ -88,7 +88,7 @@ fi
 echo "==> Image: ${IMAGE_BASE}:${tag}"
 if [ "$dry" = 1 ]; then
   echo "==> Server-side dry run of everything (nothing changes)"
-  for f in namespace configmap-rules configmap-loglevel; do apply_file "$here/$f.yaml"; done
+  for f in namespace sealedsecret-credentials configmap-rules configmap-loglevel; do [ -f "$here/$f.yaml" ] && apply_file "$here/$f.yaml"; done
   apply_deployment; apply_file "$here/service.yaml"
   for f in middleware-redirect ingress certificate; do apply_file "$here/$f.yaml"; done
   echo "==> Dry run complete."; exit 0
@@ -96,8 +96,13 @@ fi
 
 echo "==> Applying namespace and configuration"
 apply_file "$here/namespace.yaml"
+if [ -f "$here/sealedsecret-credentials.yaml" ]; then
+  echo "==> Applying the sealed credentials (the controller turns them into the Secret $SECRET)"
+  apply_file "$here/sealedsecret-credentials.yaml"
+  for _ in $(seq 1 30); do k get secret "$SECRET" >/dev/null 2>&1 && break; sleep 1; done
+fi
 if ! k get secret "$SECRET" >/dev/null 2>&1; then
-  echo "ERROR: the Secret $SECRET does not exist in $NS. The pods mount it and will not start without it. Create it from the sealed file (docs/plans/v4-staging-rollout.md, WP4), then run this again." >&2
+  echo "ERROR: the Secret $SECRET does not exist in $NS. The pods mount it and will not start without it. Make and seal it with k8s/staging/make-credentials.sh (see k8s/staging/CREDENTIALS.md), commit sealedsecret-credentials.yaml, then run this again." >&2
   exit 1
 fi
 apply_file "$here/configmap-rules.yaml"; apply_file "$here/configmap-loglevel.yaml"

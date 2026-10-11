@@ -21,6 +21,7 @@ REPO = Path(__file__).resolve().parent.parent
 
 KUBECTL = r'''#!/usr/bin/env bash
 echo "kubectl $*" >> "$STUB_LOG"
+case "$*" in "create secret generic"*) [ -f "${@: -1}" ] ; for a in "$@"; do case "$a" in --from-file=*) cp "${a#--from-file=credentials=}" "$STUB_LOG.secret-source";; esac; done; printf 'kind: Secret\n';; esac
 case "$*" in
   *"apply"*"-f -"*) echo "(stdin captured)" >> "$STUB_LOG"; cat > "$STUB_LOG.stdin";;
 esac
@@ -47,6 +48,12 @@ case "$1" in
 esac
 exit 0
 '''
+KUBESEAL = r'''#!/usr/bin/env bash
+echo "kubeseal $*" >> "$STUB_LOG"
+cat > "$STUB_LOG.kubeseal-stdin"
+[ "${STUB_SEAL:-ok}" = bad ] && { echo "oops"; exit 0; }
+printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata:\n  name: company-dns-credentials\n  namespace: company-dns-staging\nspec:\n  encryptedData:\n    credentials: AgBy3i4OJSWK\n'
+'''
 SCRIPT_STUB = '#!/usr/bin/env bash\necho "$(basename "$0") $*" >> "$STUB_LOG"\n'
 
 
@@ -63,7 +70,7 @@ class Base(unittest.TestCase):
         self.bin.mkdir()
         self.log = self.tmp / "stub.log"
         self.log.write_text("")
-        for name, body in (("kubectl", KUBECTL), ("curl", CURL), ("docker", DOCKER)):
+        for name, body in (("kubectl", KUBECTL), ("curl", CURL), ("docker", DOCKER), ("kubeseal", KUBESEAL)):
             write_exe(self.bin / name, body)
         self.env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "STUB_LOG": str(self.log)}
 
@@ -170,6 +177,83 @@ class BuildAndPush(Base):
         self.assertNotIn("docker push", self.calls())
 
 
+class MakeCredentials(Base):
+    def setUp(self):
+        super().setUp()
+        # a throwaway repository layout, so the script's idea of "the repository" is not the real one (or this temp directory's parent)
+        self.staging = self.tmp / "repo" / "k8s" / "staging"
+        shutil.copytree(REPO / "k8s/staging", self.staging)
+        self.out = self.tmp / "secrets"
+
+    def run_script(self, *args, **env):
+        return subprocess.run([str(self.staging / "make-credentials.sh"), *args], env={**self.env, **env}, capture_output=True, text=True, cwd=self.tmp)
+
+    def read(self, name):
+        return (self.out / name).read_text()
+
+    def test_it_makes_a_token_and_a_matching_hash_for_every_profile_the_rules_name(self):
+        import hashlib
+        r = self.run_script("--out", str(self.out))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        tokens = dict(l.split(":", 1) for l in self.read("tokens").splitlines())
+        self.assertEqual(set(tokens), {"mediumroast.io", "staging-test"})
+        hashes = dict(l.split(":", 1) for l in self.read("credentials").splitlines() if not l.startswith("#"))
+        self.assertEqual(set(hashes), set(tokens))
+        for p, t in tokens.items():
+            self.assertRegex(t, r"^[0-9a-f]{64}$")
+            self.assertEqual(hashes[p], hashlib.sha256(t.encode()).hexdigest())
+
+    def test_the_files_are_private_and_no_token_is_printed(self):
+        r = self.run_script("--out", str(self.out))
+        for name in ("tokens", "credentials"):
+            self.assertEqual(stat.S_IMODE((self.out / name).stat().st_mode), 0o600, name)
+        self.assertEqual(stat.S_IMODE(self.out.stat().st_mode), 0o700)
+        for t in (l.split(":", 1)[1] for l in self.read("tokens").splitlines()):
+            self.assertNotIn(t, r.stdout + r.stderr)
+
+    def test_existing_tokens_are_kept_and_rotate_replaces_them(self):
+        self.run_script("--out", str(self.out))
+        first = self.read("tokens")
+        self.run_script("--out", str(self.out))
+        self.assertEqual(self.read("tokens"), first)
+        self.run_script("--out", str(self.out), "--rotate")
+        rotated = dict(l.split(":", 1) for l in self.read("tokens").splitlines())
+        old = dict(l.split(":", 1) for l in first.splitlines())
+        self.assertEqual(set(rotated), set(old))
+        for p in old:
+            self.assertNotEqual(rotated[p], old[p])
+
+    def test_it_refuses_to_write_inside_the_repository(self):
+        inside = self.tmp / "repo" / "secrets"
+        r = self.run_script("--out", str(inside))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("inside the repository", r.stderr)
+        self.assertFalse(inside.exists())
+
+    def test_sealing_pipes_the_credentials_to_kubeseal_with_the_controller_and_writes_the_sealed_file(self):
+        r = self.run_script("--out", str(self.out), "--seal", "--controller-namespace", "kube-system", "--controller-name", "sealed-secrets-controller")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        calls = self.calls()
+        self.assertIn("kubectl create secret generic company-dns-credentials -n company-dns-staging", calls)
+        self.assertIn("kubeseal --controller-namespace kube-system --controller-name sealed-secrets-controller --format yaml", calls)
+        self.assertEqual(Path(str(self.log) + ".secret-source").read_text(), self.read("credentials"))
+        sealed = (self.staging / "sealedsecret-credentials.yaml").read_text()
+        self.assertIn("kind: SealedSecret", sealed)
+        for t in (l.split(":", 1)[1] for l in self.read("tokens").splitlines()):
+            self.assertNotIn(t, sealed)
+
+    def test_sealing_needs_the_controller_and_a_real_result(self):
+        r = self.run_script("--out", str(self.out), "--seal")
+        self.assertEqual(r.returncode, 2)
+        r = self.run_script("--out", str(self.out), "--seal", "--controller-namespace", "a", "--controller-name", "b", STUB_SEAL="bad")
+        self.assertEqual(r.returncode, 1)
+        self.assertFalse((self.staging / "sealedsecret-credentials.yaml").exists(), "a bad result must not be left behind to be committed")
+
+    def test_an_offline_certificate_is_passed_through(self):
+        self.run_script("--out", str(self.out), "--seal", "--controller-namespace", "a", "--controller-name", "b", "--cert", "cert.pem")
+        self.assertIn("--cert cert.pem", self.calls())
+
+
 class Deploy(Base):
     SCRIPT = REPO / "k8s/staging/deploy.sh"
 
@@ -236,6 +320,19 @@ class Deploy(Base):
         for l in applies:
             self.assertIn("--dry-run=server", l)
         self.assertNotIn("rollout", self.calls())
+
+    def test_a_sealed_secret_is_applied_before_the_workload_when_the_file_exists(self):
+        staging = self.tmp / "staging"
+        shutil.copytree(REPO / "k8s/staging", staging)
+        (staging / "sealedsecret-credentials.yaml").write_text("kind: SealedSecret\n")
+        r = subprocess.run([str(staging / "deploy.sh"), "10112026-abc1234"], env=self.env, capture_output=True, text=True, cwd=self.tmp)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        calls = self.calls().splitlines()
+        i_sealed = next(i for i, l in enumerate(calls) if "sealedsecret-credentials.yaml" in l)
+        i_secret = next(i for i, l in enumerate(calls) if "get secret company-dns-credentials" in l)
+        i_dep = next(i for i, l in enumerate(calls) if "apply -f -" in l)
+        self.assertLess(i_sealed, i_secret)
+        self.assertLess(i_secret, i_dep)
 
     def test_not_every_replica_ready_is_a_failure(self):
         r = self.run_script("10112026-abc1234", STUB_READY="1")
