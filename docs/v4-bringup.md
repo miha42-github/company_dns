@@ -180,6 +180,8 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 
 **Go / no-go:** suite green; capacity-test criteria met; soak clean (no restarts, no memory growth); rollback exercised; V3 stays the production service until promotion (a separate decision).
 
+**Sizing the replicas (optional, before changing their size).** To compare, for example, two larger replicas against four smaller ones with the same total, see [`docs/plans/v4-sizing-test.md`](plans/v4-sizing-test.md): `python3 perf_tests/run_cluster.py --dry-run`, then without `--dry-run`. It changes only the staging Deployment, restores it afterwards, and stops if a production pod restarts.
+
 ## 7. Day-to-day
 
 | To do this | Run |
