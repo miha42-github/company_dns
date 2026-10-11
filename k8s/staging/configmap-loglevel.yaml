@@ -1,0 +1,13 @@
+# The log level, changeable on a live pod: edit this ConfigMap and the server picks it up within about a minute
+# (kubelet sync plus the server's 5-second poll), no restart. It is mounted as a DIRECTORY (see the Deployment):
+# a subPath mount never updates, which would silently defeat this (v4/README.md, "Observability").
+# Accepts a level (error, warn, info, debug, trace) or a targeted filter such as "info,company_dns_server=debug".
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: company-dns-log-level
+  namespace: company-dns-staging
+  labels:
+    app.kubernetes.io/name: company-dns
+data:
+  log-level: "info"
