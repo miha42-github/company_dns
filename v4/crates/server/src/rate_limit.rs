@@ -21,6 +21,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 use std::num::NonZeroU32;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -39,37 +40,55 @@ use crate::envelope::too_many_requests;
 use crate::trusted_origin;
 use crate::user_agent::{classify, Tier};
 
-/// This deployment runs a fixed 4 replicas behind a Service/Ingress
-/// that load-balances across them (`k8s/prod/deployment.yaml`'s
-/// `replicas: 4`, itself a deliberate ceiling per
-/// `docs/plans/performance-improvements.md` item 3 - don't raise
-/// either number without revisiting the other). `governor`'s rate
-/// limiter state is in-process, not shared across pods
-/// (`docs/plans/v4-security-hardening.md` §6's "in-memory vs. shared
-/// quota storage" - accepted for now, same limitation V3's `slowapi`
-/// config would have had if it were actually wired up). Dividing the
-/// intended aggregate quota by the replica count here means a client
-/// hitting different pods on different requests still sees roughly
-/// the intended fleet-wide ceiling, instead of each pod independently
-/// granting the full quota (which would let the *effective* ceiling
-/// drift to `REPLICA_COUNT`x the intended one). This drifts back out
-/// of sync if `replicas` changes without updating this constant too.
-const REPLICA_COUNT: u32 = 4;
+/// How many replicas share the fleet-wide quotas below. `governor`'s limiter state is in-process,
+/// not shared across pods (`docs/plans/v4-security-hardening.md` §6's "in-memory vs. shared quota
+/// storage", accepted for now), so each pod enforces the aggregate quota divided by the replica
+/// count: a client that reaches different pods on different requests still sees roughly the
+/// intended fleet-wide ceiling, instead of each pod granting the full quota (which would let the
+/// effective ceiling drift to `replicas` times the intended one).
+///
+/// The count comes from `COMPANY_DNS_REPLICAS`, set to the Deployment's `replicas` (production
+/// runs 4, a deliberate ceiling per `docs/plans/performance-improvements.md` item 3; staging
+/// runs 2). The default is 4, so production behaves as before. It is read once at start by
+/// `main` (`set_replicas`) and falls back to the default if never set (the unit tests).
+pub const DEFAULT_REPLICAS: u32 = 4;
+const MAX_REPLICAS: u32 = 64;
+static REPLICAS: AtomicU32 = AtomicU32::new(DEFAULT_REPLICAS);
+
+/// Parse `COMPANY_DNS_REPLICAS`: unset means the default; zero, a non-number or more than 64 is a
+/// startup error with a message, never a silently different quota.
+pub fn parse_replicas(value: Option<&str>) -> Result<u32, String> {
+    let Some(v) = value.map(str::trim).filter(|v| !v.is_empty()) else {
+        return Ok(DEFAULT_REPLICAS);
+    };
+    match v.parse::<u32>() {
+        Ok(n) if (1..=MAX_REPLICAS).contains(&n) => Ok(n),
+        _ => Err(format!("COMPANY_DNS_REPLICAS must be a whole number from 1 to {MAX_REPLICAS} (the Deployment's replicas), got {v:?}")),
+    }
+}
+
+pub fn set_replicas(n: u32) {
+    REPLICAS.store(n, Ordering::Relaxed);
+}
 
 /// docs/plans/v4-security-hardening.md §3.2: intended fleet-wide
 /// aggregate quotas, adopting V3's own never-enforced `RATE_LIMITS`
 /// baseline shape (`lib/rate_limiter.py:22-37`) for the normal tier.
-/// Divided by `REPLICA_COUNT` below to get the actual per-pod quota.
+/// Divided by the replica count below to get the actual per-pod quota.
 const NORMAL_QUOTA_PER_MINUTE: u32 = 200;
 const NORMAL_BURST: u32 = 20;
 const DRACONIAN_QUOTA_PER_MINUTE: u32 = 5;
 const DRACONIAN_BURST: u32 = 1;
 
 pub(crate) fn per_pod(aggregate: u32) -> NonZeroU32 {
+    per_pod_for(aggregate, REPLICAS.load(Ordering::Relaxed))
+}
+
+fn per_pod_for(aggregate: u32, replicas: u32) -> NonZeroU32 {
     // Integer division rounds down; NonZeroU32 floors at 1 rather than
     // ever landing on a 0/min quota that would silently block every
     // request in that tier.
-    NonZeroU32::new((aggregate / REPLICA_COUNT).max(1)).expect("max(1) is never zero")
+    NonZeroU32::new((aggregate / replicas.max(1)).max(1)).expect("max(1) is never zero")
 }
 
 #[derive(Clone)]
@@ -251,6 +270,34 @@ mod tests {
     use axum::{extract::ConnectInfo, middleware, routing::get, Router};
     use base64::Engine;
     use tower::ServiceExt;
+
+    #[test]
+    fn quotas_are_divided_by_the_replica_count() {
+        // the fleet-wide normal tier is 200/min with a burst of 20
+        assert_eq!(per_pod_for(NORMAL_QUOTA_PER_MINUTE, 4).get(), 50);
+        assert_eq!(per_pod_for(NORMAL_QUOTA_PER_MINUTE, 2).get(), 100, "two replicas each carry half, so the fleet total is unchanged");
+        assert_eq!(per_pod_for(NORMAL_BURST, 4).get(), 5);
+        assert_eq!(per_pod_for(NORMAL_BURST, 2).get(), 10);
+        assert_eq!(per_pod_for(NORMAL_QUOTA_PER_MINUTE, 1).get(), 200);
+    }
+
+    #[test]
+    fn a_quota_never_floors_to_zero() {
+        assert_eq!(per_pod_for(DRACONIAN_BURST, 4).get(), 1);
+        assert_eq!(per_pod_for(5, 64).get(), 1);
+    }
+
+    #[test]
+    fn replicas_default_to_four_and_refuse_nonsense() {
+        assert_eq!(parse_replicas(None), Ok(4));
+        assert_eq!(parse_replicas(Some("")), Ok(4));
+        assert_eq!(parse_replicas(Some(" 2 ")), Ok(2));
+        assert_eq!(parse_replicas(Some("64")), Ok(64));
+        for bad in ["0", "-1", "two", "65", "2.5"] {
+            let e = parse_replicas(Some(bad)).unwrap_err();
+            assert!(e.contains("COMPANY_DNS_REPLICAS") && e.contains(bad), "{e}");
+        }
+    }
 
     /// Profiles: `unlimited` (bypass), `capped` (20/min fleet-wide = 5 per pod), `plain` (no
     /// rate_limit grant). Every token is "tok".
