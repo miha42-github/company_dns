@@ -165,8 +165,15 @@ preflight() {
     fi
   fi
   if [[ "${MODE}" == "deploy" || "${MODE}" == "check" ]]; then
-    python3 -c "import socket,sys; socket.gethostbyname(sys.argv[1])" "${STAGING_HOST}" >/dev/null 2>&1 \
-      || problems+=("${STAGING_HOST} does not resolve (the DNS record must exist before the certificate can issue)")
+    local ip
+    if ! ip="$(python3 -c "import socket,sys; print(socket.gethostbyname(sys.argv[1]))" "${STAGING_HOST}" 2>/dev/null)"; then
+      problems+=("${STAGING_HOST} does not resolve (the DNS record must exist before the certificate can issue)")
+    else
+      case "${ip}" in
+        10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|127.*) ;;
+        *) warnings+=("${STAGING_HOST} resolves to the public address ${ip}. From INSIDE the cluster that address is usually unreachable (hairpin NAT), so cert-manager's own check of the HTTP-01 challenge times out and the certificate never issues. Add a local DNS record (Pi-hole) for ${STAGING_HOST} pointing at Traefik's LAN address (192.168.1.200), as was done for production.");;
+      esac
+    fi
   fi
   [[ -f "${DEPLOYMENT_MANIFEST}" ]] || problems+=("${MANIFEST_DIR}/deployment.yaml not found: run this from a checkout of the repository")
   for w in "${warnings[@]+"${warnings[@]}"}"; do echo "WARNING: ${w}" >&2; done

@@ -105,7 +105,7 @@ esac
 printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata:\n  name: company-dns-credentials\n  namespace: company-dns-staging\nspec:\n  encryptedData:\n    credentials: AgBy3i4OJSWK%s\n' "$RANDOM"
 '''
 PYTHON = '''#!/usr/bin/env bash
-if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; exit 0; fi
+if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; echo "${STUB_DNS_IP:-192.168.1.200}"; exit 0; fi
 exec "%s" "$@"
 ''' % sys.executable
 OPENSSL = '''#!/usr/bin/env bash
@@ -209,6 +209,16 @@ class Deploy(Base):
         self.assertEqual(r.returncode, 1)
         for fragment in (".env", "GITHUB_PAT", "buildx", "data directory", "embedding model", "ingress class", "ClusterIssuer", "no credentials", "does not resolve"):
             self.assertIn(fragment, r.stderr, fragment)
+
+    def test_a_public_address_for_the_host_warns_about_the_certificate_check_but_does_not_stop(self):
+        # regression from the first real run: the host resolved to the public address, cert-manager's self-check from inside the cluster timed out
+        r = self.run_script("--check", STUB_DNS_IP="75.80.225.46")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("75.80.225.46", r.stderr)
+        self.assertIn("hairpin", r.stderr)
+        self.assertIn("192.168.1.200", r.stderr)
+        r = self.run_script("--check", STUB_DNS_IP="192.168.1.200")
+        self.assertNotIn("hairpin", r.stderr)
 
     def test_an_unreachable_cluster_is_reported(self):
         r = self.run_script("--check", STUB_NO_CLUSTER="1")
