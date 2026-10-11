@@ -38,12 +38,29 @@ k8s/staging/
   certificate.yaml         letsencrypt-prod
 ```
 
-Not here yet (later work packages): the sealed credentials Secret `company-dns-credentials` (WP4: the Deployment mounts it, so the pods will not start without it),
-the deploy script that sets the image tag (WP5; the manifest carries a deliberately unpullable `UNSET`), and the first-rollout runbook (WP6).
+### Build, push and deploy
+
+```bash
+# 1. On the amd64 build machine (cafe-1): build, smoke-test, push, and check the image pulls anonymously. Needs GITHUB_PAT (write:packages) in .env.
+v4/scripts/build-and-push.sh                 # tag = MMDDYYYY-<git sha7>; prints it and records it in v4/.build-log
+# 2. Anywhere with kubectl on the cluster. Changes only company-dns-staging; does not edit the repository.
+k8s/staging/deploy.sh --dry-run TAG          # server-side dry run of everything; once, before the first apply
+k8s/staging/deploy.sh --first-time TAG       # namespace, config, workload, port-forward smoke test, then Ingress and certificate
+k8s/staging/deploy.sh TAG                    # routine redeploy
+k8s/staging/deploy.sh --rollback             # back to the previous revision (or --rollback TAG for a specific one)
+```
+
+A brand-new GHCR package starts **private**: after the first push, make `company_dns_v4` public once (the push script's anonymous-pull check fails with instructions until you do).
+
+The credentials are delivered as a SealedSecret: `k8s/staging/make-credentials.sh` makes the tokens and their hashes (outside the repository), seals the hashes for the cluster, and
+[`k8s/staging/CREDENTIALS.md`](staging/CREDENTIALS.md) is the runbook (make, seal, deploy, verify, rotate). The Deployment mounts the Secret, so the pods will not start without it, and the
+deploy script applies the sealed file first and stops if the Secret is missing.
+
+Not here yet (a later work package): the first-rollout runbook (WP6).
 
 Without a cluster, `python3 -m unittest k8s/test_staging_manifests.py` (needs PyYAML) checks that staging touches only its own namespace, host, secret and certificate,
 that port, probes, Service and Ingress agree, that `COMPANY_DNS_REPLICAS` equals `replicas`, and that the container is locked down. Against the cluster, before the first apply:
-`kubectl apply --dry-run=server -f k8s/staging/`.
+`k8s/staging/deploy.sh --dry-run TAG`. `python3 -m unittest k8s/test_staging_scripts.py` exercises the scripts against stub `kubectl`, `docker` and `curl` (no cluster, registry or network).
 
 ## First-time cutover (do this once, in order)
 
