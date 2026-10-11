@@ -155,6 +155,9 @@ async fn main() -> anyhow::Result<()> {
     let replicas = rate_limit::parse_replicas(std::env::var("COMPANY_DNS_REPLICAS").ok().as_deref()).map_err(|m| anyhow::anyhow!(m))?;
     rate_limit::set_replicas(replicas);
     tracing::info!("Rate limits are divided across {replicas} replica(s)");
+    // COMPANY_DNS_RATE_LIMIT_*: the fleet-wide per-IP quotas of the two tiers (defaults 200/min burst 20 and 5/min burst 1).
+    let tier_limits = rate_limit::TierLimits::from_env().map_err(|m| anyhow::anyhow!(m))?;
+    tracing::info!("Per-IP rate limits (fleet-wide, per minute / burst): identified {}/{}, anonymous {}/{}", tier_limits.normal_per_minute, tier_limits.normal_burst, tier_limits.anonymous_per_minute, tier_limits.anonymous_burst);
     // COMPANY_DNS_CORS_ORIGINS: who may call the credentialed routes from a browser; lookups stay open (docs/plans/v4-staging-rollout.md, S8).
     let cors_origins = cors::CredentialedOrigins::parse(std::env::var("COMPANY_DNS_CORS_ORIGINS").ok().as_deref()).map_err(|m| anyhow::anyhow!(m))?;
     tracing::info!("Cross-origin browser calls: lookups from any origin; {} from {}", cors::CREDENTIALED_PATHS.join(", "), cors_origins.describe());
@@ -298,7 +301,7 @@ async fn main() -> anyhow::Result<()> {
     // `.layer(...)` was called (`OpenApiRouter::layer` is a pass-
     // through to `axum::Router::layer`, same "layer wraps what's
     // already there, not what's merged in after" semantics).
-    let tiered_limiter_state = TieredLimiterState::new(access.clone());
+    let tiered_limiter_state = TieredLimiterState::with_limits(access.clone(), tier_limits);
     tiered_limiter_state.spawn_periodic_sweep(Duration::from_secs(5 * 60));
 
     let health_router = OpenApiRouter::new().routes(routes!(health));

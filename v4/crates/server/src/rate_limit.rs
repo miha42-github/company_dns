@@ -79,6 +79,58 @@ const NORMAL_QUOTA_PER_MINUTE: u32 = 200;
 const NORMAL_BURST: u32 = 20;
 const DRACONIAN_QUOTA_PER_MINUTE: u32 = 5;
 const DRACONIAN_BURST: u32 = 1;
+const MAX_QUOTA: u32 = 1_000_000;
+
+/// The fleet-wide per-IP quotas of the two tiers, per minute and burst. The defaults are the constants above;
+/// `COMPANY_DNS_RATE_LIMIT_PER_MINUTE`/`_BURST` (callers that identify themselves) and
+/// `COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE`/`_BURST` (callers that do not) replace them. Still divided across replicas.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TierLimits {
+    pub normal_per_minute: u32,
+    pub normal_burst: u32,
+    pub anonymous_per_minute: u32,
+    pub anonymous_burst: u32,
+}
+
+impl Default for TierLimits {
+    fn default() -> Self {
+        Self {
+            normal_per_minute: NORMAL_QUOTA_PER_MINUTE,
+            normal_burst: NORMAL_BURST,
+            anonymous_per_minute: DRACONIAN_QUOTA_PER_MINUTE,
+            anonymous_burst: DRACONIAN_BURST,
+        }
+    }
+}
+
+fn parse_quota(name: &str, value: Option<&str>, default: u32) -> Result<u32, String> {
+    let Some(v) = value.map(str::trim).filter(|v| !v.is_empty()) else {
+        return Ok(default);
+    };
+    match v.parse::<u32>() {
+        Ok(n) if (1..=MAX_QUOTA).contains(&n) => Ok(n),
+        _ => Err(format!("{name} must be a whole number from 1 to {MAX_QUOTA}, got {v:?}")),
+    }
+}
+
+impl TierLimits {
+    /// From the four settings, each `None` (unset) meaning the default. A bad value is a startup error with a message,
+    /// never a silently different quota.
+    pub fn parse(get: impl Fn(&str) -> Option<String>) -> Result<Self, String> {
+        let d = Self::default();
+        let val = |name: &str| get(name);
+        Ok(Self {
+            normal_per_minute: parse_quota("COMPANY_DNS_RATE_LIMIT_PER_MINUTE", val("COMPANY_DNS_RATE_LIMIT_PER_MINUTE").as_deref(), d.normal_per_minute)?,
+            normal_burst: parse_quota("COMPANY_DNS_RATE_LIMIT_BURST", val("COMPANY_DNS_RATE_LIMIT_BURST").as_deref(), d.normal_burst)?,
+            anonymous_per_minute: parse_quota("COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE", val("COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE").as_deref(), d.anonymous_per_minute)?,
+            anonymous_burst: parse_quota("COMPANY_DNS_RATE_LIMIT_ANONYMOUS_BURST", val("COMPANY_DNS_RATE_LIMIT_ANONYMOUS_BURST").as_deref(), d.anonymous_burst)?,
+        })
+    }
+
+    pub fn from_env() -> Result<Self, String> {
+        Self::parse(|k| std::env::var(k).ok())
+    }
+}
 
 pub(crate) fn per_pod(aggregate: u32) -> NonZeroU32 {
     per_pod_for(aggregate, REPLICAS.load(Ordering::Relaxed))
@@ -105,11 +157,16 @@ pub struct TieredLimiterState {
 }
 
 impl TieredLimiterState {
+    #[cfg(test)]
     pub fn new(access: Option<Arc<Access>>) -> Self {
+        Self::with_limits(access, TierLimits::default())
+    }
+
+    pub fn with_limits(access: Option<Arc<Access>>, limits: TierLimits) -> Self {
         let normal_quota =
-            Quota::per_minute(per_pod(NORMAL_QUOTA_PER_MINUTE)).allow_burst(per_pod(NORMAL_BURST));
-        let draconian_quota = Quota::per_minute(per_pod(DRACONIAN_QUOTA_PER_MINUTE))
-            .allow_burst(per_pod(DRACONIAN_BURST));
+            Quota::per_minute(per_pod(limits.normal_per_minute)).allow_burst(per_pod(limits.normal_burst));
+        let draconian_quota = Quota::per_minute(per_pod(limits.anonymous_per_minute))
+            .allow_burst(per_pod(limits.anonymous_burst));
         let mut profile_quotas = HashMap::new();
         if let Some(access) = &access {
             for (id, grant) in access.profiles().rate_limit_grants() {
@@ -279,6 +336,47 @@ mod tests {
         assert_eq!(per_pod_for(NORMAL_BURST, 4).get(), 5);
         assert_eq!(per_pod_for(NORMAL_BURST, 2).get(), 10);
         assert_eq!(per_pod_for(NORMAL_QUOTA_PER_MINUTE, 1).get(), 200);
+    }
+
+    #[test]
+    fn tier_limits_default_to_the_constants_and_take_the_four_settings() {
+        let none = |_: &str| None;
+        assert_eq!(TierLimits::parse(none), Ok(TierLimits::default()));
+        let set = |k: &str| match k {
+            "COMPANY_DNS_RATE_LIMIT_PER_MINUTE" => Some(" 6000 ".to_string()),
+            "COMPANY_DNS_RATE_LIMIT_BURST" => Some("600".to_string()),
+            "COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE" => Some("120".to_string()),
+            _ => None,
+        };
+        let l = TierLimits::parse(set).unwrap();
+        assert_eq!((l.normal_per_minute, l.normal_burst, l.anonymous_per_minute, l.anonymous_burst), (6000, 600, 120, 1), "unset ones keep their default");
+        assert_eq!(per_pod_for(l.normal_per_minute, 12).get(), 500);
+        assert_eq!(per_pod_for(l.normal_burst, 12).get(), 50);
+    }
+
+    #[test]
+    fn tier_limits_refuse_nonsense_naming_the_setting() {
+        for bad in ["0", "-5", "lots", "1000001", "2.5"] {
+            let e = TierLimits::parse(|k| (k == "COMPANY_DNS_RATE_LIMIT_BURST").then(|| bad.to_string())).unwrap_err();
+            assert!(e.contains("COMPANY_DNS_RATE_LIMIT_BURST") && e.contains(bad), "{e}");
+        }
+    }
+
+    #[tokio::test]
+    async fn a_raised_per_ip_quota_lets_more_requests_through() {
+        // 12 per IP fleet-wide over the default 4 replicas: 3 per pod, then 429
+        let limits = TierLimits { normal_per_minute: 12, normal_burst: 12, anonymous_per_minute: 12, anonymous_burst: 12 };
+        let state = TieredLimiterState::with_limits(None, limits);
+        let app = Router::new()
+            .route("/x", get(|| async { "ok" }))
+            .layer(middleware::from_fn_with_state(state, tiered_rate_limit));
+        let mut codes = vec![];
+        for _ in 0..5 {
+            let mut req = Request::builder().uri("/x").header("user-agent", "Hackathon/1.0 (a@example.com)").body(Body::empty()).unwrap();
+            req.extensions_mut().insert(ConnectInfo(SocketAddr::from(([203, 0, 113, 9], 1234))));
+            codes.push(app.clone().oneshot(req).await.unwrap().status());
+        }
+        assert_eq!(codes, vec![StatusCode::OK, StatusCode::OK, StatusCode::OK, StatusCode::TOO_MANY_REQUESTS, StatusCode::TOO_MANY_REQUESTS]);
     }
 
     #[test]

@@ -35,10 +35,14 @@ WORDS = ("software bank steel oil gas food retail hotel airline shipping truckin
 SIC_CODES = ("0111 0211 0711 1311 1521 1611 2011 2211 2511 2711 2834 2911 3011 3312 3571 3674 3711 3812 4011 4213 4512 4813 4911 5012 5411 "
              "5812 5912 6021 6311 6512 7011 7372 7389 7512 7812 8011 8062 8211 8711").split()
 
-# route templates, by kind: {w} a random word, {q} three random words, {c} a real SIC code
+# route templates, by kind: {w} a random word, {q} three random words, {c} a real SIC code; the 'repeated' mix uses {rw}/{rc}, drawn from a small pool
 LOOKUPS = (("sic_description", "/V4.0/na/sic/description/{w}", 4), ("sic_code", "/V4.0/na/sic/code/{c}", 3), ("edgar_ciks", "/V4.0/na/companies/edgar/ciks/{w}", 3))
 EMBEDDING = (("similarity", "/V4.0/na/sic/similarity/{q}", 6), ("hybrid", "/V4.0/global/sic/hybrid/{q}", 4))
+# the "repeated" mix draws from a small pool, so the same lookups come round again: what clients that ask for the same codes and words do
+REPEATED_POOL = 20
+REPEATED = (("sic_description", "/V4.0/na/sic/description/{rw}", 4), ("sic_code", "/V4.0/na/sic/code/{rc}", 3), ("edgar_ciks", "/V4.0/na/companies/edgar/ciks/{rw}", 3))
 MIXES = {
+    "repeated": REPEATED,
     "lookups": LOOKUPS,
     "embedding": EMBEDDING,
     "mixed": tuple((n, p, w * 7) for n, p, w in LOOKUPS) + tuple((n, p, w * 3) for n, p, w in EMBEDDING),
@@ -76,7 +80,8 @@ class Target:
 
 
 def build_path(rng: random.Random, template: str) -> str:
-    return template.format(w=rng.choice(WORDS), q="%20".join(rng.sample(WORDS, 3)), c=rng.choice(SIC_CODES))
+    return template.format(w=rng.choice(WORDS), q="%20".join(rng.sample(WORDS, 3)), c=rng.choice(SIC_CODES),
+                           rw=rng.choice(WORDS[:REPEATED_POOL]), rc=rng.choice(SIC_CODES[:REPEATED_POOL // 2]))
 
 
 def percentile(sorted_values: list[float], p: float) -> float:

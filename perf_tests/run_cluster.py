@@ -52,8 +52,8 @@ def parse_config(text: str) -> dict:
     if not m:
         raise ValueError(f"{text!r} is not REPLICASxCPUm/MEMORY, for example 2x1000m/2Gi")
     replicas, cpu, mem, unit = int(m[1]), int(m[2]), int(m[3]), m[4]
-    if not 1 <= replicas <= 16:
-        raise ValueError(f"{text!r}: replicas must be 1 to 16")
+    if not 1 <= replicas <= 32:
+        raise ValueError(f"{text!r}: replicas must be 1 to 32")
     if not 100 <= cpu <= 4000:
         raise ValueError(f"{text!r}: the CPU limit must be 100m to 4000m")
     mem_mi = mem * (1024 if unit == "Gi" else 1)
