@@ -33,7 +33,9 @@
 # included: it names the command), never prints a token, and only ever touches
 # the namespace company-dns-staging.
 
-set -euo pipefail
+set -Eeuo pipefail
+# Never fail silently: any command that stops the script says which one and where (set -E so functions and substitutions report too).
+trap 'echo "ERROR: unexpected failure (exit $?) at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"   # -P: so "inside the repository" cannot be fooled by a symlink
@@ -85,7 +87,10 @@ fi
 
 # --- The controller ---
 if [[ -z "${CONTROLLER_NS}" || -z "${CONTROLLER_NAME}" ]]; then
-  found="$("${KUBECTL[@]}" get svc -A --no-headers 2>/dev/null | awk '$2 ~ /sealed-secrets/ && $2 !~ /metrics/ {print $1, $2; exit}')"
+  # Read the whole listing first, then search it: piping kubectl into an awk that exits early kills kubectl with SIGPIPE, and pipefail then ends this script silently.
+  services="$("${KUBECTL[@]}" get svc -A --no-headers 2>&1)" || { echo "ERROR: could not list the cluster's services: ${services}" >&2; exit 1; }
+  found="$(awk '$2 ~ /sealed-secrets/ && $2 !~ /metrics/ {print $1, $2}' <<< "${services}")"
+  found="${found%%$'\n'*}"   # the first match
   if [[ -z "${found}" ]]; then
     echo "ERROR: could not find the sealed-secrets controller. Find it with: ${KUBECTL[*]} get svc -A | grep -i sealed" >&2
     echo "       then pass --controller-namespace and --controller-name." >&2

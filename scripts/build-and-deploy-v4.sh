@@ -42,7 +42,9 @@
 #   - It does not create the credentials: run scripts/seal-secrets-v4.sh first (docs/v4-bringup.md, step 3).
 #   - It can only act on the namespace company-dns-staging, and it never deletes anything.
 
-set -euo pipefail
+set -Eeuo pipefail
+# Never fail silently: any command that stops the script says which one and where (set -E so functions and substitutions report too).
+trap 'echo "ERROR: unexpected failure (exit $?) at line ${LINENO}: ${BASH_COMMAND}" >&2' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -119,7 +121,7 @@ annotation() {   # value of one of our annotations on the Deployment, or "none"
   [[ -n "${v}" && "${v}" != "<no value>" ]] && echo "${v}" || echo "none"
 }
 running_image() { k get deployment "${DEPLOYMENT}" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true; }
-token_of() { [[ -f "${SECRETS_DIR}/tokens" ]] && grep "^$1:" "${SECRETS_DIR}/tokens" | head -1 | cut -d: -f2 || true; }
+token_of() { [[ -f "${SECRETS_DIR}/tokens" ]] && awk -F: -v p="$1" '$1 == p {print substr($0, length(p) + 2); exit}' "${SECRETS_DIR}/tokens" || true; }
 
 # --- Preflight: every problem at once ---
 preflight() {
@@ -271,7 +273,9 @@ smoke_forward() {   # through a port-forward: no Ingress involved
   for _ in $(seq 1 "${V4_SMOKE_TRIES:-20}"); do curl -fsS -A "${UA}" "http://127.0.0.1:${PF_PORT}/health" >/dev/null 2>&1 && { ok=1; break; }; sleep 1; done
   if [[ ${ok} -eq 1 ]]; then
     echo "    /health ok"
-    curl -fsS -A "${UA}" "http://127.0.0.1:${PF_PORT}/V4.0/na/sic/code/3571" | head -c 120 && echo && echo "    a SIC lookup ok" || rc=1
+    # capture the answer, then show the start of it: `curl | head -c` fails under pipefail whenever the answer is longer than head reads
+    local body
+    if body="$(curl -fsS -A "${UA}" "http://127.0.0.1:${PF_PORT}/V4.0/na/sic/code/3571")"; then echo "    ${body:0:120}"; echo "    a SIC lookup ok"; else rc=1; fi
   else
     echo "ERROR: /health did not answer through the port-forward" >&2; rc=1
   fi

@@ -35,7 +35,9 @@ case "$args" in
   "get svc -A --no-headers")
     [ -n "${STUB_NO_CONTROLLER:-}" ] && exit 0
     printf 'kube-system   sealed-secrets-controller-metrics   ClusterIP   10.0.0.1   <none>   8081/TCP   1d\n'
-    printf 'kube-system   sealed-secrets-controller   ClusterIP   10.0.0.2   <none>   8080/TCP   1d\n';;
+    printf 'kube-system   sealed-secrets-controller   ClusterIP   10.0.0.2   <none>   8080/TCP   1d\n'
+    # a real cluster lists far more services than fit in a pipe buffer, after the match
+    [ -n "${STUB_BIG_SVC:-}" ] && for i in $(seq 1 6000); do printf 'ns%d   svc-%d   ClusterIP   10.1.%d.%d   <none>   80/TCP   1d\n' $i $i $((i / 250)) $((i % 250)); done;;
   *"get secret company-dns-credentials"*) [ "${STUB_SECRET:-present}" = missing ] && exit 1; echo secret;;
   *"get certificate company-dns-staging-io-tls -o jsonpath"*) echo "${STUB_CERT_READY:-True}";;
   *"get certificate company-dns-staging-io-tls"*)
@@ -73,6 +75,8 @@ if [[ "$args" == *" -w "* ]]; then
   exit 0
 fi
 [ "${STUB_SMOKE:-ok}" = fail ] && [[ "$args" == *"127.0.0.1:18089"* ]] && exit 22
+# a real lookup answer is much longer than the 120 characters the script shows
+if [ -n "${STUB_BIG_BODY:-}" ] && [[ "$args" == *"/V4.0/na/sic/code"* ]]; then for i in $(seq 1 400); do printf '{"code":"3571","description":"Electronic Computers and related things %d"}' $i; done; exit 0; fi
 echo '{}'
 exit 0
 '''
@@ -104,6 +108,10 @@ PYTHON = '''#!/usr/bin/env bash
 if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; exit 0; fi
 exec "%s" "$@"
 ''' % sys.executable
+OPENSSL = '''#!/usr/bin/env bash
+[ "${STUB_OPENSSL:-ok}" = fail ] && exit 1
+exec /usr/bin/openssl "$@"
+'''
 BUILD_STUB = '#!/usr/bin/env bash\necho "$(basename "$0") $* [MODEL_DIR=${MODEL_DIR:-}]" >> "$STUB_STATE/calls.log"\n[ "${STUB_BUILD:-ok}" = fail ] && [[ "$(basename "$0")" == docker-build.sh ]] && exit 1\n[ "${STUB_SMOKE_IMAGE:-ok}" = fail ] && [[ "$(basename "$0")" == docker-smoke.sh ]] && exit 1\nexit 0\n'
 SUITE_STUB = '#!/usr/bin/env python3\nimport json, os, sys\nopen(os.environ["STUB_STATE"] + "/suite.json", "w").write(json.dumps({"argv": sys.argv[1:], "env": {k: os.environ.get(k) for k in ("BASE_URL", "API_TESTS_PROFILE", "API_TESTS_TOKEN")}}))\n'
 
@@ -122,7 +130,7 @@ class Base(unittest.TestCase):
         self.state.mkdir()
         (self.state / "calls.log").write_text("")
         self.bin = self.tmp / "bin"
-        for name, body in (("kubectl", KUBECTL), ("curl", CURL), ("docker", DOCKER), ("kubeseal", KUBESEAL), ("python3", PYTHON)):
+        for name, body in (("kubectl", KUBECTL), ("curl", CURL), ("docker", DOCKER), ("kubeseal", KUBESEAL), ("python3", PYTHON), ("openssl", OPENSSL)):
             exe(self.bin / name, body)
         self.home = self.tmp / "home"
         self.home.mkdir()
@@ -224,6 +232,7 @@ class Deploy(Base):
     def test_a_full_run_builds_pushes_checks_the_pull_and_deploys_in_order(self):
         r = self.run_script("10112026-abc1234")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("unexpected failure", r.stderr, "the failure trap must not fire on handled failures")
         order = ["docker login", "docker-build.sh", "docker-smoke.sh", "docker push", "docker pull", "namespace.yaml", "sealedsecret-credentials.yaml",
                  "configmap-rules.yaml", "configmap-loglevel.yaml", "apply -f -", "rollout status", "port-forward", "middleware-redirect.yaml",
                  "ingress.yaml", "certificate.yaml", "annotate"]
@@ -310,6 +319,12 @@ class Deploy(Base):
         joined = "\n".join(self.calls())
         self.assertNotIn("apply -f -", joined)
         self.assertNotIn("ingress.yaml", joined)
+
+    def test_a_real_sized_lookup_answer_does_not_fail_the_smoke_test(self):
+        # regression: `curl | head -c 120` under pipefail failed whenever the answer was longer than 120 bytes
+        r = self.run_script("10112026-abc1234", STUB_BIG_BODY="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("a SIC lookup ok", r.stdout)
 
     def test_a_failed_smoke_test_means_the_ingress_is_never_applied(self):
         r = self.run_script("10112026-abc1234", STUB_SMOKE="fail")
@@ -460,6 +475,7 @@ class Seal(Base):
     def test_a_token_and_a_matching_hash_for_every_profile_the_rules_name(self):
         r = self.run_script()
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("unexpected failure", r.stderr)
         tokens = self.tokens()
         self.assertEqual(set(tokens), {"mediumroast.io", "staging-test"})
         hashes = dict(l.split(":", 1) for l in self.read("credentials").splitlines() if not l.startswith("#"))
@@ -501,6 +517,21 @@ class Seal(Base):
         seal = next(c for c in self.calls() if c.startswith("kubeseal"))
         self.assertIn("--controller-namespace kube-system --controller-name sealed-secrets-controller --format yaml", seal)
         self.assertIn("kubectl create secret generic company-dns-credentials -n company-dns-staging", "\n".join(self.calls()))
+
+    def test_a_cluster_with_thousands_of_services_still_finds_the_controller(self):
+        # regression: awk's early exit closed the pipe, kubectl died of SIGPIPE, and pipefail made the script exit silently (status 141) before creating anything
+        for _ in range(3):
+            r = self.run_script(STUB_BIG_SVC="1")
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("kube-system/sealed-secrets-controller", r.stdout)
+        self.assertTrue((self.secrets / "tokens").exists())
+        self.assertTrue((self.repo / "k8s/staging/sealedsecret-credentials.yaml").exists())
+
+    def test_an_unexpected_failure_is_never_silent(self):
+        r = self.run_script(STUB_OPENSSL="fail")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("unexpected failure", r.stderr)
+        self.assertIn("line", r.stderr)
 
     def test_flags_override_the_discovered_controller(self):
         self.run_script("--controller-namespace", "sealed", "--controller-name", "ctl")
