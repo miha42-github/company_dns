@@ -1,4 +1,7 @@
 # Profiles' rules for staging: defaults and per-profile overrides, no secrets (docs/plans/v4-sql-endpoint.md 5a).
+# staging-test is for the API test suite, the capacity test and the owner: it has no rate limit (a suite that sends hundreds of requests in
+# seconds was throttled to 429s on the first real run with a quota of 600/min). The rate limiter itself is checked with an anonymous or
+# identified-User-Agent caller (docs/v4-bringup.md, step 6.3).
 # Every profile named here must also have a line in the staging credentials Secret, or the server refuses to
 # start. The SQL limits are first guesses: the capacity test (docs/plans/v4-staging-rollout.md WP7) sets the real ones.
 # Profiles are read at start, so a change here needs a rollout restart.
@@ -20,7 +23,7 @@ data:
                   "limits": {"max_rows": 500, "timeout_secs": 5, "concurrency": 2, "requests_per_minute": 30}}
         },
         "staging-test": {
-          "rate_limit": {"requests_per_minute": 600, "burst": 60},
+          "rate_limit": {"bypass": true},
           "sql": {"datasets": ["sic", "edgar"],
                   "limits": {"max_rows": 1000, "timeout_secs": 10, "concurrency": 2, "requests_per_minute": 60}}
         }

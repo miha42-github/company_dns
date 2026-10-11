@@ -255,6 +255,13 @@ push_image() {
 
 # --- Apply ---
 with_tag() { sed "s|image: ${REGISTRY}/${IMAGE_NAME}:.*|image: ${FULL_IMAGE}|" "${DEPLOYMENT_MANIFEST}"; }
+# Apply one file (or the Deployment, "-"), show what kubectl said, and keep it in APPLY_OUT so a caller can see whether it changed anything.
+APPLY_OUT=""
+apply_noted() {
+  APPLY_OUT="$(apply "$@" 2>&1)" || { echo "${APPLY_OUT}" >&2; return 1; }
+  echo "${APPLY_OUT}"
+}
+
 apply() {   # apply one file, or the Deployment from stdin with the tag; a dry run changes nothing
   local flag=(); [[ "${DRY}" -eq 0 ]] || flag=(--dry-run=server)
   if [[ "$1" == "-" ]]; then with_tag | "${KUBECTL[@]}" apply "${flag[@]+"${flag[@]}"}" -f -
@@ -435,12 +442,22 @@ FIRST=0; k get certificate "${CERTIFICATE}" >/dev/null 2>&1 || FIRST=1
 
 say "Applying the namespace and the credentials"
 apply namespace.yaml
-if [[ -f "${REPO_ROOT}/${MANIFEST_DIR}/sealedsecret-credentials.yaml" ]]; then apply sealedsecret-credentials.yaml; fi
+CONFIG_CHANGED=0   # a profile or credential change is read only at start: the pods must be restarted for it to take effect
+if [[ -f "${REPO_ROOT}/${MANIFEST_DIR}/sealedsecret-credentials.yaml" ]]; then
+  apply_noted sealedsecret-credentials.yaml; [[ "${APPLY_OUT}" != *" configured"* ]] || CONFIG_CHANGED=1
+fi
 wait_for_secret || die "the Secret ${SECRET} does not exist in ${NAMESPACE} (the controller could not open the sealed secret? see: ${KUBECTL[*]} -n ${NAMESPACE} describe sealedsecret ${SECRET})"
 
 say "Applying the configuration and the workload"
-apply configmap-rules.yaml; apply configmap-loglevel.yaml
-apply -; apply service.yaml
+apply_noted configmap-rules.yaml; [[ "${APPLY_OUT}" != *" configured"* ]] || CONFIG_CHANGED=1
+apply configmap-loglevel.yaml     # the log level is watched live: no restart needed
+apply_noted -; DEPLOYMENT_OUT="${APPLY_OUT}"
+apply service.yaml
+if [[ ${CONFIG_CHANGED} -eq 1 && "${DEPLOYMENT_OUT}" == *" unchanged"* ]]; then
+  # the rules or credentials changed but the Deployment did not, so nothing would restart the pods and the change would silently not apply
+  say "The profiles or credentials changed: restarting the pods so they are read"
+  k rollout restart deployment/"${DEPLOYMENT}"
+fi
 rollout
 smoke_forward || die "the smoke test failed; the Ingress was not applied. Logs: ${KUBECTL[*]} -n ${NAMESPACE} logs deploy/${DEPLOYMENT}"
 
@@ -451,6 +468,8 @@ if [[ "$(k get certificate "${CERTIFICATE}" -o jsonpath='{.status.conditions[?(@
 fi
 VERIFIED=0; verify_https && VERIFIED=1
 record
-[[ ${SUITE} -eq 0 ]] || run_suite
+SUITE_OK=1
+[[ ${SUITE} -eq 0 ]] || run_suite || SUITE_OK=0
 summary
 [[ ${VERIFIED} -eq 1 ]] || die "the deploy completed but the HTTPS verification above failed"
+[[ ${SUITE_OK} -eq 1 ]] || die "the API test suite reported failures (above); the deployment itself is up and verified"

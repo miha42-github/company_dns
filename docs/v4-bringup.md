@@ -14,7 +14,7 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 | Workload | Namespace `company-dns-staging`; Deployment `company-dns`, **2 replicas**, port 4000, 100m / 256Mi to 500m / 1Gi each, read-only root filesystem, UID 10001 |
 | Image | `ghcr.io/miha42-github/company_dns/company_dns_v4:MMDDYYYY-<sha7>` (public, `linux/amd64`, the `release-small` profile, data and model inside) |
 | Config | `k8s/staging/` (manifests only): rules and log level ConfigMaps, the sealed credentials |
-| Profiles | `mediumroast.io` (no rate limit, SQL) and `staging-test` (own quota, SQL); the SQL endpoint is **on** here and off in production |
+| Profiles | `mediumroast.io` and `staging-test`, both with **no rate limit** and SQL access (the suite sends hundreds of requests in seconds, so a quota throttles it to 429s); the SQL endpoint is **on** here and off in production |
 | Not touched | Production (`company-dns`, V3). The scripts can only act on `company-dns-staging`. |
 
 ## 1. What you need first (once)
@@ -189,7 +189,7 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 | Redeploy a tag already pushed | `./scripts/build-and-deploy-v4.sh --no-build TAG` |
 | Roll back | `./scripts/build-and-deploy-v4.sh --rollback` |
 | Change the log level on a live pod | Edit the `company-dns-log-level` ConfigMap (step 6.2) |
-| Change profiles' rules | Edit `k8s/staging/configmap-rules.yaml`, redeploy (profiles are read at start) |
+| Change profiles' rules | Edit `k8s/staging/configmap-rules.yaml`, run `./scripts/build-and-deploy-v4.sh --no-build TAG`: the script restarts the pods itself when the rules or credentials changed but the image did not (profiles are read only at start) |
 | Add a profile | Add it to the rules, then `./scripts/seal-secrets-v4.sh` (existing tokens are kept), redeploy |
 | Rotate every token | `./scripts/seal-secrets-v4.sh --rotate`, commit the sealed file, redeploy, hand out the new tokens (a changed Secret alone does not restart pods: the redeploy does) |
 | Change a setting (`COMPANY_DNS_*`) | Edit the Deployment's `env` in `k8s/staging/deployment.yaml`; the settings are in `v4/README.md` ("Settings reference"). `COMPANY_DNS_REPLICAS` must equal `replicas`. |
