@@ -63,6 +63,14 @@ pub fn ok(module: &str, message: impl Into<String>, data: Value) -> impl IntoRes
     (StatusCode::OK, Json(envelope(200, message, module, data)))
 }
 
+/// Like `ok`, for an answer whose `data` is a dictionary KEYED BY RESULT (a map of company name to CIK): the `total` layer (`total.rs`)
+/// cannot tell that from a single record, so the handler states the count itself and the layer leaves it alone.
+pub fn ok_with_total(module: &str, message: impl Into<String>, data: Value, total: u64) -> impl IntoResponse {
+    let mut body = envelope(200, message, module, data);
+    body["total"] = Value::from(total);
+    (StatusCode::OK, Json(body))
+}
+
 pub fn not_found(module: &str, message: impl Into<String>) -> impl IntoResponse {
     (
         StatusCode::NOT_FOUND,

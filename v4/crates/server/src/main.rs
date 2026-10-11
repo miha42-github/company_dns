@@ -1471,10 +1471,12 @@ async fn edgar_ciks_impl(state: &AppState, company_name: &str) -> axum::response
                 .iter()
                 .map(|m| (m.company_name.clone(), m.cik))
                 .collect();
-            ok(
+            // `data` is a map of company name to CIK, one entry per match: the count is the number of entries
+            envelope::ok_with_total(
                 "EdgarCatalog->find_by_name",
                 format!("{} CIK matches for [{company_name}]", ciks.len()),
                 json!(ciks),
+                ciks.len() as u64,
             )
             .into_response()
         }
