@@ -68,6 +68,13 @@ class StagingManifests(unittest.TestCase):
         self.assertTrue(image.startswith(IMAGE_PREFIX), image)
         self.assertNotEqual(image.rsplit(":", 1)[1], "latest")
 
+    def test_the_committed_tag_is_the_placeholder_because_the_deploy_script_applies_the_real_one(self):
+        # scripts/build-and-deploy-v4.sh puts the tag in as it applies the manifest and records it on the Deployment; the repository never carries a real one
+        self.assertEqual(self.c["image"], IMAGE_PREFIX + "UNSET")
+
+    def test_no_script_lives_in_the_configuration_directory(self):
+        self.assertEqual([p.name for p in DIR.iterdir() if p.suffix in (".sh", ".py") or p.name.endswith(".md")], [], "k8s/staging holds configuration only")
+
     def test_two_replicas_and_the_rate_limit_setting_agrees(self):
         replicas = self.dep["spec"]["replicas"]
         self.assertEqual(replicas, 2)
@@ -150,7 +157,7 @@ class StagingManifests(unittest.TestCase):
     def test_a_committed_sealed_secret_is_bound_to_the_staging_secret_name_and_namespace(self):
         sealed = [d for d in of_kind(self.docs, "SealedSecret")]
         if not sealed:
-            self.skipTest("the sealed credentials are not committed yet (k8s/staging/CREDENTIALS.md)")
+            self.skipTest("the sealed credentials are not committed yet (docs/v4-bringup.md, step 3)")
         meta = sealed[0]["metadata"]
         self.assertEqual((meta["name"], meta["namespace"]), ("company-dns-credentials", NS))
         self.assertNotIn("stringData", sealed[0].get("spec", {}))

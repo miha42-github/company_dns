@@ -91,5 +91,7 @@ v4/perf-secrets/
 # virtual environment for perf_tests/report.py (matplotlib)
 perf_tests/.venv/
 
-# what v4/scripts/build-and-push.sh pushed (one JSON line per build)
+# what scripts/build-and-deploy-v4.sh deployed (one JSON line per deploy)
 v4/.build-log
+# the API test suite report written by scripts/build-and-deploy-v4.sh --suite
+v4/.staging-suite.json

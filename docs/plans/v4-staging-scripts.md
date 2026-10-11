@@ -1,6 +1,6 @@
 # V4 staging scripts: follow the established pattern, automate more, fold into `svc_ctl.sh` later
 
-Status: **Approach decided (2026-10-11); nothing implemented yet except the draft bring-up guide [`docs/v4-bringup.md`](../v4-bringup.md).** Decisions in section 5: apply-time tag with the cluster as the record, one run on `cafe-1`, tokens sealed on `cafe-1`.
+Status: **Implemented (2026-10-11): steps A to D below are done; step E, the first real run on `cafe-1`, is next.** The scripts are tested against stubs only (`python3 scripts/test_v4_scripts.py`, 45 tests); neither has run against a registry or the cluster yet. Decisions in section 5: apply-time tag with the cluster as the record, one run on `cafe-1`, tokens sealed on `cafe-1`.
 Owner: michael.hay@mediumroast.io
 Replaces the script parts of work packages WP2, WP4 and WP5 in [`v4-staging-rollout.md`](v4-staging-rollout.md) (the manifests, WP3, stay as they are).
 Goal: **V4 operable on staging** (`https://company-dns-staging.mediumroast.io`). Some technical debt is accepted to get there; section 6 sketches paying it off.
@@ -39,7 +39,7 @@ Decisions:
 
 Everything below runs unattended after one command. Nothing asks a question; a problem stops the script with the exact fix.
 
-**`scripts/build-and-deploy-v4.sh [TAG] [--check] [--status] [--no-build] [--dry-run] [--rollback [TAG]] [--suite]`**
+**`scripts/build-and-deploy-v4.sh [TAG] [--check] [--status] [--no-build] [--dry-run] [--rollback [TAG]] [--suite] [--allow-dirty]`**
 
 | Step | What it does |
 |---|---|
@@ -62,7 +62,7 @@ record deployed versions later (GitOps style), a tag file changed through a pull
 `--no-build` deploys a tag that is already pushed. `--status` prints what is running and changes nothing. `--rollback` undoes the last rollout, or deploys a named tag. `--dry-run` runs the preflight and a server-side dry run of everything. The
 namespace is a constant (`company-dns-staging`): the script cannot touch production, and it never deletes anything.
 
-**`scripts/seal-secrets-v4.sh [--rotate] [--apply]`**
+**`scripts/seal-secrets-v4.sh [--rotate] [--reseal] [--apply] [--out DIR]`**
 
 | Step | What it does |
 |---|---|
@@ -73,7 +73,7 @@ namespace is a constant (`company-dns-staging`): the script cannot touch product
 | 4. Apply (optional, `--apply`) | Applies it and waits for the controller to create the Secret, so `build-and-deploy-v4.sh` finds it. |
 | 5. Report | Where the tokens are (store them in the password manager), and what to commit: only `sealedsecret-credentials.yaml`. |
 
-Idempotent: run again and nothing changes unless you ask (`--rotate`).
+Idempotent: run again and nothing changes unless you ask (`--rotate`, or `--reseal`: sealing is not repeatable byte for byte, so an unchanged credentials file is left alone and the committed sealed file does not churn).
 
 ## 4. Moving what #121 added
 
@@ -89,15 +89,17 @@ Idempotent: run again and nothing changes unless you ask (`--rotate`).
 
 ## 5. Work, in order
 
-| # | Work | Done when |
+| # | Work | State |
 |---|---|---|
-| A | This plan and the draft `docs/v4-bringup.md` merged. | You agree the approach and the guide's steps. |
-| B | `scripts/seal-secrets-v4.sh` and its tests. | The tests pass against the stubs; `--check`-style preflight lists every missing prerequisite in one run. |
-| C | `scripts/build-and-deploy-v4.sh` and its tests. | The tests pass; the dry run works on `cafe-1` against the real cluster. |
-| D | Remove the #121 scripts and runbook (section 4); update `k8s/README.md` and the rollout plan. | `k8s/staging/` contains only configuration. |
-| E | **The first real run on `cafe-1`, following `docs/v4-bringup.md` literally.** Every place the guide or a script is wrong is fixed in the guide or the script, and the guide is dated as proven. | V4 serves `https://company-dns-staging.mediumroast.io` from two pods and the guide's verification section passes. |
+| A | This plan and the draft `docs/v4-bringup.md` merged. | **Done** (PR #122) |
+| B | `scripts/seal-secrets-v4.sh` and its tests. | **Done** (2026-10-11) |
+| C | `scripts/build-and-deploy-v4.sh` and its tests. | **Done** (2026-10-11); its `--dry-run` against the real cluster is the first check on `cafe-1` |
+| D | Remove the #121 scripts and runbook (section 4); update `k8s/README.md` and the rollout plan. | **Done** (2026-10-11): `k8s/staging/` holds only configuration, and a manifest test keeps it so |
+| E | **The first real run on `cafe-1`, following `docs/v4-bringup.md` literally.** Every place the guide or a script is wrong is fixed in the guide or the script, and the guide is dated as proven. | **Next.** Done when V4 serves `https://company-dns-staging.mediumroast.io` from two pods and the guide's verification section passes. |
 
-B and C can be written in parallel. E is the real test; steps A to D are only ready when E has run.
+Built as planned, with these additions that the tests surfaced: **the authenticated check gives curl its credentials on standard input** (`-K -`), because `-u user:token` would have put the token on a command
+line visible to other users of the node (a test caught this in the first draft); `--allow-dirty`; `--reseal`; the waits and the smoke-test retries are environment variables (`V4_WAIT_PUBLIC_SECS`,
+`V4_WAIT_CERT_SECS`, `V4_POLL_SECS`, `V4_SMOKE_TRIES`) so the tests run in seconds, with the production defaults unchanged.
 
 **Decisions (2026-10-11):**
 

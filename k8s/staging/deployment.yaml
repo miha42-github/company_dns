@@ -45,7 +45,7 @@ spec:
       # The image package is public: no imagePullSecrets (docs/plans/v4-staging-rollout.md, S1).
       containers:
         - name: company-dns
-          # ghcr.io/miha42-github/company_dns/company_dns_v4:<tag>. The tag is set by k8s/staging/deploy.sh on every
+          # ghcr.io/miha42-github/company_dns/company_dns_v4:<tag>. The tag is put in by scripts/build-and-deploy-v4.sh as it applies this file, on every
           # deploy (never edit it by hand, never `latest`). UNSET is deliberately not pullable.
           image: ghcr.io/miha42-github/company_dns/company_dns_v4:UNSET
           imagePullPolicy: IfNotPresent

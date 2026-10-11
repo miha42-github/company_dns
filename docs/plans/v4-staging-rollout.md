@@ -154,7 +154,7 @@ WP1, WP2 and WP3 can be written in parallel as three branches. I would start wit
 
 - [x] S1 (public), S6 (DNS resolves), S8 (CORS) decided 2026-10-10; [ ] S2 to S5 and S7 confirmed.
 - [ ] WP1 merged: replica count and (if decided) CORS; settings reference written.
-- [ ] WP2: the small image is built and pushed by `v4/scripts/build-and-push.sh`; the tag, digest and data manifest hash are recorded.
+- [ ] WP2: the small image is built and pushed by `scripts/build-and-deploy-v4.sh`; the tag and digest are recorded on the Deployment and in `v4/.build-log`.
 - [ ] WP3 to WP5: `k8s/staging/` and `deploy.sh` merged; manifest test green; dry runs clean.
 - [ ] WP4: staging credentials sealed; no secret in the repository.
 - [ ] WP6: `https://company-dns-staging.mediumroast.io` serves from two pods with a valid certificate.
