@@ -1,6 +1,6 @@
 # V4 staging rollout: Kubernetes, manifests and build scripting for `company-dns-staging.mediumroast.io`
 
-Status: **Decisions S1, S6 and S8 made (2026-10-10); ready to start WP1 to WP3.**
+Status: **Decisions S1, S6 and S8 made (2026-10-10). WP1 and WP3 merged. The script work packages (WP2, WP4, WP5, WP6) are redone as `scripts/build-and-deploy-v4.sh` and `scripts/seal-secrets-v4.sh`, with `docs/v4-bringup.md` as the guide: see [`v4-staging-scripts.md`](v4-staging-scripts.md) (2026-10-11), which supersedes the script parts below.**
 Owner: michael.hay@mediumroast.io
 Scope: everything between "a V4 image that has passed the amd64 comparison" and "V4 is running on the MicroK8s cluster at
 `company-dns-staging.mediumroast.io`, verified, with a rollback that works". This is step 7 of
@@ -58,7 +58,7 @@ Each has a deliverable and a way to see it is done. Branches are small and indep
   gain a line. **Done when:** `cargo test --workspace` passes and a server started with `COMPANY_DNS_REPLICAS=2` reports per-pod quotas of double the default's.
 - CORS per S8: open for lookups, allow-list (`COMPANY_DNS_CORS_ORIGINS`) on the credentialed routes; tests for a foreign origin on a lookup (allowed), on a credentialed route (blocked: no `Access-Control-Allow-Origin`), an allowed origin, and the preflight. Settings reference for every variable (the gap noted on 2026-10-10): name, default, effect, where to set it per deployment.
 
-### WP2. Publish script: `v4/scripts/build-and-push.sh` (written 2026-10-10; to be run on `cafe-1`)
+### WP2. Publish script: `v4/scripts/build-and-push.sh` (written 2026-10-10; to be run on `cafe-1`) (superseded 2026-10-11: now step 1 to 4 of `scripts/build-and-deploy-v4.sh`)
 
 Builds the amd64 image with `docker-build.sh` (small profile by default), runs `docker-smoke.sh` on it, tags it per S3, logs in to GHCR with the PAT in the
 repository's gitignored `.env` (the V3 script's convention), pushes, and prints the digest and a one-line record (tag, commit, profile, data manifest hash)
@@ -89,13 +89,13 @@ k8s/staging/
 `k8s/` that asserts staging uses its own namespace and hostname, never mounts a prod secret, names the V4 image package, and has the replica setting equal to `replicas`).
 **Done when:** the dry runs pass and the test is green.
 
-### WP4. Secrets: staging credentials and rules (runbook and script written 2026-10-10: [`k8s/staging/CREDENTIALS.md`](../../k8s/staging/CREDENTIALS.md), `k8s/staging/make-credentials.sh`; the sealing itself needs the cluster and is yours to run)
+### WP4. Secrets: staging credentials and rules (runbook and script written 2026-10-10: [`k8s/staging/CREDENTIALS.md`](../../k8s/staging/CREDENTIALS.md), `k8s/staging/make-credentials.sh`; the sealing itself needs the cluster and is yours to run) (superseded 2026-10-11: now `scripts/seal-secrets-v4.sh`; the guide is `docs/v4-bringup.md`)
 
 Generate staging-only profiles (`mediumroast.io`-style and a test profile for the suite and capacity test), hash the tokens, seal with the cluster's controller (`kubeseal`),
 commit only the sealed file; plaintext tokens stay in the owner's password manager. Rules ConfigMap from `v4/rules.example.json` with staging values.
 **Done when:** the SealedSecret decrypts in `company-dns-staging` and in no other namespace, and `git grep` finds no token or plaintext hash.
 
-### WP5. Deploy script: `k8s/staging/deploy.sh` (written 2026-10-10; to be run against the cluster)
+### WP5. Deploy script: `k8s/staging/deploy.sh` (written 2026-10-10; to be run against the cluster) (superseded 2026-10-11: now `scripts/build-and-deploy-v4.sh`)
 
 Same conventions as `scripts/build-and-deploy.sh`, for staging only: takes a tag, **refuses any namespace other than `company-dns-staging`**, bumps the image tag in the
 Deployment, applies in the safe first-time order (namespace, secret, configmaps, deployment, service; a port-forward smoke; then ingress, middleware, certificate), waits for the rollout,
@@ -103,7 +103,7 @@ prints pod status and the first `/health`. Routine redeploys apply everything. `
 **Done when:** a first-time run on the cluster ends with two ready pods and a passing port-forward smoke, and a second run with another tag rolls without downtime
 (`maxUnavailable: 0`).
 
-### WP6. First rollout, as a runbook (written into `k8s/README.md`, run by you with me alongside)
+### WP6. First rollout, as a runbook (written into `k8s/README.md`, run by you with me alongside) (superseded 2026-10-11: it is `docs/v4-bringup.md`)
 
 1. Merge WP1 to WP5; run WP2 on `cafe-1` (image pushed).
 2. You create the DNS record (S6) and confirm it resolves.
