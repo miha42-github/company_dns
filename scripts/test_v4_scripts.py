@@ -88,9 +88,9 @@ case "$1" in
   info) [[ "$*" == *"--format"* ]] && echo /tmp;;
   login) cat >/dev/null;;
   pull)
-    if [ "${STUB_PULL:-ok}" = never ]; then exit 1; fi
+    if [ "${STUB_PULL:-ok}" = never ]; then echo "Error response from daemon: denied" >&2; exit 1; fi
     n=$(cat "$S/pulls" 2>/dev/null || echo 0); echo $((n + 1)) > "$S/pulls"
-    [ "$n" -lt "${STUB_PULL_FAILS:-0}" ] && exit 1;;
+    [ "$n" -lt "${STUB_PULL_FAILS:-0}" ] && { echo "Error response from daemon: denied" >&2; exit 1; };;
   inspect) echo "ghcr.io/miha42-github/company_dns/company_dns_v4@sha256:abc123";;
 esac
 exit 0
@@ -304,6 +304,7 @@ class Deploy(Base):
         self.assertIn("Change visibility", r.stdout)
         self.assertIn("https://github.com/miha42-github?tab=packages", r.stdout)
         self.assertIn("company_dns%2Fcompany_dns_v4", r.stdout, "the link must name the V4 package, not V3's")
+        self.assertIn("The anonymous pull said: Error response from daemon: denied", r.stdout)
         self.assertGreaterEqual(len([c for c in self.calls() if c.startswith("docker pull")]), 3)
         self.assertFalse(any("DOCKER_CONFIG=]" in c for c in self.calls() if c.startswith("docker pull")), "the check must use an empty Docker config")
 
@@ -311,6 +312,7 @@ class Deploy(Base):
         r = self.run_script("10112026-abc1234", STUB_PULL="never")
         self.assertEqual(r.returncode, 1)
         self.assertIn("--no-build 10112026-abc1234", r.stderr)
+        self.assertIn("denied", r.stdout, "the registry's own answer is shown, not hidden")
         self.assertNotIn("namespace.yaml", "\n".join(self.calls()))
 
     # ----------------------------------------------------------- applying and verifying

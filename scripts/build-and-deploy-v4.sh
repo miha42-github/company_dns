@@ -227,8 +227,11 @@ push_image() {
   local anon tries=0 max
   max=$((WAIT_PUBLIC_SECS / (POLL_SECS > 0 ? POLL_SECS : 1)))
   anon="$(mktemp -d)"
-  until DOCKER_CONFIG="${anon}" docker pull "${FULL_IMAGE}" >/dev/null 2>&1; do
+  local pull_err=""
+  until pull_err="$(DOCKER_CONFIG="${anon}" docker pull "${FULL_IMAGE}" 2>&1 >/dev/null)"; do
     if [[ ${tries} -eq 0 ]]; then
+      echo "    The anonymous pull said: $(printf '%s' "${pull_err}" | tail -1)"
+      echo "    (denied or unauthorized: the package is private. manifest unknown or not found: the push did not leave this tag in ${REGISTRY}/${IMAGE_NAME}.)"
       echo "    A new GHCR package starts private. Make it public once. It is a DIFFERENT package from V3's (company_dns/company_dns): company_dns/${IMAGE_NAME}."
       echo "    A private package is visible only to its owner, and it is not listed on the repository's Packages page until it is linked to the repository, so look under the owner's profile:"
       echo "      https://github.com/${OWNER}?tab=packages   (sign in as the owner)"
