@@ -27,11 +27,35 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 | The SIC data files in `tmp/` and the embedding model in `tmp/.fastembed_cache` | `ls tmp/*.feather tmp/.fastembed_cache`. Anything missing: [`v4-amd64-build-and-compare.md`](plans/v4-amd64-build-and-compare.md) §0 and §1 say where each comes from. |
 | `kubeseal` (for step 3) | `kubeseal --version`. Install: the release binary from github.com/bitnami-labs/sealed-secrets, for the controller's major version. |
 | `openssl`, `python3`, `curl`, `dig` | `openssl version && python3 --version` |
-| DNS: `company-dns-staging.mediumroast.io` resolves to the public address (**done 2026-10-10**, it points where production does) **and, if the router does not do NAT reflection (hairpin NAT), a local DNS record (Pi-hole) sends it to Traefik's LAN address, `192.168.1.200`**. Without one of the two the certificate never issues: cert-manager checks its own challenge from inside the cluster, and the public address can be unreachable from there. (Found on the first real run, when the name resolved to the public address on `cafe-1` and the check timed out. Port 80 must also be forwarded from the internet to Traefik: Let's Encrypt connects from outside.) | `dig +short company-dns-staging.mediumroast.io` on `cafe-1` prints `192.168.1.200` if you chose the local record |
+| DNS: `company-dns-staging.mediumroast.io` resolves to the public address (**done 2026-10-10**, it points where production does); ports 80 and 443 are forwarded from the router (Firewalla) to Traefik at `192.168.1.200`; **and CoreDNS answers the name with `192.168.1.200` inside the cluster** (the `hosts` block below). Without the CoreDNS block the certificate never issues: cert-manager checks its own challenge from inside the cluster, and a pod cannot reach the public address (the router does not loop LAN traffic back). Found on the first real run, after the port forward moved to `192.168.1.200`; it affects every name served by the cluster and every certificate renewal (the earliest was due 2026-10-19). | `kubectl -n kube-system get cm coredns -o yaml \| grep -A3 hosts` shows the block, and a pod resolves the name to `192.168.1.200` (below) |
 | Roughly 20 GB free disk and 16 GB memory for the build | `df -h /var/lib/docker && free -g` |
 
 Nothing about V4 needs AVX2: the image loads Microsoft's ONNX Runtime at run time, so it runs on `cafe-1`'s 2013 Xeons. Docker and buildx details for the nodes are in
 [`v4-amd64-build-and-compare.md`](plans/v4-amd64-build-and-compare.md).
+
+### The CoreDNS block (once per cluster, and when a new site is added)
+
+```bash
+kubectl -n kube-system edit configmap coredns
+```
+
+Add this above the `forward` line, listing **every** name the cluster serves that has an HTTP-01 certificate (`kubectl get ingress -A` shows them; do not use a wildcard, which would capture names served elsewhere):
+
+```
+    hosts {
+      192.168.1.200 company-dns-staging.mediumroast.io company-dns.mediumroast.io dev.mediumroast.io staging.mediumroast.io www.mediumroast.io dex.mediumroast.io mediumroast.io
+      fallthrough
+    }
+```
+
+then `kubectl -n kube-system rollout restart deploy/coredns`. Check from a pod:
+
+```bash
+kubectl -n company-dns-staging run c1 --rm -it --restart=Never --image=curlimages/curl -- curl -sv -m 10 http://company-dns-staging.mediumroast.io/.well-known/acme-challenge/test
+# resolves to 192.168.1.200 and answers a 301 redirect to https (the path is not a real challenge token)
+```
+
+Re-enabling MicroK8s DNS resets manual CoreDNS edits: repeat this step if you ever run `microk8s disable dns`. (The router doing NAT loopback would make this unnecessary.)
 
 ## 2. Check before changing anything
 
@@ -82,7 +106,7 @@ One command, no questions. About 15 to 25 minutes the first time (the Rust build
    back automatically** and the script exits with an error.
 6. Port-forward smoke test (`/health` and a lookup, no Ingress involved). Only then the Ingress, the HTTP redirect and the Certificate; **the first time** it waits (up to 10 minutes) for the
    certificate to become ready (it needs the DNS name to point at the cluster, which it does).
-7. Verifies through HTTPS: `/health`, a SIC lookup, **401** on `/V4.0/sql` with no credentials, and **200** with the `staging-test` token if `~/company_dns-staging-secrets/tokens` is present.
+7. Verifies through HTTPS **via Traefik's LAN address** (the Ingress's load balancer IP, with the real host name for TLS and routing), because a machine on the LAN cannot reach the public address: `/health`, a SIC lookup, **401** on `/V4.0/sql` with no credentials, and **200** with the `staging-test` token if `~/company_dns-staging-secrets/tokens` is present.
 8. **Records** what is running (annotations on the Deployment: tag, commit, image digest, time) and appends a line to `v4/.build-log`; prints the summary (tag, digest, pods, URL).
 
 Useful variants: `--status` (what is running, from the Deployment's annotations; changes nothing), `--dry-run` (preflight plus a server-side dry run of every manifest, changes nothing; do this once before the first real run), `--no-build TAG` (deploy a tag already
@@ -181,7 +205,8 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 | `ERROR: uncommitted changes in the working tree` | A tag must name its source: commit, or pass `--allow-dirty` for a throwaway build (its tag ends in `-dirty`; do not leave it deployed). |
 | The server exits at start with "rules name profile(s) with no credential" | `configmap-rules.yaml` names a profile with no token: run `seal-secrets-v4.sh` again (it covers every profile in the rules). |
 | The server exits at start with a message about `COMPANY_DNS_REPLICAS` or `COMPANY_DNS_CORS_ORIGINS` | A bad value: the message says what is accepted (`v4/README.md`). |
-| Certificate stays `False`, and `describe challenge` says "failed to perform self check GET request ... context deadline exceeded" | **Hairpin NAT** (hit on the first real run): inside the cluster the name resolves to the public address and the request times out. Add a Pi-hole local DNS record `company-dns-staging.mediumroast.io` to `192.168.1.200` (Local DNS Records; make sure the nodes and the cluster's DNS actually use the Pi-hole), or enable NAT reflection on the router. cert-manager retries by itself; if it has backed off, `kubectl -n kube-system rollout restart deploy/coredns` clears the DNS cache, and as a last resort delete the Challenge (cert-manager recreates it). Then re-run the script: it detects that the certificate exists and continues with the HTTPS checks. |
+| Certificate stays `False`, and `describe challenge` says "failed to perform self check GET request ... context deadline exceeded" | **No route from a pod to the public address** (hit on the first real run): add the name to the CoreDNS `hosts` block (prerequisites above) and restart CoreDNS. cert-manager retries by itself; to hurry it, `kubectl -n company-dns-staging delete challenge --all` (cert-manager recreates it). Then re-run `./scripts/build-and-deploy-v4.sh --no-build TAG` (the tag is in the running Deployment's image): it waits for the certificate if needed and continues with the HTTPS checks. |
+| The challenge is `pending` with Let's Encrypt's own error, for example "Timeout during connect (likely firewall problem)" | Port 80 is not reaching Traefik from the internet: check the router's forward of 80 (and 443) to `192.168.1.200`, and test from a phone on cellular: `http://company-dns-staging.mediumroast.io/.well-known/acme-challenge/test` should answer, not hang. |
 | Certificate stays `False` for another reason | DNS does not point at the cluster, or the HTTP-01 challenge cannot reach Traefik: `kubectl -n company-dns-staging describe certificate,challenge`. The workload still works through a port-forward meanwhile. |
 | 429s on your own checks | Use a self-identifying `User-Agent` (`name/1.0 (you@example.com)`) or the `staging-test` credentials; an anonymous caller gets 5 requests a minute. |
 | 401 with the right token | The tokens file and the sealed secret are from different runs: seal again from the current tokens, redeploy (pods read credentials only at start). |
