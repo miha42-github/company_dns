@@ -171,7 +171,7 @@ preflight() {
     else
       case "${ip}" in
         10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|127.*) ;;
-        *) warnings+=("${STAGING_HOST} resolves to the public address ${ip}. From INSIDE the cluster that address is usually unreachable (hairpin NAT), so cert-manager's own check of the HTTP-01 challenge times out and the certificate never issues. Add a local DNS record (Pi-hole) for ${STAGING_HOST} pointing at Traefik's LAN address (192.168.1.200), as was done for production.");;
+        *) warnings+=("${STAGING_HOST} resolves to the public address ${ip}. From INSIDE the cluster that address is usually unreachable (hairpin NAT), so cert-manager's own check of the HTTP-01 challenge times out and the certificate never issues. Add a local DNS record (Pi-hole) for ${STAGING_HOST} pointing at Traefik's LAN address (192.168.1.200), or enable NAT reflection (hairpin NAT) on the router.");;
       esac
     fi
   fi
