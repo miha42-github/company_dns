@@ -204,4 +204,8 @@ ENV COMPANY_DNS_DATA_DIR=/app/data \
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl -fsS "http://127.0.0.1:${PORT}/health" || exit 1
+# Links the GHCR package to this repository (the package page, the repository's Packages list and inherited access). Last, so it never invalidates a cached layer.
+LABEL org.opencontainers.image.source="https://github.com/miha42-github/company_dns" \
+      org.opencontainers.image.description="company_dns V4: SIC and EDGAR firmographics API (Rust), with its data and embedding model inside" \
+      org.opencontainers.image.title="company_dns_v4"
 CMD ["/app/company-dns-server"]

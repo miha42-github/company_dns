@@ -39,7 +39,12 @@ case "$args" in
     # a real cluster lists far more services than fit in a pipe buffer, after the match
     [ -n "${STUB_BIG_SVC:-}" ] && for i in $(seq 1 6000); do printf 'ns%d   svc-%d   ClusterIP   10.1.%d.%d   <none>   80/TCP   1d\n' $i $i $((i / 250)) $((i % 250)); done;;
   *"get secret company-dns-credentials"*) [ "${STUB_SECRET:-present}" = missing ] && exit 1; echo secret;;
-  *"get certificate company-dns-staging-io-tls -o jsonpath"*) echo "${STUB_CERT_READY:-True}";;
+  *"get ingress company-dns -o jsonpath"*) [ -n "${STUB_NO_LB:-}" ] && exit 0; echo 192.168.1.200;;
+  *"get certificate company-dns-staging-io-tls -o jsonpath"*)
+    if [ -n "${STUB_CERT_FALSE_POLLS:-}" ]; then
+      n=$(cat "$S/cert-polls" 2>/dev/null || echo 0); echo $((n + 1)) > "$S/cert-polls"
+      if [ "$n" -lt "$STUB_CERT_FALSE_POLLS" ]; then echo False; else echo True; fi
+    else echo "${STUB_CERT_READY:-True}"; fi;;
   *"get certificate company-dns-staging-io-tls"*)
     [ -n "${STUB_FIRST:-}" ] && [ ! -f "$S/cert.applied" ] && exit 1; echo certificate;;
   *"apply"*"certificate.yaml"*) touch "$S/cert.applied";;
@@ -88,9 +93,9 @@ case "$1" in
   info) [[ "$*" == *"--format"* ]] && echo /tmp;;
   login) cat >/dev/null;;
   pull)
-    if [ "${STUB_PULL:-ok}" = never ]; then exit 1; fi
+    if [ "${STUB_PULL:-ok}" = never ]; then echo "Error response from daemon: denied" >&2; exit 1; fi
     n=$(cat "$S/pulls" 2>/dev/null || echo 0); echo $((n + 1)) > "$S/pulls"
-    [ "$n" -lt "${STUB_PULL_FAILS:-0}" ] && exit 1;;
+    [ "$n" -lt "${STUB_PULL_FAILS:-0}" ] && { echo "Error response from daemon: denied" >&2; exit 1; };;
   inspect) echo "ghcr.io/miha42-github/company_dns/company_dns_v4@sha256:abc123";;
 esac
 exit 0
@@ -105,7 +110,7 @@ esac
 printf 'apiVersion: bitnami.com/v1alpha1\nkind: SealedSecret\nmetadata:\n  name: company-dns-credentials\n  namespace: company-dns-staging\nspec:\n  encryptedData:\n    credentials: AgBy3i4OJSWK%s\n' "$RANDOM"
 '''
 PYTHON = '''#!/usr/bin/env bash
-if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; exit 0; fi
+if [ "$1" = "-c" ] && [[ "$2" == *gethostbyname* ]]; then [ "${STUB_DNS:-ok}" = fail ] && exit 1; echo "${STUB_DNS_IP:-192.168.1.200}"; exit 0; fi
 exec "%s" "$@"
 ''' % sys.executable
 OPENSSL = '''#!/usr/bin/env bash
@@ -144,6 +149,8 @@ class Base(unittest.TestCase):
         for name in (DEPLOY_SH, SEAL_SH):
             shutil.copy(REPO / "scripts" / name, self.repo / "scripts" / name) if (self.repo / "scripts").exists() else (self.repo / "scripts").mkdir(parents=True) or shutil.copy(REPO / "scripts" / name, self.repo / "scripts" / name)
         shutil.copytree(REPO / "k8s/staging", self.repo / "k8s/staging")
+        # the real sealed secret is committed now; the tests start from a repository without one (the Deploy tests add a stand-in)
+        (self.repo / "k8s/staging/sealedsecret-credentials.yaml").unlink(missing_ok=True)
         exe(self.repo / "v4/scripts/docker-build.sh", BUILD_STUB)
         exe(self.repo / "v4/scripts/docker-smoke.sh", BUILD_STUB)
         exe(self.repo / "api_tests/run.py", SUITE_STUB)
@@ -207,6 +214,16 @@ class Deploy(Base):
         self.assertEqual(r.returncode, 1)
         for fragment in (".env", "GITHUB_PAT", "buildx", "data directory", "embedding model", "ingress class", "ClusterIssuer", "no credentials", "does not resolve"):
             self.assertIn(fragment, r.stderr, fragment)
+
+    def test_a_public_address_for_the_host_warns_about_the_certificate_check_but_does_not_stop(self):
+        # regression from the first real run: the host resolved to the public address, cert-manager's self-check from inside the cluster timed out
+        r = self.run_script("--check", STUB_DNS_IP="75.80.225.46")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("75.80.225.46", r.stderr)
+        self.assertIn("hairpin", r.stderr)
+        self.assertIn("192.168.1.200", r.stderr)
+        r = self.run_script("--check", STUB_DNS_IP="192.168.1.200")
+        self.assertNotIn("hairpin", r.stderr)
 
     def test_an_unreachable_cluster_is_reported(self):
         r = self.run_script("--check", STUB_NO_CLUSTER="1")
@@ -302,6 +319,9 @@ class Deploy(Base):
         r = self.run_script("10112026-abc1234", STUB_PULL_FAILS="2")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("Change visibility", r.stdout)
+        self.assertIn("https://github.com/miha42-github?tab=packages", r.stdout)
+        self.assertIn("company_dns%2Fcompany_dns_v4", r.stdout, "the link must name the V4 package, not V3's")
+        self.assertIn("The anonymous pull said: Error response from daemon: denied", r.stdout)
         self.assertGreaterEqual(len([c for c in self.calls() if c.startswith("docker pull")]), 3)
         self.assertFalse(any("DOCKER_CONFIG=]" in c for c in self.calls() if c.startswith("docker pull")), "the check must use an empty Docker config")
 
@@ -309,6 +329,7 @@ class Deploy(Base):
         r = self.run_script("10112026-abc1234", STUB_PULL="never")
         self.assertEqual(r.returncode, 1)
         self.assertIn("--no-build 10112026-abc1234", r.stderr)
+        self.assertIn("denied", r.stdout, "the registry's own answer is shown, not hidden")
         self.assertNotIn("namespace.yaml", "\n".join(self.calls()))
 
     # ----------------------------------------------------------- applying and verifying
@@ -345,7 +366,7 @@ class Deploy(Base):
         self.assertIn("no earlier revision", r.stderr)
 
     def test_the_first_run_waits_for_the_certificate_and_a_late_one_is_reported(self):
-        r = self.run_script("10112026-abc1234", STUB_FIRST="1")
+        r = self.run_script("10112026-abc1234", STUB_FIRST="1", STUB_CERT_FALSE_POLLS="2")
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("First deployment detected", r.stdout)
         self.assertIn("Waiting for the certificate", r.stdout)
@@ -356,9 +377,32 @@ class Deploy(Base):
         self.assertIn("certificate is not ready", r.stderr)
         self.assertIn("up and verified", r.stderr)
 
-    def test_a_routine_run_does_not_wait_for_the_certificate(self):
+    def test_a_routine_run_with_a_ready_certificate_does_not_wait(self):
         r = self.run_script("10112026-abc1234")
         self.assertNotIn("Waiting for the certificate", r.stdout)
+
+    def test_a_rerun_before_the_certificate_is_ready_waits_for_it_too(self):
+        # the first real run: the script timed out on the certificate; the re-run (not a first run any more) must wait, not verify against Traefik's default certificate
+        r = self.run_script("--no-build", "10112026-abc1234", STUB_CERT_FALSE_POLLS="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertIn("Waiting for the certificate", r.stdout)
+
+    def test_https_verification_goes_through_traefiks_lan_address_with_time_limits(self):
+        # regression from the first real run: checking by name from a node hit the unreachable public address and hung for 133 seconds
+        r = self.run_script("10112026-abc1234")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        https = [c for c in self.calls() if c.startswith("curl") and "https://company-dns-staging.mediumroast.io" in c]
+        self.assertGreaterEqual(len(https), 3)
+        for c in https:
+            self.assertIn("--resolve company-dns-staging.mediumroast.io:443:192.168.1.200", c)
+            self.assertIn("--max-time 20", c)
+            self.assertIn("--connect-timeout 5", c)
+        self.assertIn("via Traefik at 192.168.1.200", r.stdout)
+        (self.state / "calls.log").write_text("")
+        r = self.run_script("10112026-abc1234", STUB_NO_LB="1")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        self.assertNotIn("--resolve", "\n".join(c for c in self.calls() if c.startswith("curl")))
+        self.assertIn("--max-time 20", "\n".join(c for c in self.calls() if c.startswith("curl")))
 
     def test_https_verification_wants_401_without_credentials_and_200_with_them(self):
         self.write_tokens()

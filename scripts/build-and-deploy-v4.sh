@@ -51,6 +51,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 ENV_FILE="${REPO_ROOT}/.env"
 
 REGISTRY="ghcr.io/miha42-github/company_dns"
+OWNER="miha42-github"   # the GitHub account that owns the packages (the part after ghcr.io/)
 IMAGE_NAME="company_dns_v4"
 NAMESPACE="company-dns-staging"
 DEPLOYMENT="company-dns"
@@ -164,8 +165,15 @@ preflight() {
     fi
   fi
   if [[ "${MODE}" == "deploy" || "${MODE}" == "check" ]]; then
-    python3 -c "import socket,sys; socket.gethostbyname(sys.argv[1])" "${STAGING_HOST}" >/dev/null 2>&1 \
-      || problems+=("${STAGING_HOST} does not resolve (the DNS record must exist before the certificate can issue)")
+    local ip
+    if ! ip="$(python3 -c "import socket,sys; print(socket.gethostbyname(sys.argv[1]))" "${STAGING_HOST}" 2>/dev/null)"; then
+      problems+=("${STAGING_HOST} does not resolve (the DNS record must exist before the certificate can issue)")
+    else
+      case "${ip}" in
+        10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|127.*) ;;
+        *) warnings+=("${STAGING_HOST} resolves to the public address ${ip}. From INSIDE the cluster that address is usually unreachable (hairpin NAT), so cert-manager's own check of the HTTP-01 challenge times out and the certificate never issues. Make the name resolve to Traefik's LAN address (192.168.1.200) inside the cluster: add it to CoreDNS's hosts block (docs/v4-bringup.md, prerequisites), or enable NAT reflection on the router.");;
+      esac
+    fi
   fi
   [[ -f "${DEPLOYMENT_MANIFEST}" ]] || problems+=("${MANIFEST_DIR}/deployment.yaml not found: run this from a checkout of the repository")
   for w in "${warnings[@]+"${warnings[@]}"}"; do echo "WARNING: ${w}" >&2; done
@@ -226,10 +234,16 @@ push_image() {
   local anon tries=0 max
   max=$((WAIT_PUBLIC_SECS / (POLL_SECS > 0 ? POLL_SECS : 1)))
   anon="$(mktemp -d)"
-  until DOCKER_CONFIG="${anon}" docker pull "${FULL_IMAGE}" >/dev/null 2>&1; do
+  local pull_err=""
+  until pull_err="$(DOCKER_CONFIG="${anon}" docker pull "${FULL_IMAGE}" 2>&1 >/dev/null)"; do
     if [[ ${tries} -eq 0 ]]; then
-      echo "    A new GHCR package starts private. Make it public once: GitHub > your profile or organisation > Packages >"
-      echo "    company_dns/${IMAGE_NAME} > Package settings > Change visibility > Public."
+      echo "    The anonymous pull said: $(printf '%s' "${pull_err}" | tail -1)"
+      echo "    (denied or unauthorized: the package is private. manifest unknown or not found: the push did not leave this tag in ${REGISTRY}/${IMAGE_NAME}.)"
+      echo "    A new GHCR package starts private. Make it public once. It is a DIFFERENT package from V3's (company_dns/company_dns): company_dns/${IMAGE_NAME}."
+      echo "    A private package is visible only to its owner, and it is not listed on the repository's Packages page until it is linked to the repository, so look under the owner's profile:"
+      echo "      https://github.com/${OWNER}?tab=packages   (sign in as the owner)"
+      echo "      or directly: https://github.com/users/${OWNER}/packages/container/package/company_dns%2F${IMAGE_NAME}"
+      echo "    Then: Package settings > Danger Zone > Change visibility > Public (it asks you to type the package name)."
       echo "    Waiting up to $((WAIT_PUBLIC_SECS / 60)) minutes for that; this script continues by itself."
     fi
     [[ ${tries} -lt ${max} ]] || { rm -rf "${anon}"; die "the image is still not pullable without credentials after waiting; make the package public and run again with: --no-build ${TAG}"; }
@@ -270,12 +284,12 @@ smoke_forward() {   # through a port-forward: no Ingress involved
   say "Smoke test through a port-forward"
   k port-forward "svc/${SERVICE}" "${PF_PORT}:80" >/dev/null 2>&1 &
   local pf=$! ok=0 rc=0 _
-  for _ in $(seq 1 "${V4_SMOKE_TRIES:-20}"); do curl -fsS -A "${UA}" "http://127.0.0.1:${PF_PORT}/health" >/dev/null 2>&1 && { ok=1; break; }; sleep 1; done
+  for _ in $(seq 1 "${V4_SMOKE_TRIES:-20}"); do curl -fsS --max-time 5 -A "${UA}" "http://127.0.0.1:${PF_PORT}/health" >/dev/null 2>&1 && { ok=1; break; }; sleep 1; done
   if [[ ${ok} -eq 1 ]]; then
     echo "    /health ok"
     # capture the answer, then show the start of it: `curl | head -c` fails under pipefail whenever the answer is longer than head reads
     local body
-    if body="$(curl -fsS -A "${UA}" "http://127.0.0.1:${PF_PORT}/V4.0/na/sic/code/3571")"; then echo "    ${body:0:120}"; echo "    a SIC lookup ok"; else rc=1; fi
+    if body="$(curl -fsS --max-time 10 -A "${UA}" "http://127.0.0.1:${PF_PORT}/V4.0/na/sic/code/3571")"; then echo "    ${body:0:120}"; echo "    a SIC lookup ok"; else rc=1; fi
   else
     echo "ERROR: /health did not answer through the port-forward" >&2; rc=1
   fi
@@ -294,16 +308,24 @@ wait_for_certificate() {
 }
 
 verify_https() {
-  local H="https://${STAGING_HOST}" code token rc=0
-  say "Verifying through HTTPS"
-  curl -fsS -A "${UA}" "${H}/health" >/dev/null && echo "    /health ok" || { echo "ERROR: ${H}/health failed" >&2; rc=1; }
-  curl -fsS -A "${UA}" "${H}/V4.0/na/sic/code/3571" >/dev/null && echo "    a SIC lookup ok" || { echo "ERROR: a SIC lookup failed" >&2; rc=1; }
-  code="$(curl -s -o /dev/null -w '%{http_code}' -A "${UA}" -H 'content-type: application/json' -d '{"dataset":"sic","sql":"select 1 as one"}' "${H}/V4.0/sql" || true)"
+  local H="https://${STAGING_HOST}" code token rc=0 lb
+  # Reach the site through Traefik's own LAN address (the Ingress's load balancer IP), with the real host name for TLS and routing.
+  # The name itself resolves to the PUBLIC address, which a machine inside the LAN usually cannot reach (no NAT loopback), so a check
+  # by name from here would hang. This still proves the Ingress, the routing and the certificate; reaching the site from the internet
+  # is a separate check (docs/v4-bringup.md, step 5).
+  lb="$(k get ingress "${DEPLOYMENT}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+  local C=(--connect-timeout 5 --max-time 20)
+  if [[ -n "${lb}" ]]; then C+=(--resolve "${STAGING_HOST}:443:${lb}"); say "Verifying through HTTPS, via Traefik at ${lb}"; else say "Verifying through HTTPS (by name)"; fi
+  local cert; cert="$(k get certificate "${CERTIFICATE}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+  [[ "${cert}" == "True" ]] || echo "WARNING: the certificate ${CERTIFICATE} is not Ready (Ready=${cert:-unknown}); expect TLS errors below. See: ${KUBECTL[*]} -n ${NAMESPACE} describe certificate,challenge" >&2
+  curl -fsS "${C[@]}" -A "${UA}" "${H}/health" >/dev/null && echo "    /health ok" || { echo "ERROR: ${H}/health failed" >&2; rc=1; }
+  curl -fsS "${C[@]}" -A "${UA}" "${H}/V4.0/na/sic/code/3571" >/dev/null && echo "    a SIC lookup ok" || { echo "ERROR: a SIC lookup failed" >&2; rc=1; }
+  code="$(curl -s "${C[@]}" -o /dev/null -w '%{http_code}' -A "${UA}" -H 'content-type: application/json' -d '{"dataset":"sic","sql":"select 1 as one"}' "${H}/V4.0/sql" || true)"
   [[ "${code}" == "401" ]] && echo "    /V4.0/sql with no credentials: 401 (as it should)" || { echo "ERROR: /V4.0/sql with no credentials gave ${code}, expected 401" >&2; rc=1; }
   token="$(token_of "${TEST_PROFILE}")"
   if [[ -n "${token}" ]]; then
     # the credentials go to curl on its standard input (-K -), never as an argument another user could read with ps
-    code="$(printf 'user = "%s:%s"\n' "${TEST_PROFILE}" "${token}" | curl -s -K - -o /dev/null -w '%{http_code}' -A "${UA}" -H 'content-type: application/json' -d '{"dataset":"sic","sql":"select 1 as one"}' "${H}/V4.0/sql" || true)"
+    code="$(printf 'user = "%s:%s"\n' "${TEST_PROFILE}" "${token}" | curl -s -K - "${C[@]}" -o /dev/null -w '%{http_code}' -A "${UA}" -H 'content-type: application/json' -d '{"dataset":"sic","sql":"select 1 as one"}' "${H}/V4.0/sql" || true)"
     [[ "${code}" == "200" ]] && echo "    /V4.0/sql as ${TEST_PROFILE}: 200" || { echo "ERROR: /V4.0/sql as ${TEST_PROFILE} gave ${code}, expected 200 (are the tokens file and the sealed secret from the same run?)" >&2; rc=1; }
   else
     echo "    (no ${TEST_PROFILE} token in ${SECRETS_DIR}/tokens: the authenticated check is skipped)"
@@ -407,7 +429,7 @@ smoke_forward || die "the smoke test failed; the Ingress was not applied. Logs: 
 
 say "Applying the redirect, Ingress and certificate"
 apply middleware-redirect.yaml; apply ingress.yaml; apply certificate.yaml
-if [[ ${FIRST} -eq 1 ]]; then
+if [[ "$(k get certificate "${CERTIFICATE}" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)" != "True" ]]; then
   wait_for_certificate || die "the certificate is not ready: ${KUBECTL[*]} -n ${NAMESPACE} describe certificate,challenge (the workload itself is up and verified)"
 fi
 VERIFIED=0; verify_https && VERIFIED=1
