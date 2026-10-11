@@ -454,6 +454,9 @@ async fn main() -> anyhow::Result<()> {
         // local copy, it just forces a conditional GET (If-Modified-
         // Since) on every load, so an edit is never more than one
         // revalidation away from showing up.
+        // V3 serves its web UI at "/"; V4's lives under /ui/. Without this, the bare URL (what a person types or a link points at) was a 404.
+        // Outside the rate limiter, like /health and the docs.
+        .route("/", axum::routing::get(root_redirect))
         .nest_service(
             "/ui",
             ServiceBuilder::new()
@@ -517,6 +520,11 @@ async fn main() -> anyhow::Result<()> {
     .await?;
 
     Ok(())
+}
+
+/// `GET /`: send a browser to the web UI, as V3's root page served it.
+async fn root_redirect() -> axum::response::Redirect {
+    axum::response::Redirect::temporary("/ui/")
 }
 
 #[utoipa::path(
@@ -1892,4 +1900,19 @@ async fn merged_firmographics_v3(
     State(state): State<Arc<AppState>>,
 ) -> impl IntoResponse {
     merged_firmographics_impl(&state, &company_name).await
+}
+
+#[cfg(test)]
+mod root_tests {
+    use super::root_redirect;
+    use axum::{body::Body, http::{header, Request, StatusCode}, routing::get, Router};
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn the_root_sends_a_browser_to_the_ui() {
+        let app = Router::new().route("/", get(root_redirect));
+        let resp = app.oneshot(Request::builder().uri("/").body(Body::empty()).unwrap()).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(resp.headers()[header::LOCATION], "/ui/");
+    }
 }
