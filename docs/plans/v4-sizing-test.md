@@ -92,3 +92,20 @@ python3 perf_tests/run_cluster.py --configs 3x4000m/4Gi,6x2000m/2Gi,12x1000m/1Gi
 - Results of the larger-replica round: at equal total CPU, embedding throughput scaled with the *number* of pods (3x4000m 76 requests/s, 6x2000m 140, 12x1000m 231) because an embedding runs one at a time per pod; lookups were CPU-bound and shape-insensitive (about 1200 requests/s on 12 cores).
 - To find where more 1-core pods stop helping: `--configs 12x1000m/1Gi,16x1000m/1Gi,20x1000m/1Gi,24x1000m/1Gi --mixes lookups,repeated`. The `repeated` mix draws from a small pool, so it shows what repeated asks cost.
 - The per-IP rate limits are settings now (`COMPANY_DNS_RATE_LIMIT_*`, `v4/README.md`); with many replicas keep the burst well above the replica count.
+
+### Results and decision (hackathon sizing)
+
+Measured on the two worker nodes, one run per cell; the nodes also carry other workloads, so differences under about 20% are noise.
+
+| configuration (12 cores unless stated) | embedding req/s (p95 <= 1 s) | lookups req/s at N=256 | lookups p95 |
+|---|---|---|---|
+| 3 x 4000m/4Gi | 76 | 1196 | 697 ms |
+| 6 x 2000m/2Gi | 140 | 1230 | 739 ms |
+| 12 x 1000m/1Gi | 231 | 1262 | 560 ms |
+| 16 x 1000m/1Gi (16 cores) | not run | 1600 (repeated lookups 1987) | 479 ms |
+| 20 x 1000m/1Gi (20 cores) | not run | 1873 (repeated lookups 2301) | 421 ms |
+
+- Embeddings run one at a time per pod, so their throughput follows the number of pods, not their size. Lookups are CPU-bound at about 94 requests/s per core of limit and kept scaling to 20 pods.
+- Memory peaked at about 250 MiB per pod; throttling at 1000m was about 1%; the load generator was never the limit; production restarted 0 times.
+- **Decision:** staging runs 20 x 1000m/1Gi (`k8s/staging/deployment.yaml`), with requests at half the CPU limit so the other workloads on the nodes are not crowded out, `COMPANY_DNS_REPLICAS=20`, and a per-IP quota of 6000 a minute with a burst of 600 (30 per pod).
+- Not yet measured at 20 pods: embedding throughput (the 12-pod rate per pod, about 19 requests/s, would give roughly 380), the rate limiter's behaviour across 20 pods (`docs/v4-bringup.md`, step 6.3), and a rolling update of 20 pods (`maxSurge` is 4).
