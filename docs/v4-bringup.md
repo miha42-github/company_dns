@@ -124,6 +124,8 @@ kubectl -n company-dns-staging get certificate         # READY True
 kubectl -n company-dns-staging logs deploy/company-dns --tail=20     # includes the "CPU:" line (no AVX2 on cafe-1 is normal) and the replica and CORS settings
 ```
 
+**From outside your network** (a phone on cellular, Wi-Fi off), open `$H/health` (a small JSON answer), then `$H/` (it redirects to the web UI at `/ui/`, as V3's root page did; before 2026-10-11 the bare URL was a 404, which looks like a failure but was only a missing route). The checks above run from inside the LAN; this is the one that shows the internet path works.
+
 Open `$H/docs` (Swagger) and `$H/redoc` in a browser: the SQL endpoint should be listed (it is on in staging).
 
 Credentials, directly:

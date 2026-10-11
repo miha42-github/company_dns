@@ -22,6 +22,25 @@ class Smoke(ServerTestCase):
         self.assertTrue(spec["info"]["description"])
         self.assertTrue(spec["info"]["license"]["name"])
 
+    def test_the_root_url_goes_to_the_ui_not_a_404(self):
+        # V3 serves its UI at "/"; V4's is under /ui/. The bare URL is what people type and what links point at.
+        import urllib.error
+        import urllib.request
+        from common import BASE_URL, _headers
+
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                return None
+
+        opener = urllib.request.build_opener(NoRedirect)
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            opener.open(urllib.request.Request(BASE_URL + "/", headers=_headers()), timeout=30)
+        self.assertIn(cm.exception.code, (301, 302, 303, 307, 308))
+        self.assertEqual(cm.exception.headers["Location"], "/ui/")
+        with urllib.request.urlopen(urllib.request.Request(BASE_URL + "/", headers=_headers()), timeout=30) as r:  # and following it lands on the page
+            self.assertEqual(r.status, 200)
+            self.assertIn("text/html", r.headers["Content-Type"])
+
     def test_the_documentation_pages_are_served(self):
         for path in ("/docs/", "/redoc"):
             with self.subTest(path=path):
