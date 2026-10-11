@@ -1,4 +1,5 @@
 mod access;
+mod cors;
 mod cpu;
 mod docs;
 mod envelope;
@@ -29,7 +30,7 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::CorsLayer, limit::RequestBodyLimitLayer, services::ServeDir,
+    limit::RequestBodyLimitLayer, services::ServeDir,
     set_header::SetResponseHeaderLayer, timeout::TimeoutLayer, trace::TraceLayer,
 };
 use utoipa::OpenApi;
@@ -149,6 +150,13 @@ async fn main() -> anyhow::Result<()> {
     // Fail fast, with a message, if the ONNX Runtime this build uses cannot run on this machine (docs/plans/v4-release-to-staging.md, item I).
     cpu::preflight()?;
     tracing::info!("Loading US SIC data from {sic_path}...");
+    // COMPANY_DNS_REPLICAS: the Deployment's replicas; the fleet-wide rate limits are divided by it (docs/plans/v4-staging-rollout.md, S7).
+    let replicas = rate_limit::parse_replicas(std::env::var("COMPANY_DNS_REPLICAS").ok().as_deref()).map_err(|m| anyhow::anyhow!(m))?;
+    rate_limit::set_replicas(replicas);
+    tracing::info!("Rate limits are divided across {replicas} replica(s)");
+    // COMPANY_DNS_CORS_ORIGINS: who may call the credentialed routes from a browser; lookups stay open (docs/plans/v4-staging-rollout.md, S8).
+    let cors_origins = cors::CredentialedOrigins::parse(std::env::var("COMPANY_DNS_CORS_ORIGINS").ok().as_deref()).map_err(|m| anyhow::anyhow!(m))?;
+    tracing::info!("Cross-origin browser calls: lookups from any origin; {} from {}", cors::CREDENTIALED_PATHS.join(", "), cors_origins.describe());
     // COMPANY_DNS_QUERY_PARALLELISM: partitions per lookup query (default: the host's CPUs, at most 4; docs/plans/v4-release-to-staging.md finding 2).
     let query_parallelism = cpu::query_parallelism(std::env::var("COMPANY_DNS_QUERY_PARALLELISM").ok().as_deref(), company_dns_sic::default_query_parallelism())
         .map_err(|m| anyhow::anyhow!(m))?;
@@ -481,7 +489,7 @@ async fn main() -> anyhow::Result<()> {
             Duration::from_secs(30),
         ))
         .layer(RequestBodyLimitLayer::new(64 * 1024))
-        .layer(CorsLayer::permissive())
+        .layer(cors::layer(cors_origins))
         // outermost: every error, including axum's own rejections, is the JSON envelope (errors.rs)
         .layer(axum::middleware::from_fn(errors::json_errors));
 

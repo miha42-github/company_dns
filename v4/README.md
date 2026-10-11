@@ -125,6 +125,25 @@ The ONNX Runtime is Microsoft's official release (1.31.0, pinned by SHA-256, fet
 
 ## Observability" below).
 
+## Settings reference
+
+Everything is an environment variable (no config file loader), plus three optional mounted files. All are optional; the server starts with the defaults. Set them with `env:` in a
+Kubernetes Deployment, `environment:` or `env_file:` in Compose, or `-e` on `docker run`. **CPU and memory limits are not server settings**: they belong to the container runtime
+(`resources.limits` in Kubernetes, `cpus` and `mem_limit` in Compose), and the lookup tables stay in memory whatever the limit (about 160 MiB idle, under 260 MiB peak measured at 0.5 CPU to 16 CPU).
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PORT` | 4000 | Listening port. |
+| `COMPANY_DNS_DATA_DIR` | `/app/data` in the image | Directory holding the four SIC files and the EDGAR catalog; per-file overrides: `SIC_DATA_PATH`, `JAPAN_SIC_DATA_PATH`, `EU_NACE_DATA_PATH`, `ISIC_DATA_PATH`, `EDGAR_CATALOG_PATH`. |
+| `SIC_MODELS` | `all_minilm_l6_v2` | Embedding model for similarity search. `FASTEMBED_CACHE_DIR` (set in the image) holds its weights. |
+| `COMPANY_DNS_QUERY_PARALLELISM` | host CPUs, at most 4 | Partitions per lookup query. |
+| `COMPANY_DNS_REPLICAS` | 4 | **Set to the Deployment's `replicas`.** The fleet-wide rate limits are divided by it, because each pod enforces its own share. Wrong on purpose or by drift, the fleet allows more or less than intended. 1 to 64; anything else stops startup. |
+| `COMPANY_DNS_CORS_ORIGINS` | mediumroast.io, its subdomains and localhost | Which origins a **browser** may call the credentialed routes (`/V4.0/sql`) from: a comma-separated list of exact origins (`https://app.example.com`), or `*` for any. Lookups answer any origin regardless. curl, SDKs and servers are not affected by CORS. |
+| `COMPANY_DNS_CREDENTIALS_FILE`, `COMPANY_DNS_RULES_FILE` | none | Profiles for authenticated access (see "Profiles" below). Mount them; never bake them into an image. |
+| `COMPANY_DNS_SQL_ENABLED` and `COMPANY_DNS_SQL_*` | off | The experimental SQL endpoint and its limits (see "Experimental: SQL endpoint" below). |
+| `RUST_LOG`, `LOG_LEVEL_CONFIG_PATH` | `info`, `/etc/company-dns-log-level/log-level` | Log level at start, and the file watched for a live change (see "Observability" below). |
+| `ORT_DYLIB_PATH` | set in the image | The ONNX Runtime library, for builds that load it at run time. |
+
 ## API docs
 
 `GET /openapi.json` (raw spec), `GET /docs` (Swagger UI), `GET /redoc`
