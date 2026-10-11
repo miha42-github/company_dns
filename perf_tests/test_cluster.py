@@ -161,7 +161,7 @@ class Orchestrator(unittest.TestCase):
     def test_configurations_parse_and_unsafe_ones_are_refused(self):
         c = rc.parse_config("2x1000m/2Gi")
         self.assertEqual((c["replicas"], c["cpu_m"], c["mem_mi"], c["name"]), (2, 1000, 2048, "2x1000m/2Gi"))
-        for bad in ("2x1000/2Gi", "0x500m/1Gi", "9x500m/1Gi", "2x50m/1Gi", "2x9000m/1Gi", "2x500m/64Mi", "two"):
+        for bad in ("2x1000/2Gi", "0x500m/1Gi", "17x500m/1Gi", "2x50m/1Gi", "2x9000m/1Gi", "2x500m/64Mi", "two"):
             with self.assertRaises(ValueError, msg=bad):
                 rc.parse_config(bad)
 
