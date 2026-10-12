@@ -308,13 +308,22 @@ pub async fn tiered_rate_limit(
         Ok(_) => next.run(request).await,
         Err(not_until) => {
             let wait = not_until.wait_time_from(governor::clock::DefaultClock::default().now());
-            too_many_requests(
-                "rate_limit",
-                "Rate limit exceeded. Set a self-identifying User-Agent header \
-                 (e.g. \"YourApp/1.0 (contact@example.com)\") for a higher limit.",
-                wait.as_secs().max(1),
-            )
-            .into_response()
+            too_many_requests("rate_limit", over_limit_message(tier), wait.as_secs().max(1)).into_response()
+        }
+    }
+}
+
+/// What a caller over its per-IP limit is told. Only the strictest tier is told to identify itself: a caller that already did
+/// would be misled, so the standard tier is told to wait, spread its requests out and cache.
+fn over_limit_message(tier: Tier) -> &'static str {
+    match tier {
+        Tier::Draconian => {
+            "Rate limit exceeded. Set a self-identifying User-Agent header \
+             (e.g. \"YourApp/1.0 (contact@example.com)\") for a higher limit."
+        }
+        Tier::Normal => {
+            "Rate limit exceeded. Wait the number of seconds in Retry-After, spread your requests out (the limit is a rate per minute plus a short burst) \
+             and cache answers on your side. A profile with a higher quota can be issued by the operator."
         }
     }
 }
@@ -441,6 +450,35 @@ mod tests {
 
     async fn hit(app: &Router, ua: Option<&str>, origin: Option<&str>) -> StatusCode {
         hit_as(app, ua, origin, None).await
+    }
+
+    #[tokio::test]
+    async fn the_429_message_matches_the_tier_that_was_exceeded() {
+        // the strictest tier (no User-Agent): told how to get a higher limit
+        let strict = message_when_limited(&app(), None).await;
+        assert!(strict.contains("self-identifying User-Agent"), "{strict}");
+        // the standard tier (an identifying User-Agent): it already did that, so it must not be told to
+        let standard = message_when_limited(&app(), Some("Hackathon/1.0 (a@example.org)")).await;
+        assert!(!standard.contains("self-identifying"), "{standard}");
+        assert!(standard.contains("Retry-After") && standard.contains("cache"), "{standard}");
+    }
+
+    /// Send requests until one is answered 429 and return its message.
+    async fn message_when_limited(app: &Router, ua: Option<&str>) -> String {
+        for _ in 0..200 {
+            let mut b = Request::builder().uri("/x");
+            if let Some(ua) = ua {
+                b = b.header(header::USER_AGENT, ua);
+            }
+            let mut req = b.body(Body::empty()).unwrap();
+            req.extensions_mut().insert(ConnectInfo::<SocketAddr>("192.0.2.1:1".parse().unwrap()));
+            let resp = app.clone().oneshot(req).await.unwrap();
+            if resp.status() == StatusCode::TOO_MANY_REQUESTS {
+                let bytes = axum::body::to_bytes(resp.into_body(), 64 * 1024).await.unwrap();
+                return serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["message"].as_str().unwrap().to_string();
+            }
+        }
+        panic!("never rate limited");
     }
 
     #[tokio::test]
