@@ -1,6 +1,6 @@
 # V4 sizing test: two larger replicas, or four smaller ones?
 
-Status: **Tool written and tested against a fake cluster (2026-10-11); not yet run on the real cluster.**
+Status: **Done (2026-10-11). Run on the real cluster in three rounds; results and the decision (20 x 1000m) are recorded at the end of this document.**
 Owner: michael.hay@mediumroast.io
 Question: for the same total CPU and memory, is V4 better as a few large replicas or several small ones? V3 production runs 4 replicas of 500m CPU and 1 GiB each; staging runs 2 of the same size.
 

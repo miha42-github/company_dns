@@ -4,6 +4,33 @@ All notable changes to this project are documented here.
 
 The format is based on Keep a Changelog and this project adheres to Semantic Versioning.
 
+## [V4.0.0-pre] (unreleased)
+A rewrite of the service in Rust (`v4/`). It answers V3's URLs and, on its `/V3.0/` and `/V2.0/` paths, V3's answer shapes. V3 remains the live service until V4 is released. Every intentional difference is recorded in `docs/results/differences.json`; the guide for clients is [docs/migrating-to-v4.md](docs/migrating-to-v4.md).
+
+### Added
+- Semantic and hybrid industry-code search, and the Industry Match endpoint (`/V4.0/...`).
+- An experimental SQL endpoint over the classification and EDGAR data (off unless enabled; profiles and limits in `v4/README.md`).
+- Built-in API documentation (`/docs`, `/redoc`, `/openapi.json`) and web UI (`/ui/`); `/` redirects to the UI.
+- A top-level `total` on every answer, including the `/V3.0/`, `/V2.0/` and `/v2/` paths: the count of results in `data`. Additive; `data` is unchanged.
+- Profiles (HTTP Basic) with their own rate limits, and per-IP rate limits that are settings (`COMPANY_DNS_RATE_LIMIT_*`) and are shared fairly across replicas (`COMPANY_DNS_REPLICAS`).
+- A live log level without a restart; a CORS allow-list for the credentialed routes (`COMPANY_DNS_CORS_ORIGINS`).
+- Deploy and test tooling: `scripts/build-and-deploy-v4.sh`, `scripts/seal-secrets-v4.sh`, `perf_tests/` (load, cluster sizing, soak), `scripts/check_hygiene.py`.
+
+### Changed
+- Runtime: Rust (axum, DataFusion, ONNX Runtime) instead of Python; the image is self-contained and starts without a network. Faster than V3 on 26 of the 28 checks compared (`docs/results/`).
+- Errors are JSON envelopes (V3 returned an HTML page for a 404); the `dependencies` block is V4's.
+- Japan SIC answers come from the corrected full classification file; ticker lists hold symbols only; the merged firmographics shape is `{edgar, wikipedia, ...}` on `/V4.0/` paths.
+- The EDGAR catalog covers the 10-K and 10-Q filers of the last eight completed quarters.
+
+### Removed
+- UK SIC and the `/v1/` Wikipedia backends are not served.
+
+### Data
+- Terms for each data source, and a pending permission for ISIC (which may be removed): see the README, "Data sources and terms".
+
+## [3.3.0]
+A performance pass across the whole service: the `companies` database full-table-scan fix, blocking I/O moved off the event loop, four replicas, comparison tooling (`perf_tests/baseline.py`, `compare.py`), HTTP connection reuse to SEC EDGAR, and a rewritten Wikipedia backend (`lib/wikipedia_v2.py`, median latency down about 80%). Details and measured numbers: `docs/plans/performance-improvements.md` and the README's history.
+
 ## [3.2.0]
 The V3.2.0 release brought comprehensive security hardening and modernized the web framework:
 
