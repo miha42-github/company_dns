@@ -92,14 +92,22 @@ def percentile(sorted_values: list[float], p: float) -> float:
     return sorted_values[lo] + (sorted_values[hi] - sorted_values[lo]) * (k - lo)
 
 
-def _worker(target: Target, mix, headers: dict, deadline: float, seed: int, out: list, lock: threading.Lock) -> None:
+def _worker(target: Target, mix, headers: dict, deadline: float, seed: int, out: list, lock: threading.Lock, interval: float = 0.0) -> None:
     rng = random.Random(seed)
     names = [m[0] for m in mix]
     templates = {m[0]: m[1] for m in mix}
     weights = [m[2] for m in mix]
     samples = []
     conn = None
+    slot = time.monotonic()  # with a rate cap, the time the next request may start
     while time.monotonic() < deadline:
+        if interval:
+            now = time.monotonic()
+            if slot > now:
+                time.sleep(min(slot - now, max(0.0, deadline - now)))
+                if time.monotonic() >= deadline:
+                    break
+            slot = max(slot, now) + interval  # behind schedule: no catching up in a burst
         name = rng.choices(names, weights)[0]
         path = build_path(rng, templates[name])
         started = time.monotonic()
@@ -126,11 +134,11 @@ def _worker(target: Target, mix, headers: dict, deadline: float, seed: int, out:
         out.extend(samples)
 
 
-def _process_main(target, mix, headers, duration, threads, seed, queue) -> None:
+def _process_main(target, mix, headers, duration, threads, seed, queue, interval=0.0) -> None:
     deadline = time.monotonic() + duration
     out: list = []
     lock = threading.Lock()
-    workers = [threading.Thread(target=_worker, args=(target, mix, headers, deadline, seed * 1000 + i, out, lock)) for i in range(threads)]
+    workers = [threading.Thread(target=_worker, args=(target, mix, headers, deadline, seed * 1000 + i, out, lock, interval)) for i in range(threads)]
     t0 = time.monotonic()
     for w in workers:
         w.start()
@@ -162,18 +170,19 @@ def summarise(samples: list, duration: float, concurrency: int) -> dict:
 
 
 def run_level(target: Target, mix_name: str, concurrency: int, duration: float, warmup: float = 5.0, auth: str | None = None, processes: int = 4,
-              extra_headers: dict | None = None) -> dict:
-    """N closed-loop workers for `warmup + duration` seconds; the warm-up is thrown away."""
+              extra_headers: dict | None = None, rps: float | None = None) -> dict:
+    """N closed-loop workers for `warmup + duration` seconds; the warm-up is thrown away. `rps` caps the total request rate (each worker waits for its slot)."""
     mix = MIXES[mix_name]
     headers = {"User-Agent": "company_dns-load/1.0 (+https://github.com/miha42-github/company_dns)", "Accept": "application/json"}
     headers.update(extra_headers or {})
     if auth:
         headers["Authorization"] = "Basic " + base64.b64encode(auth.encode()).decode()
     processes = max(1, min(processes, concurrency))
+    interval = concurrency / rps if rps else 0.0  # seconds between one worker's requests
     per = [concurrency // processes + (1 if i < concurrency % processes else 0) for i in range(processes)]
     ctx = multiprocessing.get_context("spawn")
     queue = ctx.Queue()
-    procs = [ctx.Process(target=_process_main, args=(target, mix, headers, warmup + duration, n, i + 1, queue)) for i, n in enumerate(per)]
+    procs = [ctx.Process(target=_process_main, args=(target, mix, headers, warmup + duration, n, i + 1, queue, interval)) for i, n in enumerate(per)]
     for p in procs:
         p.start()
     samples: list = []
@@ -194,13 +203,14 @@ def main(argv=None) -> int:
     ap.add_argument("--duration", type=float, default=20.0)
     ap.add_argument("--warmup", type=float, default=5.0)
     ap.add_argument("--header", action="append", default=[], metavar="NAME:VALUE", help="an extra request header (for a local server: Origin:http://localhost)")
+    ap.add_argument("--rps", type=float, help="cap the total request rate")
     ap.add_argument("--auth", help="PROFILE:TOKEN (Basic auth); prefer the environment variable LOAD_AUTH so it is not on a command line")
     a = ap.parse_args(argv)
     import os
     auth = a.auth or os.environ.get("LOAD_AUTH")
     target = Target(a.url, a.connect_to)
     for n in a.concurrency:
-        r = run_level(target, a.mix, n, a.duration, a.warmup, auth, extra_headers=dict(h.split(":", 1) for h in a.header))
+        r = run_level(target, a.mix, n, a.duration, a.warmup, auth, extra_headers=dict(h.split(":", 1) for h in a.header), rps=a.rps)
         print(json.dumps({k: v for k, v in r.items() if k != "routes"}))
     return 0
 
