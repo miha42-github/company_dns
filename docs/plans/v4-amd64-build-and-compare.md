@@ -36,10 +36,10 @@ The build takes the four SIC feather files and the embedding model from two dire
 ```bash
 NODE=user@node-hostname            # your node
 ssh $NODE 'mkdir -p ~/company-dns-inputs/data ~/company-dns-inputs/model'
-cd /Users/mihay42/dev/company_dns/tmp
+cd <repo>/tmp
 rsync -av us_flat_embedded.feather japan_rev13_flat_embedded.feather nace_rev2_flat_embedded.feather \
           isic_rev4_flat_embedded.feather  $NODE:company-dns-inputs/data/
-rsync -av /Users/mihay42/dev/company_dns/.claude/worktrees/repo-overview-ed2879/v4/.fastembed_cache/ $NODE:company-dns-inputs/model/
+rsync -av <repo>/v4/.fastembed_cache/ $NODE:company-dns-inputs/model/
 ```
 
 (The model directory must contain `models--Qdrant--all-MiniLM-L6-v2-onnx`. If the worktree has been cleaned, run the server once on the Mac to recreate it.)

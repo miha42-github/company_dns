@@ -117,7 +117,7 @@ pushed), `--suite` (also run the API test suite with the staging token, which th
 ```bash
 H=https://company-dns-staging.mediumroast.io
 curl -s $H/health
-curl -s -A "bringup-check/1.0 (you@mediumroast.io)" $H/V4.0/na/sic/code/3571 | head -c 200; echo
+curl -s -A "bringup-check/1.0 (you@example.org)" $H/V4.0/na/sic/code/3571 | head -c 200; echo
 ./scripts/build-and-deploy-v4.sh --status             # the tag, commit, image digest and time of what is running (read from the Deployment's annotations)
 kubectl -n company-dns-staging get pods -o wide        # two pods Running and Ready, on different nodes if the scheduler could
 kubectl -n company-dns-staging get certificate         # READY True
@@ -154,7 +154,7 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 3. **Rate limiting across the replicas.** The fleet allows an identified caller 6000 requests a minute with a burst of 600 (30 per pod over 20 pods). One sequential `curl` loop refills as fast as it spends, so use parallel requests from one machine:
 
    ```bash
-   seq 1 2000 | xargs -P 100 -I{} curl -s -o /dev/null -w "%{http_code}\n" -A "bringup-check/1.0 (you@mediumroast.io)" $H/V3.0/na/sic/code/7372 | sort | uniq -c
+   seq 1 2000 | xargs -P 100 -I{} curl -s -o /dev/null -w "%{http_code}\n" -A "bringup-check/1.0 (you@example.org)" $H/V3.0/na/sic/code/7372 | sort | uniq -c
    ```
 
    Expect mostly `200`s and **some `429`s** once the per-pod bursts are used up; the exact counts depend on how the requests spread across the pods. All `200`s from a much larger run would mean the limiter divides by too many replicas; a `429` after only a few dozen requests would mean it divides by too few (check `COMPANY_DNS_REPLICAS` and `COMPANY_DNS_RATE_LIMIT_*` in the Deployment, and the "Per-IP rate limits" line in the pod log).
@@ -169,7 +169,7 @@ This is plan step 7 ([`v4-release-to-staging.md`](plans/v4-release-to-staging.md
 6. **A soak.** Leave it up for a defined period (suggested 72 hours) with a light steady load, and watch restarts, memory and the error rate:
 
    ```bash
-   while true; do curl -s -o /dev/null -w "%{http_code} " -A "soak/1.0 (you@mediumroast.io)" $H/V4.0/na/sic/code/3571; sleep 5; done
+   while true; do curl -s -o /dev/null -w "%{http_code} " -A "soak/1.0 (you@example.org)" $H/V4.0/na/sic/code/3571; sleep 5; done
    kubectl -n company-dns-staging get pods                  # RESTARTS stays 0
    kubectl -n company-dns-staging top pods                  # (if the cluster has metrics) memory stays flat (about 160 MiB idle, under 260 MiB peak was measured)
    ```
