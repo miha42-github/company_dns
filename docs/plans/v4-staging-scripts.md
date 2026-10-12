@@ -1,6 +1,6 @@
 # V4 staging scripts: follow the established pattern, automate more, fold into `svc_ctl.sh` later
 
-Status: **Implemented (2026-10-11): steps A to D below are done; step E, the first real run on the build node, is next.** The scripts are tested against stubs only (`python3 scripts/test_v4_scripts.py`, 45 tests); neither has run against a registry or the cluster yet. Decisions in section 5: apply-time tag with the cluster as the record, one run on the build node, tokens sealed on the build node.
+Status: **Implemented and proven (2026-10-11): steps A to E are done. The first real runs on the build node deployed V4 to staging, and the suite passed there.** The scripts are tested against stubs (`python3 scripts/test_v4_scripts.py`) and have run against the registry and the cluster. Decisions in section 5: apply-time tag with the cluster as the record, one run on the build node, tokens sealed on the build node.
 Owner: michael.hay@mediumroast.io
 Replaces the script parts of work packages WP2, WP4 and WP5 in [`v4-staging-rollout.md`](v4-staging-rollout.md) (the manifests, WP3, stay as they are).
 Goal: **V4 operable on staging** (`https://company-dns-staging.mediumroast.io`). Some technical debt is accepted to get there; section 6 sketches paying it off.
