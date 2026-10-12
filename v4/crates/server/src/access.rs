@@ -645,7 +645,7 @@ pub(crate) mod tests {
     #[test]
     fn identify_covers_the_four_cases() {
         let access = Access::new(test_profiles(&[("p", "tok")], None));
-        let ip: IpAddr = "10.0.0.9".parse().unwrap();
+        let ip: IpAddr = "192.0.2.9".parse().unwrap();
         let basic = |id: &str, t: &str| format!("Basic {}", base64::engine::general_purpose::STANDARD.encode(format!("{id}:{t}")));
 
         assert!(matches!(access.identify(&HeaderMap::new(), ip), Identity::Anonymous));

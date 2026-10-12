@@ -435,7 +435,7 @@ mod tests {
             b = b.header(header::AUTHORIZATION, a);
         }
         let mut req = b.body(Body::empty()).unwrap();
-        req.extensions_mut().insert(ConnectInfo::<SocketAddr>("10.0.0.1:1".parse().unwrap()));
+        req.extensions_mut().insert(ConnectInfo::<SocketAddr>("192.0.2.1:1".parse().unwrap()));
         app.clone().oneshot(req).await.unwrap().status()
     }
 

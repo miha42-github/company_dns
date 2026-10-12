@@ -40,8 +40,8 @@ case "$args" in
   "get clusterissuer letsencrypt-prod") [ -n "${STUB_NO_ISSUER:-}" ] && exit 1;;
   "get svc -A --no-headers")
     [ -n "${STUB_NO_CONTROLLER:-}" ] && exit 0
-    printf 'kube-system   sealed-secrets-controller-metrics   ClusterIP   10.0.0.1   <none>   8081/TCP   1d\n'
-    printf 'kube-system   sealed-secrets-controller   ClusterIP   10.0.0.2   <none>   8080/TCP   1d\n'
+    printf 'kube-system   sealed-secrets-controller-metrics   ClusterIP   192.0.2.1   <none>   8081/TCP   1d\n'
+    printf 'kube-system   sealed-secrets-controller   ClusterIP   192.0.2.2   <none>   8080/TCP   1d\n'
     # a real cluster lists far more services than fit in a pipe buffer, after the match
     [ -n "${STUB_BIG_SVC:-}" ] && for i in $(seq 1 6000); do printf 'ns%d   svc-%d   ClusterIP   10.1.%d.%d   <none>   80/TCP   1d\n' $i $i $((i / 250)) $((i % 250)); done;;
   *"get secret company-dns-credentials"*) [ "${STUB_SECRET:-present}" = missing ] && exit 1; echo secret;;
@@ -237,7 +237,7 @@ class Deploy(Base):
         self.assertIn("198.51.100.7", r.stderr)
         self.assertIn("hairpin", r.stderr)
         self.assertIn("load balancer address", r.stderr)
-        r = self.run_script("--check", STUB_DNS_IP="10.0.0.10")  # a private address: no warning
+        r = self.run_script("--check", STUB_DNS_IP="10.0.0.10")  # a private address: no warning  # hygiene: allow
         self.assertNotIn("hairpin", r.stderr)
 
     def test_an_unreachable_cluster_is_reported(self):

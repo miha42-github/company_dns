@@ -8,7 +8,7 @@ after two deliveries of a corrected US data file (the second, `us_flat_embedded.
 
 - This repository serves industry-classification and company data over an HTTP API (the Rust server in `v4/`).
 - The classification data is loaded at startup from **flat data files** in the directory named by `COMPANY_DNS_DATA_DIR`
-  (on the author's machine `/Users/mihay42/dev/company_dns/tmp/`; it is not committed).
+  (on the author's machine, a `tmp/` directory in the checkout; it is not committed).
 - The files are supplied by the data owner (Mediumroast). The step that produces them **is not in this repository**; the repository
   only holds a validator for them (`docs/plans/research/check_ic_feather.py`) and notes on defects found in earlier deliveries
   (`docs/plans/research/*-defects.md`).
