@@ -10,6 +10,8 @@ Every request is rate limited per caller, and how much you get depends on how yo
 | a self-identifying `User-Agent` with a contact, for example `YourApp/1.0 (contact@example.com)` | the standard limit |
 | HTTP Basic Auth for a profile your operator issued | whatever that profile is granted: no limit or a quota of its own, and optionally SQL |
 
+The limits are **per client IP address** (per profile for a profile with its own quota), counted across all of the service's replicas, as a number of requests per minute plus a short burst allowance. The operator sets the numbers, so they differ between deployments; the built-in defaults are **200 a minute (burst 20)** for the standard limit and **5 a minute (burst 1)** for the strictest. Ask your operator for the figures of the deployment you use. A burst larger than the allowance is answered with `429`s even when your average is low, so spread requests out and cache answers on your side.
+
 Over the limit you get `429` with a `Retry-After` header (seconds to wait). A wrong Basic credential is a `401`; it is never treated as anonymous. The `Origin` and `Referer` headers are not identity. `/health`, `/docs` and `/redoc` are not rate limited.
 
 Details: [Security](https://github.com/miha42-github/company_dns/blob/main/v4/README.md#security) and [Profiles](https://github.com/miha42-github/company_dns/blob/main/v4/README.md#profiles-authenticated-access).
