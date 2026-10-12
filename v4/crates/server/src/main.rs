@@ -69,7 +69,7 @@ struct AppState {
     modifiers(&SecurityAddon),
     info(
         title = "company_dns API (V4)",
-        version = "4.0.0",
+        version = env!("CARGO_PKG_VERSION"),
         description = include_str!("api_description.md"),
         license(name = "Apache-2.0", url = "https://www.apache.org/licenses/LICENSE-2.0"),
         contact(name = "company_dns", url = "https://github.com/miha42-github/company_dns")
@@ -542,7 +542,7 @@ async fn root_redirect() -> axum::response::Redirect {
 async fn health() -> impl IntoResponse {
     axum::Json(json!({
         "status": "healthy",
-        "version": "4.0.0",
+        "version": env!("CARGO_PKG_VERSION"),
         "timestamp": chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
     }))
 }
@@ -1922,5 +1922,18 @@ mod root_tests {
         let resp = app.oneshot(Request::builder().uri("/").body(Body::empty()).unwrap()).await.unwrap();
         assert_eq!(resp.status(), StatusCode::TEMPORARY_REDIRECT);
         assert_eq!(resp.headers()[header::LOCATION], "/ui/");
+    }
+}
+
+#[cfg(test)]
+mod version_tests {
+    use super::*;
+
+    /// The code says 4.0.0 everywhere (the documents call the release V4.0.0-pre until it ships): one value in the workspace manifest,
+    /// read by /health and the OpenAPI document, so nothing is reset at release.
+    #[test]
+    fn the_version_is_4_0_0_and_the_health_and_openapi_documents_agree() {
+        assert_eq!(env!("CARGO_PKG_VERSION"), "4.0.0");
+        assert_eq!(ApiDoc::openapi().info.version, "4.0.0");
     }
 }

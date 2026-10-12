@@ -10,6 +10,9 @@ members = [
 ]
 
 [workspace.package]
+# The one place the version lives. The code says 4.0.0; the documents call this release V4.0.0-pre until it is released
+# (docs/plans/v4-documentation-update.md, DP1). /health, the OpenAPI document and the User-Agents read it from here.
+version = "4.0.0"
 edition = "2021"
 publish = false
 

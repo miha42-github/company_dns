@@ -11,4 +11,4 @@ pub use firmographics::build_firmographics;
 /// Matches `lib/edgar.py`'s existing pattern for identifying
 /// `company_dns` to SEC.gov, per its fair-access User-Agent
 /// requirement.
-pub const USER_AGENT: &str = "Mediumroast, Inc. company_dns/4.0.0 hello@mediumroast.io";
+pub const USER_AGENT: &str = concat!("Mediumroast, Inc. company_dns/", env!("CARGO_PKG_VERSION"), " hello@mediumroast.io");

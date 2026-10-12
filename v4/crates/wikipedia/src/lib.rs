@@ -37,7 +37,7 @@ pub const DEFAULT_TTL: Duration = Duration::from_secs(60 * 60);
 /// traffic, a real operational risk under Wikimedia's User-Agent
 /// policy - https://meta.wikimedia.org/wiki/User-Agent_policy).
 pub const USER_AGENT: &str =
-    "company_dns/4.0.0 (https://github.com/miha42-github/company_dns; hello@mediumroast.io)";
+    concat!("company_dns/", env!("CARGO_PKG_VERSION"), " (https://github.com/miha42-github/company_dns; hello@mediumroast.io)");
 
 pub struct WikipediaClient {
     http: reqwest::Client,

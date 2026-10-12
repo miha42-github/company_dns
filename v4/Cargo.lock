@@ -730,14 +730,14 @@ dependencies = [
 
 [[package]]
 name = "company-dns-cache"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "moka",
 ]
 
 [[package]]
 name = "company-dns-edgar"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -751,7 +751,7 @@ dependencies = [
 
 [[package]]
 name = "company-dns-firmographics"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -759,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "company-dns-server"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -790,7 +790,7 @@ dependencies = [
 
 [[package]]
 name = "company-dns-sic"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "datafusion",
@@ -803,7 +803,7 @@ dependencies = [
 
 [[package]]
 name = "company-dns-wikipedia"
-version = "0.1.0"
+version = "4.0.0"
 dependencies = [
  "anyhow",
  "company-dns-cache",
