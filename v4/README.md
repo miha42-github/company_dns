@@ -1,14 +1,43 @@
-# company_dns V4 (prototype)
+# company_dns V4.0.0-pre
 
-The first real running server combining what
-[`docs/plans/go-duckdb-rewrite.md`](../docs/plans/go-duckdb-rewrite.md),
-[`docs/plans/edgar-backend.md`](../docs/plans/edgar-backend.md), and
-[`experiments/`](../experiments/) validated individually — see
-[`docs/plans/v4-server-prototype.md`](../docs/plans/v4-server-prototype.md)
-for the full plan this implements. **Prototype**: US SIC + EDGAR +
-Wikipedia (real, per §8.1), no UX — see that doc's §1 scope. Tracking
-toward an initial development release:
-[`docs/plans/v4-initial-release-roadmap.md`](../docs/plans/v4-initial-release-roadmap.md).
+A Rust server for company firmographics and industry-classification lookups: the V3 API's URLs and answers, plus semantic and hybrid industry-code search,
+an experimental SQL endpoint, and built-in API documentation and UI. It combines what
+[`docs/plans/go-duckdb-rewrite.md`](../docs/plans/go-duckdb-rewrite.md), [`docs/plans/edgar-backend.md`](../docs/plans/edgar-backend.md) and
+[`experiments/`](../experiments/) validated individually; the original build is in [`docs/plans/v4-server-prototype.md`](../docs/plans/v4-server-prototype.md).
+
+**Status: pre-release.** It runs on a staging environment and passes its API test suite there; **V3 is still the live service**. The plan for moving it to production is
+[`docs/plans/v4-production-cutover.md`](../docs/plans/v4-production-cutover.md); the documents plan is [`docs/plans/v4-documentation-update.md`](../docs/plans/v4-documentation-update.md).
+Data terms (and a pending permission for ISIC) are in the root [README](../README.md#data-sources-and-terms).
+
+**Version labels.** The code reports `4.0.0` everywhere (`/health`, the OpenAPI document, every crate; one value in `Cargo.toml`). The documents call this release
+**V4.0.0-pre** until it is released; dropping "-pre" is a documents-only change.
+
+## Deploying it: three layers
+
+**1. Run the container (general).** The image is self-contained (binary, UI, data and embedding model inside; no network needed to start) and runs as a non-root user on a read-only filesystem.
+Take a tag from the [package page](https://github.com/miha42-github/company_dns/pkgs/container/company_dns%2Fcompany_dns_v4):
+
+```bash
+docker run --rm -p 4000:4000 -e COMPANY_DNS_REPLICAS=1 ghcr.io/miha42-github/company_dns/company_dns_v4:<tag>
+curl http://localhost:4000/health
+```
+
+Every setting is an environment variable (see the [Settings reference](#settings-reference)). Set `COMPANY_DNS_REPLICAS` to the number of copies you run; the rate limits are divided by it.
+
+**2. Run it on Kubernetes (a reference).** [`k8s/staging/`](../k8s/staging/) holds standard objects (Deployment, Service, probes, resources, anti-affinity, ConfigMaps, an Ingress). Adapt, do not apply blindly: they assume Traefik as the ingress
+class (including a Traefik `Middleware` for the HTTP redirect), cert-manager with an issuer named `letsencrypt-prod`, this project's host names, a SealedSecrets credentials file, and `COMPANY_DNS_REPLICAS` equal to `replicas` (set by hand).
+
+**3. How the maintainers deploy it (specific to our cluster).** [`scripts/build-and-deploy-v4.sh`](../scripts/build-and-deploy-v4.sh) and [`scripts/seal-secrets-v4.sh`](../scripts/seal-secrets-v4.sh), guided by
+[`docs/v4-bringup.md`](../docs/v4-bringup.md). **These are maintainer-focused today.** The intention is to make them generic.
+
+| Already general | Debt, to work through over time |
+|---|---|
+| The application and image: self-contained, non-root, `/health`, settings as environment variables or two optional mounted files, no Kubernetes dependency, a public image | The scripts hard-code the registry and owner, the namespace, host and certificate names, the Traefik class and the `letsencrypt-prod` issuer; they assume SealedSecrets, a GitHub token in `.env` and `microk8s kubectl`. Move the constants into a config file or environment overrides |
+| The manifest shapes (probes, resources, spread, ConfigMaps) | The manifests assume Traefik, a named issuer and our host names. Kustomize overlays (a shared base plus per-environment changes) or documented substitutions |
+| The deploy script's pattern (preflight, tag applied at deploy time, rollback, build log) | The default allow-list for the credentialed routes, and the rate limiter's trusted-origin bypass, name `mediumroast.io`. Make the trusted origins an explicit setting with no built-in default for outside deployments |
+| The load and soak tools (`perf_tests/`) work against any URL | `COMPANY_DNS_REPLICAS` must equal `replicas` by hand. Derive it where possible, warn loudly where not |
+| | The verification path through the ingress address and the CoreDNS section of the bring-up guide are workarounds for our router. Label them as ours; the generic check is the public name |
+| | `svc_ctl.sh` controls V3 only. Fold V3 and V4 into one controller, or retire it with V3 |
 
 ## Layout
 
@@ -94,8 +123,9 @@ Env vars (all optional): `COMPANY_DNS_DATA_DIR` (above), and per-file overrides
 `SIC_DATA_PATH`, `JAPAN_SIC_DATA_PATH`, `EU_NACE_DATA_PATH`, `ISIC_DATA_PATH`,
 `EDGAR_CATALOG_PATH`, plus `SIC_MODELS`
 (`all_minilm_l6_v2` default, per `go-duckdb-rewrite.md` §7.8), `PORT`
-(default `4000`), `COMPANY_DNS_QUERY_PARALLELISM` (partitions per lookup query; default: the host's CPUs, at most 4. The classification and EDGAR tables are read into memory once at start, and a lookup is split into a few partitions, not one per CPU: on these small tables more partitions cost more than they save), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see
-"## Docker
+(default `4000`), `COMPANY_DNS_QUERY_PARALLELISM` (partitions per lookup query; default: the host's CPUs, at most 4. The classification and EDGAR tables are read into memory once at start, and a lookup is split into a few partitions, not one per CPU: on these small tables more partitions cost more than they save), `RUST_LOG`/`LOG_LEVEL_CONFIG_PATH` (see "Observability" below).
+
+## Docker
 
 The image is self-contained: the binary, the UI, the data files and the embedding model are all inside it, so a pod starts with no
 volume and no outbound access. Decided in `docs/plans/v4-deployment.md` section 3.2 and `docs/plans/v4-release-to-staging.md` step 6.
@@ -122,8 +152,6 @@ file, a row and quarter check on the EDGAR catalog, and a SHA-256 check of the m
 (glibc), because the ONNX runtime fastembed uses has no musl build. The process runs as UID 10001. A volume mounted at `/app/data`
 replaces the data without a rebuild. The image carries `THIRD_PARTY_NOTICES.md` and the Redoc licence under `/usr/share/doc/company-dns/`.
 The ONNX Runtime is Microsoft's official release (1.31.0, pinned by SHA-256, fetched from GitHub during the build) and is loaded at run time (`ORT_DYLIB_PATH`), so the image runs on CPUs without AVX2, such as the production nodes' 2013 Xeons. `docker-build.sh --ort download` uses pyke's prebuilt runtime instead, which needs AVX2. For local `cargo run` the default is still pyke's runtime; `cargo build --no-default-features --features ort-dynamic` with `ORT_DYLIB_PATH` set uses the dynamic one. `v4/scripts/cpu-check.sh` reports a machine's architecture and AVX2/NEON and which build fits; the server logs the same facts at start (`CPU: ...`) and refuses to start, with a message, if the runtime cannot run on that machine. The build needs network access (the running container does not).
-
-## Observability" below).
 
 ## Settings reference
 

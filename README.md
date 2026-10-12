@@ -5,6 +5,15 @@ To enable a more automated approach to gathering information about companies `co
 
 The embedded web interface is a modern single-page application for exploring SEC EDGAR filings and industry classifications. For detailed documentation on features, architecture, and usage, see [html/README.md](html/README.md).
 
+## V4.0.0-pre (pre-release)
+
+A Rust rewrite of the service, **V4.0.0-pre**, is being prepared and runs in a staging environment. **V3 (described in the rest of this file) is still the live service.** V4 answers the same URLs (its `/V3.0/` and `/V2.0/` paths return V3's shapes, with one additive field, a top-level `total`), and adds semantic and hybrid industry-code search, an experimental SQL endpoint, and built-in API documentation (`/docs`, `/redoc`) and web UI (`/ui/`). It is faster than V3 on 26 of the 28 checks compared (`docs/results/`). The documents say "V4.0.0-pre" until it is released; the code reports `4.0.0`.
+
+- Start here: [v4/README.md](v4/README.md) (running it, the settings, the endpoints, how it is deployed).
+- Moving from V3: [docs/migrating-to-v4.md](docs/migrating-to-v4.md) and the using-the-API guide [docs/using-the-api.md](docs/using-the-api.md).
+- What changed: [CHANGELOG.md](CHANGELOG.md). Plans: [docs/plans/README.md](docs/plans/README.md).
+- **Data sources and terms:** see [Data sources and terms](#data-sources-and-terms) below, including a pending permission for the ISIC data.
+
 # Changes
 
 ## Introducing V3.3.0
@@ -91,6 +100,9 @@ The live service at `company-dns.mediumroast.io` runs on an on-prem MicroK8s HA 
 ```
 which builds the image, pushes it to GHCR, and rolls it out via `kubectl` (requires a `.env` file with `GITHUB_PAT` set — see [.env.template](.env.template)).
 
+### V4 (pre-release) on Kubernetes
+V4 is deployed with `scripts/build-and-deploy-v4.sh` and `k8s/staging/`. **Those scripts and manifests are maintainer-focused today**: they assume this project's registry and namespace, Traefik, cert-manager with a named issuer, SealedSecrets and its host names. The application and the container image are general (run the image with `docker run`; see [v4/README.md](v4/README.md#deploying-it-three-layers)), the manifests are a usable reference, and making the scripts generic is planned work, listed with the rest of the debt in v4/README.md.
+
 ## Verify that the service is working
 Regardless of the approach taken to run the company_dns checking to see if it is operating is important.  A quick way to check on service availability when running on localhost is to follow this link: [http://localhost:8000/](http://localhost:8000/). If this is successful the embedded web interface will display (see screenshot below) describing core capabilities and function, examples with `curl`, and some helpful links to the company_dns GitHub repository.
 
@@ -105,6 +117,10 @@ A live system is available for Mediuroast efforts and for anyone to try out, run
 ## Bugs
 If you encounter a problem with the company_dns please first review existing open [issues](https://github.com/miha42-github/company_dns/issues), and if you find a match then please add a comment with any detail you might deem relevant.  If you're unable to find an issue that matches the behavior you're seeing please open a new issue. 
 
+## Tests
+- V3: see `perf_tests/` and the API tests in `api_tests/`.
+- V4: `cd v4 && cargo test --workspace`; `python3 api_tests/run.py` against a running server (see [v4/README.md](v4/README.md)); `python3 scripts/test_v4_scripts.py` for the deploy scripts; `python3 scripts/check_hygiene.py` for the open-source hygiene check (no addresses, internal names or secrets in the repository).
+
 ## Improvements
 We try to keep high level Todos and Improvements in a list contained in a section below, and as we begin to work on things we will create a corresponding issue, link to it, progress and close it.  However, if there is a change in design, major improvement, and so on something may fall off the list below.  If something isn't on the list then please create a new issue and we will evaluate.  We'll let you know if we pick up your request and progress to working on it.
 
@@ -116,6 +132,22 @@ Here are the things that are likely to be worked but without any strict deadline
 2. Evaluate if financial data can be added from EDGAR, Wikipedia and Companies House
 4. Provide instructions/details for running on a Pi or Arm based system
     1. Since one of the target docker images is for ARM, the next logical step is to provide instructions for running on a Pi.
+
+# Data sources and terms
+The classification data bundled with the service, and where it comes from. This is a summary of the published terms, not legal advice; follow the linked terms.
+
+| Data | Licence | Terms | Status |
+|---|---|---|---|
+| US SIC (Standard Industrial Classification) | Federal Government Works, Public Domain Policy | [dol.gov copyright](https://www.dol.gov/general/aboutdol/copyright) | Redistribution rights in hand |
+| EU NACE Rev. 2 | Creative Commons Attribution 4.0 International (CC BY 4.0) | [Eurostat copyright notice](https://ec.europa.eu/eurostat/help/copyright-notice) | Redistribution rights in hand |
+| Japan SIC (JSIC Rev. 13) | Creative Commons Attribution 4.0 International (CC BY 4.0) | [e-Stat terms of use](https://www.e-stat.go.jp/en/terms-of-use) | Redistribution rights in hand |
+| **ISIC Rev. 4** (United Nations) | not yet confirmed | | **Permission requested from the UN; no answer yet** |
+| SEC EDGAR filings | public SEC data, read under the SEC's fair-access policy (an identifying User-Agent) | [sec.gov](https://www.sec.gov/os/accessing-edgar-data) | fetched at build time and live |
+| Wikipedia and Wikidata | Wikipedia text CC BY-SA 4.0; Wikidata CC0; read under the Wikimedia User-Agent policy | [wikimedia terms](https://foundation.wikimedia.org/wiki/Policy:Terms_of_Use) | read live |
+
+**Attribution (CC BY 4.0).** The EU NACE data contains information from Eurostat and the Japan SIC data contains information from e-Stat (Japan), both under CC BY 4.0. Mediumroast changed it: the classifications are flattened into one table per system and embedded (vectors added) for similarity search.
+
+**Risk: the ISIC data could be removed.** A request to the United Nations for permission to redistribute ISIC has not been answered. If the answer is no, or never comes, the ISIC data will be taken out of the image and the service. What would stop working: the `international` ISIC lookups (`/V4.0/international/...` and their `/V3.0/` aliases), ISIC rows in the global keyword search, and crosswalks to ISIC in company matching. The other systems are unaffected, and the server already starts without any one classification file (it warns and continues). **Do not build on ISIC yet.** Updates will be recorded here and in the [CHANGELOG](CHANGELOG.md).
 
 # License
 Since this code falls under a liberal Apache-V2 license it is provided as is, without warranty or guarantee of support.  Feel free to fork the code, but please provide attribution to the authors.

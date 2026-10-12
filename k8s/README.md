@@ -26,6 +26,8 @@ CoreDNS answers the cluster's public host names with Traefik's LAN address (`<tr
 
 ## Staging (V4): `k8s/staging/`
 
+> **Maintainer-focused.** These manifests and the scripts that apply them assume this project's cluster (Traefik, cert-manager with an issuer named `letsencrypt-prod`, SealedSecrets, our host names and registry). The application and the container image are general; the manifests are a reference to adapt. The intention is to make the scripts generic: see the table in [v4/README.md](../v4/README.md#deploying-it-three-layers).
+
 V4 at `https://company-dns-staging.mediumroast.io`, twenty replicas in the `company-dns-staging` namespace, on the same cluster. It is **not** a copy of
 `k8s/prod/` (which is V3): V4 listens on **4000**, runs as UID 10001 with a read-only root filesystem, and takes its credentials, rules and log level from
 mounted files. Plan and order of work: [docs/plans/v4-staging-rollout.md](../docs/plans/v4-staging-rollout.md).
