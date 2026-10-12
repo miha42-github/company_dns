@@ -179,3 +179,10 @@ Full raw data: `perf_tests/results/baseline-20260926.json`.
    (JPMorgan Chase, first run only - didn't recur), and one `502` on
    `merged_firmographics` (Meta Platforms, 13ms - a fast gateway-level
    failure, not an app timeout). Both are in the JSON for the record.
+
+
+## Soak and capacity tests
+
+- `load.py`: a closed-loop load generator (throughput and latency percentiles; `--rps` caps the rate).
+- `run_cluster.py`: compares replica configurations on the cluster (`docs/plans/v4-sizing-test.md`).
+- `soak.py`: a ramp-and-hold soak test for a remote tester, with periodic known-answer checks and per-window output (`docs/soak-test.md`).
