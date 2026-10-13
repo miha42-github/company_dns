@@ -187,3 +187,4 @@ Full raw data: `perf_tests/results/baseline-20260926.json`.
 - `run_cluster.py`: compares replica configurations on the cluster (`docs/plans/v4-sizing-test.md`).
 - `soak.py`: a ramp-and-hold soak test for a remote tester, with periodic known-answer checks and per-window output (`docs/soak-test.md`).
 - `pod_watch.py`: reads the pods from the cluster side while a soak runs (readiness, restarts, memory, CPU throttling), read-only. `soak_analyze.py`: merges several sites' soak results and judges each marked event (`docs/soak-scenarios.md`).
+- `report_cluster.py`: draws the sizing and soak figures of `docs/performance-report.md` from the committed result files.
