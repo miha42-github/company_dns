@@ -1,0 +1,22 @@
+{
+ "url": "https://company-dns-staging.mediumroast.io",
+ "label": "remote-tester",
+ "mix": "lookups",
+ "window_s": 60.0,
+ "steps": [
+  4,
+  8,
+  16,
+  32
+ ],
+ "step_windows": 10,
+ "hold": 16,
+ "rps_cap": 60.0,
+ "authenticated": false,
+ "started_utc": "2026-10-12T03:10:26Z",
+ "python": "3.11.0",
+ "platform": "Linux-6.8.0-139-generic-x86_64-with-glibc2.39",
+ "planned_windows": 1440,
+ "max_error_rate": 0.01,
+ "max_p95_ms": 2000.0
+}

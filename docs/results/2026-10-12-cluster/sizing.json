@@ -1,0 +1,394 @@
+{
+ "_about": "Closed-loop load from the build node through the staging ingress, one run per cell (perf_tests/run_cluster.py), 30 s per level after a 5 s warm-up, random requests for 'embedding' and 'lookups', a small repeating pool for 'repeated'. Rounds 2 and 3 are transcribed from the run summaries (the raw results.json files were not kept). Errors and 429s were 0 in every run. The nodes also carry other workloads.",
+ "recorded": "2026-10-11",
+ "staging_namespace": "company-dns-staging",
+ "runs": {
+  "embedding": {
+   "3x4000m/4Gi": [
+    {
+     "n": 32,
+     "rps": 76.2,
+     "p50_ms": 346.8,
+     "p95_ms": 941.3,
+     "p99_ms": 1053.9,
+     "cpu_cores_used": 9.45,
+     "throttled": 0.129
+    },
+    {
+     "n": 64,
+     "rps": 77.0,
+     "p50_ms": 691.3,
+     "p95_ms": 2095.0,
+     "p99_ms": 2393.8,
+     "cpu_cores_used": 9.48,
+     "throttled": 0.139
+    },
+    {
+     "n": 128,
+     "rps": 77.8,
+     "p50_ms": 1821.2,
+     "p95_ms": 2491.4,
+     "p99_ms": 2594.2,
+     "cpu_cores_used": 9.21,
+     "throttled": 0.129
+    },
+    {
+     "n": 256,
+     "rps": 78.1,
+     "p50_ms": 3353.5,
+     "p95_ms": 3947.8,
+     "p99_ms": 4159.5,
+     "cpu_cores_used": 9.38,
+     "throttled": 0.127
+    }
+   ],
+   "6x2000m/2Gi": [
+    {
+     "n": 32,
+     "rps": 139.5,
+     "p50_ms": 214.2,
+     "p95_ms": 513.0,
+     "p99_ms": 633.9,
+     "cpu_cores_used": 10.47,
+     "throttled": 0.261
+    },
+    {
+     "n": 64,
+     "rps": 139.7,
+     "p50_ms": 250.7,
+     "p95_ms": 1635.4,
+     "p99_ms": 1798.5,
+     "cpu_cores_used": 10.27,
+     "throttled": 0.256
+    },
+    {
+     "n": 128,
+     "rps": 143.8,
+     "p50_ms": 788.6,
+     "p95_ms": 2036.8,
+     "p99_ms": 3444.4,
+     "cpu_cores_used": 9.85,
+     "throttled": 0.251
+    },
+    {
+     "n": 256,
+     "rps": 144.2,
+     "p50_ms": 1902.1,
+     "p95_ms": 2752.3,
+     "p99_ms": 2970.7,
+     "cpu_cores_used": 10.23,
+     "throttled": 0.238
+    }
+   ],
+   "12x1000m/1Gi": [
+    {
+     "n": 32,
+     "rps": 211.7,
+     "p50_ms": 113.5,
+     "p95_ms": 395.7,
+     "p99_ms": 577.8,
+     "cpu_cores_used": 10.49,
+     "throttled": 0.012
+    },
+    {
+     "n": 64,
+     "rps": 230.5,
+     "p50_ms": 204.6,
+     "p95_ms": 800.7,
+     "p99_ms": 1222.8,
+     "cpu_cores_used": 11.18,
+     "throttled": 0.012
+    },
+    {
+     "n": 128,
+     "rps": 237.5,
+     "p50_ms": 377.6,
+     "p95_ms": 1612.8,
+     "p99_ms": 2467.5,
+     "cpu_cores_used": 11.34,
+     "throttled": 0.01
+    },
+    {
+     "n": 256,
+     "rps": 237.7,
+     "p50_ms": 681.4,
+     "p95_ms": 3555.3,
+     "p99_ms": 6781.3,
+     "cpu_cores_used": 10.96,
+     "throttled": 0.013
+    }
+   ]
+  },
+  "lookups": {
+   "3x4000m/4Gi": [
+    {
+     "n": 32,
+     "rps": 1070.9,
+     "p50_ms": 18.8,
+     "p95_ms": 93.8,
+     "p99_ms": 140.0,
+     "cpu_cores_used": 10.66,
+     "throttled": 0.08
+    },
+    {
+     "n": 64,
+     "rps": 1124.4,
+     "p50_ms": 34.8,
+     "p95_ms": 181.3,
+     "p99_ms": 289.0,
+     "cpu_cores_used": 11.04,
+     "throttled": 0.132
+    },
+    {
+     "n": 128,
+     "rps": 1172.7,
+     "p50_ms": 69.8,
+     "p95_ms": 362.9,
+     "p99_ms": 535.1,
+     "cpu_cores_used": 11.32,
+     "throttled": 0.178
+    },
+    {
+     "n": 256,
+     "rps": 1196.0,
+     "p50_ms": 123.2,
+     "p95_ms": 696.6,
+     "p99_ms": 935.1,
+     "cpu_cores_used": 11.16,
+     "throttled": 0.155
+    }
+   ],
+   "6x2000m/2Gi": [
+    {
+     "n": 32,
+     "rps": 961.8,
+     "p50_ms": 18.8,
+     "p95_ms": 108.9,
+     "p99_ms": 172.4,
+     "cpu_cores_used": 9.37,
+     "throttled": 0.049
+    },
+    {
+     "n": 64,
+     "rps": 1093.4,
+     "p50_ms": 36.0,
+     "p95_ms": 195.6,
+     "p99_ms": 299.7,
+     "cpu_cores_used": 10.34,
+     "throttled": 0.081
+    },
+    {
+     "n": 128,
+     "rps": 1137.0,
+     "p50_ms": 63.5,
+     "p95_ms": 408.9,
+     "p99_ms": 620.1,
+     "cpu_cores_used": 10.84,
+     "throttled": 0.117
+    },
+    {
+     "n": 256,
+     "rps": 1230.4,
+     "p50_ms": 112.5,
+     "p95_ms": 738.7,
+     "p99_ms": 1193.3,
+     "cpu_cores_used": 11.1,
+     "throttled": 0.145
+    }
+   ],
+   "12x1000m/1Gi": [
+    {
+     "n": 32,
+     "rps": 839.2,
+     "p50_ms": 13.6,
+     "p95_ms": 132.6,
+     "p99_ms": 203.5,
+     "cpu_cores_used": 7.81,
+     "throttled": 0.003
+    },
+    {
+     "n": 64,
+     "rps": 1031.4,
+     "p50_ms": 44.1,
+     "p95_ms": 191.8,
+     "p99_ms": 299.3,
+     "cpu_cores_used": 9.37,
+     "throttled": 0.007
+    },
+    {
+     "n": 128,
+     "rps": 1158.5,
+     "p50_ms": 77.1,
+     "p95_ms": 330.0,
+     "p99_ms": 499.5,
+     "cpu_cores_used": 10.31,
+     "throttled": 0.009
+    },
+    {
+     "n": 256,
+     "rps": 1261.6,
+     "p50_ms": 153.1,
+     "p95_ms": 560.4,
+     "p99_ms": 768.8,
+     "cpu_cores_used": 10.86,
+     "throttled": 0.01
+    }
+   ],
+   "16x1000m/1Gi": [
+    {
+     "n": 64,
+     "rps": 1222.7,
+     "p50_ms": 24.2,
+     "p95_ms": 178.0,
+     "p99_ms": 299.9,
+     "cpu_cores_used": 11.47,
+     "throttled": 0.008
+    },
+    {
+     "n": 128,
+     "rps": 1443.0,
+     "p50_ms": 62.6,
+     "p95_ms": 282.3,
+     "p99_ms": 463.9,
+     "cpu_cores_used": 13.06,
+     "throttled": 0.006
+    },
+    {
+     "n": 256,
+     "rps": 1600.1,
+     "p50_ms": 116.1,
+     "p95_ms": 478.8,
+     "p99_ms": 727.3,
+     "cpu_cores_used": 13.9,
+     "throttled": 0.013
+    }
+   ],
+   "20x1000m/1Gi": [
+    {
+     "n": 64,
+     "rps": 1373.3,
+     "p50_ms": 18.8,
+     "p95_ms": 159.8,
+     "p99_ms": 243.7,
+     "cpu_cores_used": 13.67,
+     "throttled": 0.006
+    },
+    {
+     "n": 128,
+     "rps": 1684.9,
+     "p50_ms": 56.7,
+     "p95_ms": 237.5,
+     "p99_ms": 358.3,
+     "cpu_cores_used": 15.91,
+     "throttled": 0.008
+    },
+    {
+     "n": 256,
+     "rps": 1873.0,
+     "p50_ms": 91.4,
+     "p95_ms": 420.9,
+     "p99_ms": 743.8,
+     "cpu_cores_used": 16.79,
+     "throttled": 0.012
+    }
+   ]
+  },
+  "repeated": {
+   "16x1000m/1Gi": [
+    {
+     "n": 64,
+     "rps": 1543.0,
+     "p50_ms": 15.5,
+     "p95_ms": 145.7,
+     "p99_ms": 217.8,
+     "cpu_cores_used": 11.41,
+     "throttled": 0.003
+    },
+    {
+     "n": 128,
+     "rps": 1817.7,
+     "p50_ms": 52.0,
+     "p95_ms": 216.9,
+     "p99_ms": 336.4,
+     "cpu_cores_used": 13.09,
+     "throttled": 0.007
+    },
+    {
+     "n": 256,
+     "rps": 1986.9,
+     "p50_ms": 86.7,
+     "p95_ms": 411.6,
+     "p99_ms": 632.5,
+     "cpu_cores_used": 13.91,
+     "throttled": 0.016
+    }
+   ],
+   "20x1000m/1Gi": [
+    {
+     "n": 64,
+     "rps": 1721.0,
+     "p50_ms": 13.1,
+     "p95_ms": 135.8,
+     "p99_ms": 208.7,
+     "cpu_cores_used": 13.37,
+     "throttled": 0.003
+    },
+    {
+     "n": 128,
+     "rps": 2022.8,
+     "p50_ms": 34.7,
+     "p95_ms": 218.9,
+     "p99_ms": 339.1,
+     "cpu_cores_used": 15.49,
+     "throttled": 0.007
+    },
+    {
+     "n": 256,
+     "rps": 2300.7,
+     "p50_ms": 72.2,
+     "p95_ms": 372.2,
+     "p99_ms": 606.8,
+     "cpu_cores_used": 16.74,
+     "throttled": 0.012
+    }
+   ]
+  }
+ },
+ "round1_partial": {
+  "_about": "Round 1 (equal 2 cores; best sustained = highest throughput with error rate <= 1% and p95 <= 1 s); only the headline figures were kept.",
+  "embedding": {
+   "2x500m/1Gi": {
+    "best_rps": null,
+    "note": "never met p95 <= 1 s; about 10 to 12 req/s with p95 2.3 to 4.4 s"
+   },
+   "4x500m/1Gi": {
+    "best_rps": null,
+    "note": "never met p95 <= 1 s; about 21 to 24 req/s with p95 1.2 to 2.8 s"
+   },
+   "2x1000m/2Gi": {
+    "best_rps": 43.1,
+    "at_n": 16,
+    "p95_ms": 816
+   }
+  },
+  "lookups": {
+   "2x500m/1Gi": {
+    "best_rps": 50.5,
+    "at_n": 8
+   },
+   "4x500m/1Gi": {
+    "best_rps": 104.1,
+    "at_n": 16
+   },
+   "2x1000m/2Gi": {
+    "best_rps": 226.0,
+    "at_n": 32,
+    "p95_ms": 341
+   }
+  },
+  "throttled_share": {
+   "500m pods": "0.46 to 0.92",
+   "1000m pods": "about 0.01 to 0.03"
+  }
+ }
+}
