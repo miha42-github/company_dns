@@ -41,7 +41,27 @@ EMBEDDING = (("similarity", "/V4.0/na/sic/similarity/{q}", 6), ("hybrid", "/V4.0
 # the "repeated" mix draws from a small pool, so the same lookups come round again: what clients that ask for the same codes and words do
 REPEATED_POOL = 20
 REPEATED = (("sic_description", "/V4.0/na/sic/description/{rw}", 4), ("sic_code", "/V4.0/na/sic/code/{rc}", 3), ("edgar_ciks", "/V4.0/na/companies/edgar/ciks/{rw}", 3))
+# the same lookups at their original /V3.0/ paths (V3's response shape): clients that have not moved yet
+LOOKUPS_V3 = (("sic_description_v3", "/V3.0/na/sic/description/{w}", 4), ("sic_code_v3", "/V3.0/na/sic/code/{c}", 3), ("edgar_ciks_v3", "/V3.0/na/companies/edgar/ciks/{w}", 3))
+
+
+def blend(embedding_share: float) -> tuple:
+    """Lookups on the V4 paths and the V3 paths in equal parts, with this share (0 to 1) of embedding searches: a breadth-of-use workload.
+    Weights are integers out of 10000, so a share of 0.05 is 5% of the requests."""
+    if not 0 <= embedding_share <= 1:
+        raise ValueError("the embedding share is a fraction from 0 to 1")
+    emb = round(embedding_share * 10000)
+    rest = 10000 - emb
+
+    def scaled(routes, total):
+        weight = sum(w for _, _, w in routes)
+        return tuple((n, p, max(1, round(total * w / weight))) for n, p, w in routes)
+
+    return scaled(LOOKUPS, rest // 2) + scaled(LOOKUPS_V3, rest - rest // 2) + (scaled(EMBEDDING, emb) if emb else ())
+
+
 MIXES = {
+    "breadth": blend(0.05),
     "repeated": REPEATED,
     "lookups": LOOKUPS,
     "embedding": EMBEDDING,
@@ -169,10 +189,10 @@ def summarise(samples: list, duration: float, concurrency: int) -> dict:
     }
 
 
-def run_level(target: Target, mix_name: str, concurrency: int, duration: float, warmup: float = 5.0, auth: str | None = None, processes: int = 4,
+def run_level(target: Target, mix_name, concurrency: int, duration: float, warmup: float = 5.0, auth: str | None = None, processes: int = 4,
               extra_headers: dict | None = None, rps: float | None = None) -> dict:
     """N closed-loop workers for `warmup + duration` seconds; the warm-up is thrown away. `rps` caps the total request rate (each worker waits for its slot)."""
-    mix = MIXES[mix_name]
+    mix = MIXES[mix_name] if isinstance(mix_name, str) else tuple(mix_name)  # a name, or a blend() result
     headers = {"User-Agent": "company_dns-load/1.0 (+https://github.com/miha42-github/company_dns)", "Accept": "application/json"}
     headers.update(extra_headers or {})
     if auth:
@@ -199,6 +219,7 @@ def main(argv=None) -> int:
     ap.add_argument("--url", required=True)
     ap.add_argument("--connect-to", help="address to connect to instead of resolving the URL's host name")
     ap.add_argument("--mix", choices=sorted(MIXES), default="mixed")
+    ap.add_argument("--embedding-share", type=float, help="with --mix breadth: the fraction of requests that are embedding searches (default 0.05)")
     ap.add_argument("--concurrency", type=int, nargs="+", default=[8, 16, 32])
     ap.add_argument("--duration", type=float, default=20.0)
     ap.add_argument("--warmup", type=float, default=5.0)
@@ -209,8 +230,11 @@ def main(argv=None) -> int:
     import os
     auth = a.auth or os.environ.get("LOAD_AUTH")
     target = Target(a.url, a.connect_to)
+    if a.embedding_share is not None and a.mix != "breadth":
+        ap.error("--embedding-share goes with --mix breadth")
+    mix = blend(a.embedding_share) if a.embedding_share is not None else a.mix
     for n in a.concurrency:
-        r = run_level(target, a.mix, n, a.duration, a.warmup, auth, extra_headers=dict(h.split(":", 1) for h in a.header), rps=a.rps)
+        r = run_level(target, mix, n, a.duration, a.warmup, auth, extra_headers=dict(h.split(":", 1) for h in a.header), rps=a.rps)
         print(json.dumps({k: v for k, v in r.items() if k != "routes"}))
     return 0
 

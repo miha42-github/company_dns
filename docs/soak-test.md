@@ -41,7 +41,7 @@ export SOAK_AUTH='PROFILE:TOKEN'
 python3 perf_tests/soak.py --label your-name-where --hours 2 --steps 8,16,32,64 --step-minutes 15 --hold-concurrency 32 --out ./soak-capacity
 ```
 
-The token profile has no rate limit, so this measures the service. To include the embedding searches (the heaviest routes) add `--mix mixed`; do that only in a run agreed with the owner.
+The token profile has no rate limit, so this measures the service. To include the embedding searches (the heaviest routes) add `--mix mixed` (30% of requests) or `--mix breadth --embedding-share 0.05` (lookups on the V4 and V3 paths and 5% embedding searches); do that only in a run agreed with the owner.
 
 ## While it runs, and when it stops
 
@@ -58,3 +58,7 @@ The whole output directory (`windows.csv`, `windows.jsonl`, `canaries.jsonl`, `m
 a VPN). `meta.json` records the Python and operating system versions. It contains no credentials and no addresses.
 
 Please do not change the server, run other load tools at the same time, or share the token.
+
+The soak can also run from a machine on the cluster's network, with `--connect-to <address>` if the service's name does not resolve there (see [soak-scenarios.md](soak-scenarios.md)).
+
+**Other scenarios** (a rollout under load, a wider mix from several places, the same soak on production) are in [soak-scenarios.md](soak-scenarios.md). `--hours` is the length of the run, ramp included: the run ends on the clock.
