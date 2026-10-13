@@ -4,7 +4,7 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 
 > **Status: proven for deployment and stability (2026-10-13).** The scripts and this guide were followed on the build node on 2026-10-11 (tag `10112026-f255f85`; the API suite
 > passed, 57 OK and 3 skipped) and fixed wherever the first runs found a fault. A 24-hour soak from outside the network then passed (5.18 million requests, no errors, 7,200 of 7,200
-> known-answer checks correct, p95 between 110 and 126 ms, no drift) at a steady 60 requests/s: [`performance-report.md`](performance-report.md). **Not recorded or not yet run:** the shape and image tag staging ran during the soak were not written down; at the current size (20 pods) these have not been run:
+> known-answer checks correct, p95 between 110 and 126 ms, no drift) at a steady 60 requests/s: [`performance-report.md`](performance-report.md). The soak ran against tag `10112026-85feab8` at 20 pods, which showed 0 restarts after 38 hours. **Not yet run at the current size (20 pods):**
 > the rate-limit check of step 6.3, the CORS check, the rollback drill and a rolling update; the stability result covers one known workload, not the capacity ceiling
 > (the sizing results are in the report).
 

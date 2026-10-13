@@ -75,7 +75,7 @@ Staging runs **20 x 1000m with 1 GiB memory** (`k8s/staging/deployment.yaml`; pe
 
 ## 3. Stability: a 24-hour soak from outside the network
 
-`perf_tests/soak.py`, run by a remote tester (guide: [`soak-test.md`](soak-test.md)) against the staging service from 12 October 03:10 UTC for 24.4 hours. It sends only `GET` requests for US SIC code and description
+`perf_tests/soak.py`, run by a remote tester (guide: [`soak-test.md`](soak-test.md)) against the staging service from 12 October 03:10 UTC for 24.4 hours. Staging ran image tag `10112026-85feab8` (commit 85feab8, deployed 11 October 22:47 UTC) as 20 pods of 1000m / 1Gi throughout. It sends only `GET` requests for US SIC code and description
 lookups and EDGAR searches, ramps in four steps, holds, and every minute asks five known-answer questions (health, a US SIC code on the V4 and V3 paths, an EU NACE class and a Japan SIC industry group).
 The files are in [`results/2026-10-12-soak/`](results/2026-10-12-soak/): the per-window `windows.csv`, `summary.md` and `meta.json`.
 
@@ -110,7 +110,7 @@ Per-IP limits are settings, not capacity: with 20 pods and a quota of 6,000 a mi
 - **The per-IP limiter at 20 pods.** The soak never reached the quota, so no `429` was seen. The step-6.3 check in the bring-up guide has not been run at this size.
 - **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below.
 - **Server memory and restarts during the soak.** A client cannot see them. They must be read from the cluster (restart counts, memory per pod).
-- **What staging ran during the soak.** The pod shape and the image tag were not recorded.
+- **Server memory during the soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October), but memory over time was not recorded; the next soak scenarios add a pod watcher for that.
 - **One run per cell** in the sizing, on nodes shared with other services; the load is closed-loop (a fixed number of requests in flight), which measures capacity, not a traffic model. A real event is bursty.
 - **The tester's network.** A p50 of 28 ms suggests it was close to the cluster; a distant client sees more latency.
 - **The single-image comparison** is one machine, three runs per cell, and its repeat-traffic ratios measure the caches.
