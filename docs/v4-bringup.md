@@ -1,10 +1,12 @@
 # Bringing V4 up on staging
 
-From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.io` from two pods**, verified. Follow it top to bottom.
+From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.io` from twenty pods**, verified. Follow it top to bottom.
 
-> **Status: scripts written and tested against stubs (2026-10-11); not yet run for real.** `scripts/seal-secrets-v4.sh` and `scripts/build-and-deploy-v4.sh` (plan:
-> [`docs/plans/v4-staging-scripts.md`](plans/v4-staging-scripts.md)) pass 45 stub tests, but no script has yet talked to the registry or the cluster. The guide is marked
-> **proven** (with a date) only after someone has followed it end to end on the build node (plan step E), fixing whatever it got wrong.
+> **Status: proven for deployment and stability (2026-10-13).** The scripts and this guide were followed on the build node on 2026-10-11 (tag `10112026-f255f85`; the API suite
+> passed, 57 OK and 3 skipped) and fixed wherever the first runs found a fault. A 24-hour soak from outside the network then passed (5.18 million requests, no errors, 7,200 of 7,200
+> known-answer checks correct, p95 between 110 and 126 ms, no drift) at a steady 60 requests/s: [`performance-report.md`](performance-report.md). The soak ran against tag `10112026-85feab8` at 20 pods, which showed 0 restarts after 38 hours. **Not yet run at the current size (20 pods):**
+> the rate-limit check of step 6.3, the CORS check, the rollback drill and a rolling update; the stability result covers one known workload, not the capacity ceiling
+> (the sizing results are in the report).
 
 ## What you end up with
 
