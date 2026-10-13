@@ -207,12 +207,13 @@ def run(a, log=print) -> int:
     out.mkdir(parents=True, exist_ok=True)
     steps = [int(x) for x in a.steps.split(",") if x.strip()]
     window_s = a.window
-    total_windows = max(1, int(a.hours * 3600 / window_s))
+    total_windows = max(1, int(a.hours * 3600 / window_s))  # an upper bound: each window also takes a second or two to set up and check, so the clock ends the run first
     step_windows = max(1, round(a.step_minutes * 60 / window_s))
     target = load.Target(a.url)
+    mix = load.blend(a.embedding_share) if getattr(a, "embedding_share", None) is not None else a.mix
     ua = user_agent(a.label)
     headers = {"User-Agent": ua, "Accept": "application/json"}
-    meta = {"url": a.url, "label": a.label, "mix": a.mix, "window_s": window_s, "steps": steps, "step_windows": step_windows, "hold": a.hold_concurrency,
+    meta = {"url": a.url, "label": a.label, "mix": a.mix, "embedding_share": getattr(a, "embedding_share", None), "window_s": window_s, "steps": steps, "step_windows": step_windows, "hold": a.hold_concurrency,
             "rps_cap": a.rps, "authenticated": bool(auth), "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "python": platform.python_version(), "platform": platform.platform(), "planned_windows": total_windows,
             "max_error_rate": a.max_error_rate, "max_p95_ms": a.max_p95_ms}
@@ -228,7 +229,9 @@ def run(a, log=print) -> int:
         try:
             for step, conc in schedule(steps, step_windows, a.hold_concurrency, total_windows):
                 now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                r = load.run_level(target, a.mix, conc, window_s, 0.0, auth, processes=min(a.processes, conc),
+                if time.monotonic() - t0 >= a.hours * 3600:
+                    break  # --hours is the length of the run, ramp included: stop on the clock, not only on the window count
+                r = load.run_level(target, mix, conc, window_s, 0.0, auth, processes=min(a.processes, conc),
                                    extra_headers={"User-Agent": ua}, rps=a.rps)
                 canaries = run_canaries(target, headers)
                 health_ms = probe_health(target, headers)
@@ -275,7 +278,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url", default=DEFAULT_URL)
     ap.add_argument("--label", default=os.environ.get("USER", "tester"), help="who and where, for the record (for example johns-home); no spaces")
-    ap.add_argument("--mix", choices=sorted(load.MIXES), default="lookups", help="lookups (default), repeated, mixed (30%% embedding searches), embedding")
+    ap.add_argument("--mix", choices=sorted(load.MIXES), default="lookups",
+                    help="lookups (default), repeated, breadth (V4 and V3 paths, 5%% embedding searches), mixed (30%% embedding searches), embedding")
+    ap.add_argument("--embedding-share", type=float, help="with --mix breadth: the fraction of requests that are embedding searches, 0 to 1 (default 0.05)")
     ap.add_argument("--steps", default="4,8,16,32", help="concurrency of each ramp step, comma separated")
     ap.add_argument("--step-minutes", type=float, default=10.0)
     ap.add_argument("--hold-concurrency", type=int, default=16)
@@ -297,6 +302,8 @@ def main(argv=None) -> int:
         problems.append("--steps must be numbers separated by commas, for example 4,8,16,32")
     if a.window < 5 or a.hours <= 0 or a.hold_concurrency < 1 or (a.rps is not None and a.rps <= 0):
         problems.append("--window must be at least 5 seconds; --hours and --hold-concurrency must be positive; --rps must be positive")
+    if a.embedding_share is not None and (a.mix != "breadth" or not 0 <= a.embedding_share <= 1):
+        problems.append("--embedding-share (0 to 1) goes with --mix breadth")
     if re.search(r"\s", a.label):
         problems.append("--label must not contain spaces")
     if problems:

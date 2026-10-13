@@ -70,8 +70,23 @@ class LoadGenerator(unittest.TestCase):
             paths = {load.build_path(rng, t) for _, t, _ in mix for _ in range(40)}
             self.assertGreater(len(paths), 30, name)
             for p in paths:
-                self.assertTrue(p.startswith("/V4.0/"), p)
+                self.assertTrue(p.startswith(("/V4.0/", "/V3.0/")), p)
                 self.assertNotIn("{", p)
+
+    def test_the_breadth_blend_has_the_requested_share_of_each_kind(self):
+        def shares(mix):
+            total = sum(w for _, _, w in mix)
+            emb = sum(w for n, _, w in mix if n in ("similarity", "hybrid"))
+            v3 = sum(w for n, _, w in mix if n.endswith("_v3"))
+            return emb / total, v3 / total
+        emb, v3 = shares(load.blend(0.05))
+        self.assertAlmostEqual(emb, 0.05, places=2)
+        self.assertAlmostEqual(v3, 0.475, places=2)
+        self.assertEqual(shares(load.blend(0))[0], 0)
+        self.assertAlmostEqual(shares(load.blend(0.3))[0], 0.3, places=2)
+        with self.assertRaises(ValueError):
+            load.blend(1.5)
+        self.assertIn("breadth", load.MIXES)
 
     def test_the_repeated_mix_comes_round_again(self):
         import random

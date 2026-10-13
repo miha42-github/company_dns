@@ -49,7 +49,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def args(url, out, **kw):
     d = dict(url=url, label="test-rig", mix="lookups", steps="2,3", step_minutes=0.0167, hold_concurrency=2, hours=0.0017, window=1.0, rps=None, processes=2,
-             max_error_rate=0.01, max_p95_ms=2000.0, out=out)
+             max_error_rate=0.01, max_p95_ms=2000.0, out=out, embedding_share=None)
     d.update(kw)
     return argparse.Namespace(**d)
 
@@ -157,7 +157,27 @@ class Soak(unittest.TestCase):
         self.assertEqual(verdict, "FAIL")
         self.assertIn("Windows that missed the bar", text)
 
+    def test_the_run_ends_on_the_clock_not_only_on_the_window_count(self):
+        import time
+        real = soak.run_canaries
+        self.addCleanup(setattr, soak, "run_canaries", real)
+        soak.run_canaries = lambda *a, **k: (time.sleep(0.6), real(*a, **k))[1]  # each window pays 0.6 s for its checks, as a real one pays a second or two
+        started = time.monotonic()
+        # 10 s in windows of 1 s (10 of them by the count): the clock must end it after about 6 windows of 1.6 s
+        code, _ = self.run_soak(hours=10 / 3600, steps="2", step_minutes=1.0, hold_concurrency=2)
+        elapsed = time.monotonic() - started
+        self.assertEqual(code, 0)
+        self.assertLess(elapsed, 10 + 3, elapsed)
+        self.assertLess(len(self.rows()), 10, "fewer windows than planned: each took longer than its load time")
+
+    def test_the_breadth_mix_sends_v3_paths_and_a_few_embedding_searches(self):
+        self.run_soak(mix="breadth", embedding_share=0.2)
+        meta = json.loads((self.out / "meta.json").read_text())
+        self.assertEqual((meta["mix"], meta["embedding_share"]), ("breadth", 0.2))
+
     def test_main_refuses_nonsense_arguments(self):
+        self.assertEqual(soak.main(["--embedding-share", "0.1", "--out", str(self.out)]), 2)  # needs --mix breadth
+        self.assertEqual(soak.main(["--mix", "breadth", "--embedding-share", "2", "--out", str(self.out)]), 2)
         self.assertEqual(soak.main(["--steps", "a,b", "--out", str(self.out)]), 2)
         self.assertEqual(soak.main(["--window", "1", "--out", str(self.out)]), 2)
         self.assertEqual(soak.main(["--label", "two words", "--out", str(self.out)]), 2)
