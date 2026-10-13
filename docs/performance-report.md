@@ -99,7 +99,7 @@ The files are in [`results/2026-10-12-soak/`](results/2026-10-12-soak/): the per
 ## 4. Changes under load: rollback, roll forward and a lost pod (13 October)
 
 The first run of soak scenario 2 ([`soak-scenarios.md`](soak-scenarios.md)): the soak at a steady 60 requests/s for two hours from a machine on the cluster's own network (so its latencies are lower than the remote run's),
-with `pod_watch.py` on the build node reading the pods every 15 seconds, while the deployment was changed. The soak's windows were lined up with the watcher's clock from the load itself (a 2-second difference, found from the pods'
+with `pod_watch.py` on the build node reading the pods every 15 seconds, while the deployment was changed between two images: `10132026-7a8c8ac` (the new one, built from `main` at the merge of #146, which includes the `429` message fix and the single version source) and `10112026-85feab8` (the one the 24-hour soak ran on). The soak's windows were lined up with the watcher's clock from the load itself (a 2-second difference, found from the pods'
 CPU rising and falling; nobody compared clocks). The files are in [`results/2026-10-13-rollout/`](results/2026-10-13-rollout/).
 
 | | |
