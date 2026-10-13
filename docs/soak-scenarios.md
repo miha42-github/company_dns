@@ -6,18 +6,36 @@ These are the next scenarios, in order, each with who does what, the commands, a
 
 **Never during an event, and never against a cluster someone else is changing.** Staging shares its nodes with other services: keep to the steady rates below.
 
+## From a machine on the same network (for example a Mac Studio beside the cluster)
+
+The soak can run from any machine, including one on the cluster's own network, with `pod_watch.py` on the build node. What that does and does not show:
+
+- **It shows** how the cluster behaves: stability, and what happens to requests during a rollout, a restart or a lost pod. That is what scenario 2 is about, and a nearby client sees it with less network noise.
+- **It does not show** the public path (the internet, then the router's port forward, then the ingress), or what a distant client sees; latencies are lower. The first 24-hour soak, run remotely, covers the public path; keep a remote tester for the runs where that matters (scenario 4 especially).
+
+**Reaching the server.** The router does not loop traffic from the network back to its own public address, and the public name may not resolve to the cluster from inside. First check from that machine: `curl -sI <service-url>/health` should answer within a second or two. If it fails or hangs, give the soak the ingress address directly:
+
+```bash
+python3 perf_tests/soak.py ... --connect-to <ingress-address>      # the address `kubectl -n company-dns-staging get ingress` shows
+```
+
+The connection goes to that address, but the certificate and the routing still use the service's name, so TLS validates as normal. The address is not written into the results.
+
+**Also.** Keep the machine awake (on macOS run it as `caffeinate -i python3 perf_tests/soak.py ...`; Python 3.10 or newer). The per-address limits apply to that machine's address, as for any single caller, so `--rps 60` stays under them. Compare `date -u` on the two machines before a rollout test: the soak's windows and the watcher's rows are matched by their UTC times, and a clock a minute out blurs that.
+For scenario 3, a machine on the network and a remote tester are two different addresses, which is what that scenario wants.
+
 ## Scenario 2: rollout under load (about 2 hours)
 
 **Question:** does anything fail while the deployment changes under a steady load? This is what cutover day is made of, and the bring-up guide's rolling-update, rollback and restart checks at 20 pods have not been run.
 
-**Two people.** The *tester* (remote) only starts the soak. The *maintainer* (on the build node) runs the watcher and makes the changes, noting the time of each.
+**One or two people, two machines.** The soak runs on one machine (a remote tester, or the machine beside the cluster: see above); the watcher and the changes run on the build node, where the time of each change is noted.
 
 **Before starting.** Staging healthy at 20 pods (`./scripts/build-and-deploy-v4.sh --status`). Deploy the **next** image (`NEXT`, for example `main` with the latest fixes) beforehand with the normal script, so `NEXT` is running and the previous revision is the one the cluster remembers
 (`--rollback` needs it). Note both tags. No one else deploys to staging during the test.
 
 ### Start
 
-Tester, from outside the network (a steady 60 requests/s, a short ramp, two hours):
+On the soak machine (a steady 60 requests/s, a short ramp, two hours; add `--connect-to <ingress-address>` if the service's name does not resolve to the cluster from there):
 
 ```bash
 python3 perf_tests/soak.py --label your-name-where --hours 2 --steps 4 --step-minutes 5 --hold-concurrency 16 --rps 60 --out ./soak-rollout
@@ -47,7 +65,7 @@ Take the pod names from `kubectl -n company-dns-staging get pods`. Do not drain 
 
 ### Stop and judge
 
-The soak ends by itself after two hours (the tester can also press `Ctrl-C`); stop the watcher (`kill %1`). The tester sends the whole `soak-rollout` directory. Then:
+The soak ends by itself after two hours (`Ctrl-C` also ends it cleanly); stop the watcher (`kill %1`). Bring the whole `soak-rollout` directory to the build node (or the other way round). Then:
 
 ```bash
 python3 perf_tests/soak_analyze.py events --soak ./soak-rollout --events ./events.txt --watch ./watch-rollout --span 5

@@ -59,4 +59,6 @@ a VPN). `meta.json` records the Python and operating system versions. It contain
 
 Please do not change the server, run other load tools at the same time, or share the token.
 
+The soak can also run from a machine on the cluster's network, with `--connect-to <address>` if the service's name does not resolve there (see [soak-scenarios.md](soak-scenarios.md)).
+
 **Other scenarios** (a rollout under load, a wider mix from several places, the same soak on production) are in [soak-scenarios.md](soak-scenarios.md). `--hours` is the length of the run, ramp included: the run ends on the clock.

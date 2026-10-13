@@ -11,6 +11,8 @@ Without credentials the server limits each address to a standard quota (a per-mi
 which the test counts on their own; use --rps to stay under it. With a profile that has no limit, put "PROFILE:TOKEN" in the environment variable
 SOAK_AUTH (never on the command line) to measure the server rather than the quota.
 
+With the server on your own network, `--connect-to <address>` reaches it directly (see docs/soak-scenarios.md, "From a machine on the same network").
+
 Output, in the --out directory (default perf_tests/results/soak-<time>): windows.csv and windows.jsonl (one line per window), canaries.jsonl, meta.json
 and summary.md (rewritten after every window, so a partial run can be read). The test never changes anything on the server: it only sends GET requests.
 """
@@ -209,12 +211,12 @@ def run(a, log=print) -> int:
     window_s = a.window
     total_windows = max(1, int(a.hours * 3600 / window_s))  # an upper bound: each window also takes a second or two to set up and check, so the clock ends the run first
     step_windows = max(1, round(a.step_minutes * 60 / window_s))
-    target = load.Target(a.url)
+    target = load.Target(a.url, connect_to=getattr(a, "connect_to", None))  # connect_to: reach the server at this address, with the URL's host name for TLS and routing
     mix = load.blend(a.embedding_share) if getattr(a, "embedding_share", None) is not None else a.mix
     ua = user_agent(a.label)
     headers = {"User-Agent": ua, "Accept": "application/json"}
     meta = {"url": a.url, "label": a.label, "mix": a.mix, "embedding_share": getattr(a, "embedding_share", None), "window_s": window_s, "steps": steps, "step_windows": step_windows, "hold": a.hold_concurrency,
-            "rps_cap": a.rps, "authenticated": bool(auth), "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "rps_cap": a.rps, "via_connect_to": bool(getattr(a, "connect_to", None)), "authenticated": bool(auth), "started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "python": platform.python_version(), "platform": platform.platform(), "planned_windows": total_windows,
             "max_error_rate": a.max_error_rate, "max_p95_ms": a.max_p95_ms}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -287,6 +289,8 @@ def main(argv=None) -> int:
     ap.add_argument("--hours", type=float, default=24.0, help="total length, ramp included")
     ap.add_argument("--window", type=float, default=60.0, help="seconds per recorded window")
     ap.add_argument("--rps", type=float, help="cap the total request rate (use this without credentials, to stay under the per-address quota)")
+    ap.add_argument("--connect-to", metavar="ADDRESS",
+                    help="reach the server at this address instead of resolving the URL's host name (certificate and routing still use the host name); for a machine on the same network as the cluster, where the public name does not resolve to it. The address is not recorded in the results")
     ap.add_argument("--processes", type=int, default=4)
     ap.add_argument("--max-error-rate", type=float, default=0.01)
     ap.add_argument("--max-p95-ms", type=float, default=2000.0, help="a window whose p95 is above this missed the bar (it includes your network)")
@@ -304,6 +308,8 @@ def main(argv=None) -> int:
         problems.append("--window must be at least 5 seconds; --hours and --hold-concurrency must be positive; --rps must be positive")
     if a.embedding_share is not None and (a.mix != "breadth" or not 0 <= a.embedding_share <= 1):
         problems.append("--embedding-share (0 to 1) goes with --mix breadth")
+    if a.connect_to and not re.fullmatch(r"[A-Za-z0-9.:_-]+", a.connect_to):
+        problems.append("--connect-to must be an address or host name")
     if re.search(r"\s", a.label):
         problems.append("--label must not contain spaces")
     if problems:
