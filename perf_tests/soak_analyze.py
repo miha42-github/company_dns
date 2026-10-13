@@ -9,7 +9,8 @@
 
 `events` first lines the soak's timeline up with the watcher's by the load itself (see "Alignment"), then takes the marks you made during a run (events.txt, one per line: `2026-10-12T21:05:00Z rolling update to <tag>`, UTC; make them with `echo "$(date -u +%FT%TZ) text" >> events.txt`),
 and for each one shows the soak windows that overlap it (errors, `429`s, p95, the slowest request, the canaries) and, with pod_watch.py's directory, the pods around it
-(ready, terminating, restarts). Each event is judged: PASS if no errors, every canary right, and p95 within 1.5 times the quiet baseline, else REVIEW with the reason.
+(ready, terminating, restarts). Each event is judged: PASS if no errors, every canary right, and p95 within 1.5 times the quiet baseline, else REVIEW with the reason. A mark that falls outside the soak (a note made
+after it ended) is NOT JUDGED and does not count against the run.
 """
 import argparse
 import csv
@@ -188,15 +189,17 @@ def judge_events(rows: list[dict], window_s: float, events: list[tuple[float, st
         canary_bad = sum(r["canaries_total"] - r["canaries_ok"] for r in ws)
         p95 = max((r["p95_ms"] for r in ws if r["p95_ms"] is not None), default=None)
         reasons = []
-        if not ws:
-            reasons.append("no soak window overlaps it")
         if errors:
             reasons.append(f"{errors} request errors")
         if canary_bad:
             reasons.append(f"{canary_bad} wrong or failed canary answers")
         if p95 is not None and p95 > baseline * P95_FACTOR:
             reasons.append(f"p95 reached {p95:.0f} ms (baseline {baseline:.0f} ms)")
-        out.append({"time": stamp, "text": text, "windows": ws, "errors": errors, "canary_bad": canary_bad, "p95_max": p95, "verdict": "REVIEW" if reasons else "PASS",
+        # a mark outside the soak (a note made after it ended, or before it began) changed nothing the soak could see: it is not judged, and is not a failure
+        verdict = "NOT JUDGED" if not ws else ("REVIEW" if reasons else "PASS")
+        if not ws:
+            reasons = ["no soak window overlaps it (a mark outside the soak, not judged)"]
+        out.append({"time": stamp, "text": text, "windows": ws, "errors": errors, "canary_bad": canary_bad, "p95_max": p95, "verdict": verdict,
                     "reasons": reasons, "watch": wt,
                     "min_ready": min((int(x["ready"]) for x in wt), default=None), "max_terminating": max((int(x["terminating"]) for x in wt), default=None),
                     "new_restarts": sum(int(x["new_restarts"]) for x in wt) if wt else None,
@@ -205,7 +208,8 @@ def judge_events(rows: list[dict], window_s: float, events: list[tuple[float, st
 
 
 def render_events(results: list[dict], baseline: float, bad: list[str], label: str, span_min: float, alignment: str = "") -> str:
-    verdict = "PASS" if results and all(r["verdict"] == "PASS" for r in results) else "REVIEW"
+    judged = [r for r in results if r["verdict"] != "NOT JUDGED"]
+    verdict = "PASS" if judged and all(r["verdict"] == "PASS" for r in judged) else "REVIEW"
     lines = [f"# Soak events: {verdict}", "", f"`{label}`: {len(results)} events, each judged over the next {span_min:g} minutes. The quiet baseline p95 is {baseline:.0f} ms; "
              f"an event passes with no errors, every canary right and p95 within {P95_FACTOR}x of it.", ""] + ([alignment, ""] if alignment else []) + [
              "| time (UTC) | what | verdict | windows | errors | wrong canaries | worst p95 ms | fewest ready | most terminating | restarts | peak memory MiB | |",
@@ -274,7 +278,8 @@ def main(argv=None) -> int:
         text = render_events(results, baseline, bad, meta["label"], a.span, note)
         (a.soak / "events.md").write_text(text)
         print(text)
-        return 0 if all(r["verdict"] == "PASS" for r in results) else 1
+        judged = [r for r in results if r["verdict"] != "NOT JUDGED"]
+        return 0 if judged and all(r["verdict"] == "PASS" for r in judged) else 1
     except (OSError, KeyError, ValueError) as e:
         print(f"cannot read the results: {e}", file=sys.stderr)
         return 2

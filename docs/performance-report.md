@@ -10,6 +10,7 @@ with the tools in this repository. Written for the maintainers and for anyone de
 | Is V4 faster than V3? | Faster on 26 of 28 checks, level on 2, slower on none (at the production limits of 0.5 CPU and 1 GiB) | single-image comparison, 2026-10-10 |
 | How should a replica be sized? | **About one core per pod, and as many pods as you want to dedicate.** Two or four half-core pods are throttled; pods of two or four cores waste cores on the embedding searches | cluster sizing, 2026-10-11 |
 | How much does it carry? | On the 20-pod staging shape (20 x 1000m): **about 1,900 lookups a second** (2,300 when the requests repeat) at p95 around 400 ms, through the real ingress | cluster sizing |
+| Does it survive change? | **Yes, for a rollback, a roll forward and a lost pod** at 60 requests/s: no errors, p95 within 4 ms of baseline, memory flat. One finding: pods take the full 30 s to stop (no graceful shutdown) | rollout under load, 2026-10-13 |
 | Does it stay up and correct? | **Yes, for the known workload:** 24 hours at 60 requests/s from outside the network, 5.18 million requests, **no errors**, 7,200 of 7,200 known-answer checks correct, p95 110 to 126 ms with no drift | soak test, 2026-10-12 and 13 |
 
 What none of it shows is stated at the end ("What this does not show"). Read that before quoting a number.
@@ -95,7 +96,29 @@ The files are in [`results/2026-10-12-soak/`](results/2026-10-12-soak/): the per
 
 **For this known workload, stability is proven:** no errors, no wrong answers, no drift.
 
-## 4. What this means for sizing a deployment
+## 4. Changes under load: rollback, roll forward and a lost pod (13 October)
+
+The first run of soak scenario 2 ([`soak-scenarios.md`](soak-scenarios.md)): the soak at a steady 60 requests/s for two hours from a machine on the cluster's own network (so its latencies are lower than the remote run's),
+with `pod_watch.py` on the build node reading the pods every 15 seconds, while the deployment was changed. The soak's windows were lined up with the watcher's clock from the load itself (a 2-second difference, found from the pods'
+CPU rising and falling; nobody compared clocks). The files are in [`results/2026-10-13-rollout/`](results/2026-10-13-rollout/).
+
+| | |
+|---|---|
+| the whole run | 120 windows, 431,153 requests, **0 errors, 0 `429`s, 600 of 600 canary answers correct**; p95 median 96 ms (worst window 100 ms); first quarter of the hold 95.2 ms, last quarter 96.4 ms |
+| changes made | **rollback** to the previous image (16:41 UTC), **roll forward** to the new one (17:18), **delete one pod** (17:39); each PASS: no errors, every canary right, worst p95 99.6, 99.1 and 96.9 ms against a 96 ms baseline, and 60.0 requests/s held in every window |
+| the slowest request | 335 ms in the windows around the changes; 1,045 ms once, in a quiet window |
+| pods, from the cluster | **0 restarts, no out-of-memory kills**, 20 ready pods at every sample (the 15-second sampling would miss a gap shorter than that), CPU throttling at most 0.2% |
+| CPU | 0.05 cores used while idle and 0.84 across the 20 pods at 60 requests/s (about 70 requests/s per core used at this load) |
+| memory | **flat**: the first pods held 190.9 MiB (largest pod) from the start to the rollback, then fresh pods held 163 MiB for the rest of the run (163.1, then 163.3, then 163.1 MiB across 35 minutes); the 28 MiB gap is the same image on pods that had served the deploy's API test suite before the soak, not an image difference |
+
+**Not run:** three of the six planned changes (delete two pods at once, restart all pods, scale 20 to 16 and back). The first changes began 48 minutes in instead of 15, and the run ended first.
+
+**What the rollouts looked like.** A full 20-pod rollout took about a minute from the first new pod to the last, never fewer than 20 pods ready, and never more than 24 live pods (20 plus the surge of 4). The old pods were slower to go:
+**every one of the 41 pods that were stopped stayed in `Terminating` for 30 to 45 seconds**, the whole 30-second grace period. The server has no handler for the stop signal (it runs as the container's first process, which ignores it by default), so Kubernetes waits out the grace period and then kills it.
+Nothing was lost at this load, because traffic had already moved to the new pods, but: a rollout briefly holds up to 40 pods (20 of them stopping), requests still in flight when the kill arrives would be cut, and a pod lost under heavy traffic takes 30 seconds to leave. A graceful shutdown (stop accepting, finish what is running, exit) would make pods leave in a second or two.
+It is a small change; it has not been made.
+
+## 5. What this means for sizing a deployment
 
 | Shape | Lookups | Embedding searches | Notes |
 |---|---|---|---|
@@ -104,18 +127,19 @@ The files are in [`results/2026-10-12-soak/`](results/2026-10-12-soak/): the per
 
 Per-IP limits are settings, not capacity: with 20 pods and a quota of 6,000 a minute (burst 600) a single address is held to 100 requests/s, far below what the pods carry.
 
-## 5. What this does not show
+## 6. What this does not show
 
 - **Capacity from a remote client.** The soak was capped at 60 requests/s (the soak's cap, chosen to stay under the per-address quota), about 3% of what the 20 pods carried in the sizing runs. Every step of its ramp ran at the same rate. The sizing figures come from a load generator inside the network.
 - **The per-IP limiter at 20 pods.** The soak never reached the quota, so no `429` was seen. The step-6.3 check in the bring-up guide has not been run at this size.
 - **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below.
 - **Server memory and restarts during the soak.** A client cannot see them. They must be read from the cluster (restart counts, memory per pod).
-- **Server memory during the soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October), but memory over time was not recorded; the next soak scenarios add a pod watcher for that.
+- **Server memory during the 24-hour soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October). The two-hour rollout run (section 4) did sample memory, and it was flat.
+- **Three of the six changes of the rollout run** (two pods at once, restart all, scaling) were not run, and the run was at 60 requests/s from the cluster's own network.
 - **One run per cell** in the sizing, on nodes shared with other services; the load is closed-loop (a fixed number of requests in flight), which measures capacity, not a traffic model. A real event is bursty.
 - **The tester's network.** A p50 of 28 ms suggests it was close to the cluster; a distant client sees more latency.
 - **The single-image comparison** is one machine, three runs per cell, and its repeat-traffic ratios measure the caches.
 
-## 6. Reproducing it
+## 7. Reproducing it
 
 ```bash
 # 1. single image against single image: see docs/plans/v4-results-report.md (perf_tests/run_matrix.py, then perf_tests/report.py)
