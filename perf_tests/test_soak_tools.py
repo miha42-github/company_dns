@@ -110,7 +110,7 @@ class Watch(unittest.TestCase):
 
 
 def write_soak(d: Path, rows, label="site-a", window_s=60):
-    d.mkdir(parents=True)
+    d.mkdir(parents=True, exist_ok=True)
     (d / "meta.json").write_text(json.dumps({"url": "https://example.org", "label": label, "window_s": window_s, "started_utc": rows[0]["time_utc"], "mix": "lookups", "platform": "Linux-x-with-glibc", "python": "3.11",
                                              "max_error_rate": 0.01, "max_p95_ms": 2000.0}))
     with open(d / "windows.csv", "w", newline="") as f:
@@ -204,6 +204,97 @@ class Analyse(unittest.TestCase):
         code = sa.main(["events", "--soak", str(self.root / "s"), "--events", str(self.root / "e.txt"), "--watch", str(self.root / "w")])
         self.assertEqual(code, 0)
         self.assertTrue((self.root / "s" / "events.md").exists())
+
+
+def write_watch(d: Path, load_start: float, load_end: float, interval=15.0, before=240.0, after=240.0, spikes=(), idle=0.1, busy=0.9):
+    """A watch.csv: idle CPU before and after, busy between (times on the watcher's clock); `spikes` are times with a short CPU burst inside the load, as a rollout makes."""
+    import time
+    d.mkdir(parents=True, exist_ok=True)
+    with open(d / "watch.csv", "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=pw.CSV_FIELDS)
+        w.writeheader()
+        t = load_start - before
+        while t <= load_end + after:
+            # the CPU of the interval ending at t, averaged over it: the share of the interval that was inside the load
+            inside = max(0.0, min(t, load_end) - max(t - interval, load_start)) / interval
+            cpu = idle + (busy - idle) * inside + (2.0 if any(t - interval < s_ <= t for s_ in spikes) else 0.0)
+            w.writerow({"time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)), "pods": 20, "ready": 20, "terminating": 0, "not_ready": 0, "restarts_total": 0, "new_restarts": 0,
+                        "oom_killed": 0, "mem_mib_median": 200, "mem_mib_max": 220, "cpu_cores_used": round(cpu, 3), "throttled_share": 0.01, "nodes": 2, "unreadable": 0})
+            t += interval
+
+
+class Alignment(unittest.TestCase):
+    """The soak machine's clock is not trusted: the pods' CPU shows when the load really ran."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.start = 1_800_000_000  # the soak's own clock
+        self.rows = make_rows(120, start=self.start)  # 120 windows of 61 s
+        for r in self.rows:
+            pass
+        self.end = self.rows[-1]["time_utc"]
+
+    def watch_for(self, skew, **kw):
+        sa_rows, _ = None, None
+        load_start = self.start + skew
+        load_end = self.start + 61 * 120 + skew
+        write_watch(self.root / "w", load_start, load_end, **kw)
+        return sa.read_watch(self.root / "w")
+
+    def rows_parsed(self):
+        write_soak(self.root / "s", self.rows)
+        return sa.read_windows(self.root / "s")[0]
+
+    def test_the_offset_is_found_from_the_load_whatever_the_clock_difference(self):
+        for skew in (0, 37, -90, 400, -1200):
+            watch = self.watch_for(skew)
+            est = sa.estimate_offset(watch, self.rows_parsed(), 60.0)
+            self.assertIsNotNone(est["offset"], skew)
+            self.assertLess(abs(est["offset"] - skew), 20.0, f"skew {skew}: found {est['offset']}")
+            self.assertEqual(set(est["anchors"]), {"start", "end"})
+
+    def test_rollout_spikes_inside_the_run_do_not_move_the_edges(self):
+        skew = 400
+        spikes = [self.start + skew + 61 * k for k in (10, 30, 31, 60, 90)]
+        watch = self.watch_for(skew, spikes=spikes)
+        est = sa.estimate_offset(watch, self.rows_parsed(), 60.0)
+        self.assertLess(abs(est["offset"] - skew), 20.0, est)
+
+    def test_no_idle_before_or_after_means_one_edge_or_unknown(self):
+        watch = self.watch_for(0, before=-60.0)
+        est = sa.estimate_offset(watch, self.rows_parsed(), 60.0)
+        self.assertEqual(set(est["anchors"]), {"end"})
+        self.assertTrue(any("one edge" in n or "no idle before" in n for n in est["notes"]), est["notes"])
+        watch = self.watch_for(0, before=-60.0, after=-60.0)
+        est = sa.estimate_offset(watch, self.rows_parsed(), 60.0)
+        self.assertIsNone(est["offset"])
+
+    def test_a_watch_with_no_difference_between_idle_and_running_is_not_guessed_at(self):
+        watch = self.watch_for(0, busy=0.12)
+        est = sa.estimate_offset(watch, self.rows_parsed(), 60.0)
+        self.assertIsNone(est["offset"])
+        self.assertTrue(any("no clear difference" in n for n in est["notes"]), est["notes"])
+
+    def test_alignment_changes_which_windows_an_event_covers(self):
+        # a window with errors at soak time T; the watcher's clock is 400 s ahead; the event is marked at T on the WATCHER's clock
+        import time
+        skew = 400
+        self.rows[50].update(errors=30, ok=3570, error_rate=0.008)
+        watch_rows = self.watch_for(skew)
+        write_soak(self.root / "s", self.rows)
+        ev = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(self.start + skew + 61 * 50 - 5))
+        (self.root / "e.txt").write_text(f"{ev} kill a pod\n")
+        code = sa.main(["events", "--soak", str(self.root / "s"), "--events", str(self.root / "e.txt"), "--watch", str(self.root / "w")])
+        text = (self.root / "s" / "events.md").read_text()
+        self.assertEqual(code, 1, text)
+        self.assertIn("REVIEW", text)
+        self.assertIn("shifted by +", text)
+        code = sa.main(["events", "--soak", str(self.root / "s"), "--events", str(self.root / "e.txt"), "--watch", str(self.root / "w"), "--no-align"])
+        self.assertEqual(code, 0, "unaligned, the error window is 400 s away from the event and is missed")
+        code = sa.main(["events", "--soak", str(self.root / "s"), "--events", str(self.root / "e.txt"), "--watch", str(self.root / "w"), "--offset", "400"])
+        self.assertEqual(code, 1)
 
 
 if __name__ == "__main__":

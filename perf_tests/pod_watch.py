@@ -9,7 +9,10 @@ Run it on a machine that reaches the cluster (the build node), next to the soak.
 throttling, memory), and appends a row to watch.csv (one row for all the pods, UTC time, so it lines up with the soak's windows) and a line per pod to pods.jsonl.
 It only ever reads: `kubectl get pods` and, per pod, one `kubectl exec ... cat` of the cgroup files. It never changes, restarts or deletes anything.
 
-Mark what you do with the same clock, in a text file, one line each (`events.txt`):    echo "$(date -u +%FT%TZ) rolling update to <tag>" >> events.txt
+Start it a few minutes BEFORE the soak and stop it a few minutes AFTER: the pods' CPU is low while idle and clearly higher while the soak runs, so `soak_analyze.py events` can see when the load started and ended
+and line the soak's windows up with these rows, without anyone comparing clocks.
+
+Mark what you do (on the machine this runs on: the same clock), in a text file, one line each (`events.txt`):    echo "$(date -u +%FT%TZ) rolling update to <tag>" >> events.txt
 `soak_analyze.py events` then shows the soak windows and the pods around each mark.
 """
 import argparse

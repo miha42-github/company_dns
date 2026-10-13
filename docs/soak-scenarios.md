@@ -21,7 +21,8 @@ python3 perf_tests/soak.py ... --connect-to <ingress-address>      # the address
 
 The connection goes to that address, but the certificate and the routing still use the service's name, so TLS validates as normal. The address is not written into the results.
 
-**Also.** Keep the machine awake (on macOS run it as `caffeinate -i python3 perf_tests/soak.py ...`; Python 3.10 or newer). The per-address limits apply to that machine's address, as for any single caller, so `--rps 60` stays under them. Compare `date -u` on the two machines before a rollout test: the soak's windows and the watcher's rows are matched by their UTC times, and a clock a minute out blurs that.
+**Also.** Keep the machine awake (on macOS run it as `caffeinate -i python3 perf_tests/soak.py ...`; Python 3.10 or newer). The per-address limits apply to that machine's address, as for any single caller, so `--rps 60` stays under them.
+**Clocks are not compared.** The two machines' clocks are not trusted to agree, and nobody needs to check them. Instead the watcher runs for a few minutes *before* the soak starts and a few minutes *after* it ends: the pods' CPU is low while idle and clearly higher while the soak runs, so the start and the end of the load show in the watch. `soak_analyze.py events` finds them and shifts the soak's times onto the watcher's clock (the clock your marks are made on, the build node's) by itself, and says what it did.
 For scenario 3, a machine on the network and a remote tester are two different addresses, which is what that scenario wants.
 
 ## Scenario 2: rollout under load (about 2 hours)
@@ -41,14 +42,14 @@ On the soak machine (a steady 60 requests/s, a short ramp, two hours; add `--con
 python3 perf_tests/soak.py --label your-name-where --hours 2 --steps 4 --step-minutes 5 --hold-concurrency 16 --rps 60 --out ./soak-rollout
 ```
 
-Maintainer, on the build node, in the repository root, at about the same moment:
+Maintainer, on the build node, in the repository root, **first**:
 
 ```bash
-python3 perf_tests/pod_watch.py --interval 15 --hours 2.25 --out ./watch-rollout &
-mark() { echo "$(date -u +%FT%TZ) $*" >> events.txt; }      # the same clock as the soak (UTC)
+python3 perf_tests/pod_watch.py --interval 15 --out ./watch-rollout &      # runs until you stop it
+mark() { echo "$(date -u +%FT%TZ) $*" >> events.txt; }      # marks use the build node's clock, the watcher's clock
 ```
 
-Let it run for 15 minutes untouched: that is the baseline.
+Let the watcher run **idle for at least 3 minutes**, then start the soak on the soak machine. The idle stretch is what lets the tool see where the load begins. Then let the soak run for 15 minutes untouched: that is the baseline.
 
 ### The changes (about 15 minutes apart; mark each one just before you run it)
 
@@ -65,13 +66,13 @@ Take the pod names from `kubectl -n company-dns-staging get pods`. Do not drain 
 
 ### Stop and judge
 
-The soak ends by itself after two hours (`Ctrl-C` also ends it cleanly); stop the watcher (`kill %1`). Bring the whole `soak-rollout` directory to the build node (or the other way round). Then:
+The soak ends by itself after two hours (`Ctrl-C` also ends it cleanly). **Leave the watcher running for at least 3 more minutes**, then stop it (`kill %1`): that idle stretch shows where the load ended. Bring the whole `soak-rollout` directory to the build node (or the other way round). Then:
 
 ```bash
 python3 perf_tests/soak_analyze.py events --soak ./soak-rollout --events ./events.txt --watch ./watch-rollout --span 5
 ```
 
-It judges each marked change over the next five minutes: **PASS** means no request errors, every known-answer check right, and p95 within 1.5 times the quiet baseline; otherwise **REVIEW** with the reason and the soak windows.
+It first lines the soak's timeline up with the watcher's from the load's start and end in the watch, and prints how (`--offset SECONDS` sets it by hand; `--no-align` trusts the clocks). It judges each marked change over the next five minutes: **PASS** means no request errors, every known-answer check right, and p95 within 1.5 times the quiet baseline; otherwise **REVIEW** with the reason and the soak windows.
 The same table shows, from the cluster, the fewest ready pods, the most terminating, new restarts and peak memory.
 
 ### Pass
@@ -96,7 +97,7 @@ Each tester, at the same time:
 python3 perf_tests/soak.py --label name-where --hours 12 --mix breadth --embedding-share 0.05 --rps 60 --out ./soak-breadth
 ```
 
-The maintainer runs `pod_watch.py` for the same period (`--interval 60`), then merges the sites:
+The maintainer starts `pod_watch.py` (`--interval 60`) a few minutes before the soaks begin and stops it a few minutes after the last one ends, then merges the sites (the merge needs no clock alignment):
 
 ```bash
 python3 perf_tests/soak_analyze.py merge ./site-a ./site-b ./site-c --out ./soak-breadth-merged
