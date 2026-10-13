@@ -297,5 +297,26 @@ class Alignment(unittest.TestCase):
         self.assertEqual(code, 1)
 
 
+class Terminating(unittest.TestCase):
+    def test_how_long_stopped_pods_stayed_in_terminating(self):
+        import time
+        with tempfile.TemporaryDirectory() as d:
+            base = 1_800_000_000
+            lines = []
+            for i in range(12):  # 5 s samples; pod "a" terminating for 3 samples, pod "b" for 1
+                t = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(base + 5 * i))
+                lines.append({"time_utc": t, "name": "a", "terminating": 2 <= i < 5})
+                lines.append({"time_utc": t, "name": "b", "terminating": i == 7})
+                lines.append({"time_utc": t, "name": "c", "terminating": False})
+            (Path(d) / "pods.jsonl").write_text("\n".join(json.dumps(x) for x in lines))
+            r = sa.terminating_times(Path(d))
+            self.assertEqual((r["pods"], r["interval"], r["min"], r["max"]), (2, 5.0, 5.0, 15.0))
+            text = sa.render_terminating(r)
+            self.assertIn("2 pods were seen stopping", text)
+            self.assertEqual(sa.main(["terminating", "--watch", d]), 0)
+            (Path(d) / "pods.jsonl").write_text(json.dumps({"time_utc": "2027-01-15T08:00:00Z", "name": "a", "terminating": False}))
+            self.assertIn("No pod was seen stopping", sa.render_terminating(sa.terminating_times(Path(d))))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -127,6 +127,13 @@ class StagingManifests(unittest.TestCase):
         self.assertEqual((per_minute, burst), (6000, 600))
         self.assertGreaterEqual(burst // self.dep["spec"]["replicas"], 10, "the limiter divides the burst by the replicas; a team's burst of requests must survive that")
 
+    def test_the_pod_has_time_to_shut_down_gracefully(self):
+        grace = self.dep["spec"]["template"]["spec"]["terminationGracePeriodSeconds"]
+        env = {e["name"]: e.get("value") for e in self.c["env"]}
+        delay = int(env.get("COMPANY_DNS_SHUTDOWN_DELAY_SECS", 5))   # the server's defaults when unset
+        drain = int(env.get("COMPANY_DNS_SHUTDOWN_GRACE_SECS", 15))
+        self.assertGreater(grace, delay + drain, "Kubernetes would kill the pod before it finished draining")
+
     def test_the_rollout_replaces_pods_quickly_without_losing_any(self):
         s = self.dep["spec"]["strategy"]["rollingUpdate"]
         self.assertEqual((s["maxSurge"], s["maxUnavailable"]), (4, 0))

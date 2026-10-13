@@ -6,6 +6,7 @@ mod envelope;
 mod errors;
 mod logging;
 mod rate_limit;
+mod shutdown;
 mod sic_endpoints;
 mod total;
 mod v3_edgar;
@@ -519,11 +520,11 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(
         "API docs: http://127.0.0.1:{port}/docs (Swagger) http://127.0.0.1:{port}/redoc (ReDoc)"
     );
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await?;
+    // COMPANY_DNS_SHUTDOWN_DELAY_SECS / _GRACE_SECS: on SIGTERM keep serving a few seconds, then drain and exit (shutdown.rs), instead of ignoring the signal
+    // and being killed after the pod's whole grace period.
+    let shutdown_times = shutdown::ShutdownTimes::from_env().map_err(|m| anyhow::anyhow!(m))?;
+    tracing::info!("On SIGTERM: keep serving {} s, then finish running requests for at most {} s", shutdown_times.delay.as_secs(), shutdown_times.grace.as_secs());
+    shutdown::serve(listener, app, shutdown_times, shutdown::stop_signal()).await?;
 
     Ok(())
 }
