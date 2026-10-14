@@ -172,7 +172,7 @@ def fig_ceiling(levels: list[dict], joined: list[dict], f: dict, note: str, out:
     fig, top = rcl._frame(f"Throughput levels off at about {round(f['peak']['rps'], -2):,.0f} requests/s from {f['plateau']['level']:,} in flight while latency keeps climbing: the pods use about {f['cpu_at_plateau']:.0f} of "
                           f"{f['cpu_limit']:.0f} cores; {nothing}",
                           f"Closed-loop load from three machines, each step held 30 s. Best sustained (p95 within 1 s, no errors): {f['best']['rps']:,.0f} requests/s at {f['best']['level']:,} in flight. Requests in flight are the total across the machines. "
-                          f"{note.replace('Alignment: ', 'Pods’ clock: ')}", foot)
+                          f"Pods’ clock: {note}.", foot)
     h = top - 0.12
     a1 = fig.add_axes([0.07, 0.12 + h * 0.46, 0.84, h * 0.52])
     a2 = fig.add_axes([0.07, 0.12, 0.84, h * 0.34], sharex=a1)
@@ -212,27 +212,50 @@ def fig_ceiling(levels: list[dict], joined: list[dict], f: dict, note: str, out:
 
 # ---------------------------------------------------------------- the rate-limit probe, per address
 def limit_findings(runs: list[tuple[str, dict]], expect_per_minute: float | None = None) -> dict:
-    sustained = [r["sustained_per_second"] for _, r in runs if r.get("sustained_per_second") is not None]
-    bursts = [r["burst"] for _, r in runs if r.get("burst") is not None]
-    return {"addresses": len(runs), "sustained_each": sustained, "sustained_total": sum(sustained), "burst_each": bursts, "burst_total": sum(bursts),
-            "mean_sustained": statistics.mean(sustained) if sustained else None, "expected_per_second": expect_per_minute / 60 if expect_per_minute else None}
+    """What each address got, what they got together, and whether the machines look like they were drawing on a shared allowance: the per-second counts of two machines running at the
+    same time are negatively correlated (what one gains the other loses) while their total sits at a whole number of configured allowances."""
+    ok_runs = [(n, r) for n, r in runs if r.get("sustained_per_second") is not None and r.get("ok", 0) > 0]
+    sustained = [r["sustained_per_second"] for _, r in ok_runs]
+    bursts = [r["burst"] for _, r in ok_runs if r.get("burst") is not None]
+    expected = expect_per_minute / 60 if expect_per_minute else None
+    series = [[p["ok"] for p in r["per_second"][:-1]] for _, r in ok_runs]
+    n = min((len(s) for s in series), default=0)
+    totals = [sum(s[i] for s in series) for i in range(n)]
+    settle = min(10, max(1, n // 3))
+    total_sustained = statistics.mean(totals[settle:]) if totals[settle:] else None
+    corr = statistics.correlation(series[0][settle:n], series[1][settle:n]) if len(series) >= 2 and n - settle > 3 else None
+    each_off = expected is not None and any(abs(s - expected) > 0.25 * expected for s in sustained)
+    shared = bool(expected and len(series) >= 2 and corr is not None and corr < -0.7 and each_off and abs(total_sustained - len(series) * expected) <= 0.1 * len(series) * expected)
+    return {"addresses": len(ok_runs), "names": [n_ for n_, _ in ok_runs], "sustained_each": sustained, "sustained_total": total_sustained, "burst_each": bursts, "burst_total": sum(bursts),
+            "mean_sustained": statistics.mean(sustained) if sustained else None, "expected_per_second": expected, "correlation": corr, "shared": shared, "totals": totals,
+            "first_second_total": totals[0] if totals else None}
 
 
 def fig_limit(runs: list[tuple[str, dict]], f: dict, out: Path, foot: str) -> None:
     n = f["addresses"]
     expected = f["expected_per_second"]
-    fig, top = rcl._frame(f"Each address got about {f['mean_sustained']:.0f} requests/s through the limit after a burst of about {statistics.mean(f['burst_each']):.0f}; {n} addresses together {f['sustained_total']:.0f}/s",
-                          "Requests let through per second (answered 200 or 404) by each machine running flat out at the same time, each on its own address. The dashed line is the configured rate"
-                          + (f" ({expected:.0f} a second)." if expected else "."), foot)
+    ok_runs = [(name, r) for name, r in runs if name in f["names"]]
+    each = " and ".join(f"{name} {r['sustained_per_second']:.0f}" for name, r in ok_runs)
+    if f["shared"]:
+        title = (f"{n} machines, each on its own address, got {f['sustained_total']:.0f} requests/s together, exactly {n} configured allowances, but split {each} a second: "
+                 "the limit does not tell them apart")
+        sub = (f"Requests let through per second (answered 200 or 404) by the machines running flat out at the same time. Stacked, they sum to a steady {f['sustained_total']:.0f}/s (the dashed line is {n} x the configured "
+               f"{expected:.0f}/s), yet what one gained the other lost (correlation {f['correlation']:.2f}): the limiter is counting them against the same allowance, not one each.")
+    else:
+        title = f"Each address got about {f['mean_sustained']:.0f} requests/s through the limit after a burst of about {statistics.mean(f['burst_each']):.0f}; {n} addresses together {f['sustained_total']:.0f}/s"
+        sub = "Requests let through per second (answered 200 or 404) by each machine running flat out at the same time, each on its own address." + (f" The dashed line is {n} x the configured rate ({expected:.0f} a second)." if expected else "")
+    fig, top = rcl._frame(title, sub, foot)
     ax = fig.add_axes([0.07, 0.12, 0.89, top - 0.12 - 0.04])
-    for k, (label, r) in enumerate(runs):
-        ps = r["per_second"][:-1] if len(r["per_second"]) > 1 else r["per_second"]
-        ax.plot([p["second"] for p in ps], [p["ok"] for p in ps], lw=2, color=rcl.COLORS[k % 5], label=f"{label}: burst {r['burst']}, then {r['sustained_per_second']}/s")
+    secs = list(range(len(ok_runs[0][1]["per_second"]) - 1))
+    ax.stackplot(secs, *[[p["ok"] for p in r["per_second"][:-1]] for _, r in ok_runs], colors=[rcl.COLORS[k % 5] for k in range(n)], alpha=0.85,
+                 labels=[f"{name}: burst {r['burst']}, then {r['sustained_per_second']:.0f}/s" for name, r in ok_runs])
     if expected:
-        ax.axhline(expected, color=GREY, ls="--", lw=1.2)
+        ax.axhline(expected * n, color="#111827", ls="--", lw=1.4)
+        ax.text(len(secs) - 0.5, expected * n, f" {n} x configured ({expected * n:.0f}/s)", ha="right", va="bottom", fontsize=10)
     ax.set_xlabel("seconds since the start")
-    ax.set_ylabel("let through per second")
-    ax.set_ylim(bottom=0)
+    ax.set_ylabel("let through per second (stacked)")
+    ax.set_ylim(0, max(expected * n * 1.6 if expected else 0, statistics.median(f["totals"][10:]) * 1.8 if len(f["totals"]) > 10 else 0) or None)
+    ax.set_xlim(0, len(secs) - 1)
     ax.legend(loc="upper right", frameon=False)
     ax.spines[["top", "right"]].set_visible(False)
     fig.savefig(out, dpi=rcl.DPI)
@@ -288,6 +311,7 @@ def main(argv=None) -> int:
             print(f"wrote {a.out / 'k1-ceiling.png'}: peak {f['peak']['rps']:.0f}/s, best sustained {f['best']['rps']:.0f}/s at {f['best']['level']}, pods' CPU at the plateau {f['cpu_at_plateau']} of {f['cpu_limit']:.0f}")
         else:
             runs = [(d.name.replace("limit-", ""), read_limit_run(d)) for d in a.dirs]
+            print("addresses with usable results:", [n for n, r in runs if r.get("ok", 0) > 0], " without:", [n for n, r in runs if not r.get("ok", 0)])
             f = limit_findings(runs, a.expect_per_minute)
             fig_limit(runs, f, a.out / "l1-limit-per-address.png", "Rate-limit probe: perf_tests/limit_probe.py, one run per address at the same time. Data: " + ", ".join(str(d) for d in a.dirs))
             print(f"wrote {a.out / 'l1-limit-per-address.png'}: sustained {f['sustained_each']}, total {f['sustained_total']:.0f}/s")

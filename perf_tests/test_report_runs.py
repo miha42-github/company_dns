@@ -2,6 +2,7 @@
 
 The rollout numbers are checked against the committed results of the two rollout runs, so a change to the arithmetic that moves a number the report quotes shows up here.
 """
+import statistics
 import sys
 import tempfile
 import unittest
@@ -59,10 +60,40 @@ class Ceiling(unittest.TestCase):
         self.assertAlmostEqual(f["utilisation"], 19.3 / 20, places=2)
         self.assertEqual((f["errors"], f["restarts"]), (0, 0))
 
-    def test_limit_findings(self):
-        runs = [("a", {"sustained_per_second": 98.0, "burst": 540}), ("b", {"sustained_per_second": 101.0, "burst": 575}), ("c", {"sustained_per_second": 100.0, "burst": 560})]
+    def test_the_ceiling_numbers_from_the_committed_run(self):
+        import soak_analyze as sa
+        levels = ce.read_levels(ROOT / "docs/results/2026-10-14-ceiling/merged")
+        joined, note = ce.join_watch(levels, sa.read_watch(ROOT / "docs/results/2026-10-14-ceiling/watch-staging"))
+        f = rr.ceiling_findings(levels, joined, 20.0)
+        self.assertAlmostEqual(f["peak"]["rps"], 2144.7, delta=0.5)
+        self.assertEqual((f["best"]["level"], f["plateau"]["level"], f["errors"], f["restarts"]), (512, 768, 0, 0))
+        self.assertEqual(f["first_low_ready"]["level"], 3072)
+        self.assertIn("shifted by -4", note)
+
+    def test_the_real_two_address_probe_looks_like_a_shared_allowance(self):
+        runs = [(n, rr.read_limit_run(ROOT / "docs/results/2026-10-14-limit" / n)) for n in ("studio", "laptop")]
         f = rr.limit_findings(runs, 6000)
-        self.assertEqual((f["sustained_total"], f["burst_total"], f["expected_per_second"]), (299.0, 1675, 100.0))
+        self.assertEqual(f["names"], ["studio", "laptop"])
+        self.assertAlmostEqual(f["sustained_total"], 200.0, delta=3)
+        self.assertLess(f["correlation"], -0.9)
+        self.assertTrue(f["shared"])
+        self.assertEqual((f["burst_each"]), [707, 518])
+
+    def test_independent_addresses_are_not_called_shared(self):
+        def run(rates, burst=600):
+            ps = [{"second": i, "ok": burst if i == 0 else r, "limited": 5, "errors": 0} for i, r in enumerate(rates)] + [{"second": len(rates), "ok": 0, "limited": 0, "errors": 0}]
+            return {"ok": sum(p["ok"] for p in ps), "burst": burst, "sustained_per_second": float(statistics.median(rates[10:])), "per_second": ps}
+        a = [101, 99, 100, 102, 98] * 12
+        b = [100, 103, 97, 99, 101] * 12
+        f = rr.limit_findings([("a", run(a)), ("b", run(b))], 6000)
+        self.assertFalse(f["shared"], "each got its own 100 a second")
+        self.assertAlmostEqual(f["sustained_total"], 200, delta=5)
+
+    def test_an_address_that_only_saw_errors_is_left_out(self):
+        failed = {"ok": 0, "burst": None, "sustained_per_second": 0.0, "per_second": [{"second": 0, "ok": 0, "limited": 0, "errors": 5}, {"second": 1, "ok": 0, "limited": 0, "errors": 0}]}
+        good = rr.read_limit_run(ROOT / "docs/results/2026-10-14-limit/studio")
+        f = rr.limit_findings([("mini", failed), ("studio", good)], 6000)
+        self.assertEqual(f["names"], ["studio"])
 
 
 @unittest.skipUnless(HAVE_PLOT, "matplotlib is not installed (use perf_tests/.venv)")
@@ -75,32 +106,13 @@ class Drawing(unittest.TestCase):
             self.assertTrue((out / "r2-2026-10-14-shutdown-zoom.png").exists())
             self.assertFalse((out / "r2-2026-10-13-rollout-zoom.png").exists(), "no change by that name in the first run")
 
-    def test_the_ceiling_and_limit_pictures_draw(self):
-        import csv
-        import json
-        import time
+    def test_the_ceiling_and_limit_pictures_draw_from_the_committed_runs(self):
         with tempfile.TemporaryDirectory() as d:
-            root = Path(d)
-            base = 1_800_000_000
-            levels = [dict(lv(l, r, p), start_utc=ce.utc(base + 100 + 50 * i), end_utc=ce.utc(base + 130 + 50 * i)) for i, (l, r, p) in enumerate([(256, 1700, 400), (512, 1900, 800), (1024, 2050, 1500), (2048, 2100, 2700)])]
-            (root / "run").mkdir()
-            ce.write_levels(root / "run", levels)
-            (root / "watch").mkdir()
-            with open(root / "watch" / "watch.csv", "w", newline="") as f:
-                w = csv.DictWriter(f, fieldnames=["time_utc", "pods", "ready", "terminating", "not_ready", "restarts_total", "new_restarts", "oom_killed", "mem_mib_median", "mem_mib_max", "cpu_cores_used", "throttled_share", "nodes", "unreadable"])
-                w.writeheader()
-                for i in range(80):
-                    t = base + 5 * i * 4 - 100 + 100 * 0
-                    busy = base + 100 <= t - 0 <= base + 100 + 200
-                    w.writerow({"time_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t)), "pods": 20, "ready": 20, "terminating": 0, "not_ready": 0, "restarts_total": 0, "new_restarts": 0, "oom_killed": 0,
-                                "mem_mib_median": 160, "mem_mib_max": 170, "cpu_cores_used": 18.0 if busy else 0.3, "throttled_share": 0.05, "nodes": 2, "unreadable": 0})
-            self.assertEqual(rr.main(["ceiling", "--run", str(root / "run"), "--watch", str(root / "watch"), "--out", str(root / "figs")]), 0)
-            self.assertTrue((root / "figs" / "k1-ceiling.png").exists())
-            for name in ("limit-a", "limit-b"):
-                (root / name).mkdir()
-                (root / name / "per_second.json").write_text(json.dumps({"burst": 560, "sustained_per_second": 100.0, "per_second": [{"second": s, "ok": 560 if s == 0 else 100, "limited": 5, "errors": 0} for s in range(30)]}))
-            self.assertEqual(rr.main(["limit", str(root / "limit-a"), str(root / "limit-b"), "--out", str(root / "figs")]), 0)
-            self.assertTrue((root / "figs" / "l1-limit-per-address.png").exists())
+            out = Path(d)
+            self.assertEqual(rr.main(["ceiling", "--run", str(ROOT / "docs/results/2026-10-14-ceiling/merged"), "--watch", str(ROOT / "docs/results/2026-10-14-ceiling/watch-staging"), "--out", d]), 0)
+            self.assertTrue((out / "k1-ceiling.png").stat().st_size > 20000)
+            self.assertEqual(rr.main(["limit", str(ROOT / "docs/results/2026-10-14-limit/studio"), str(ROOT / "docs/results/2026-10-14-limit/laptop"), "--out", d]), 0)
+            self.assertTrue((out / "l1-limit-per-address.png").stat().st_size > 20000)
 
 
 if __name__ == "__main__":
