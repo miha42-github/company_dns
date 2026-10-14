@@ -118,7 +118,7 @@ def _percentile(values: list[float], p: float) -> float:
 
 def find_load(watch: list[dict], run: int = 3) -> dict:
     """When the load started and ended, on the watcher's clock, from the pods' CPU: idle samples, then a sustained rise, then a sustained fall back.
-    A sample's CPU is the average over the interval before it, so the change is placed half an interval earlier than the first (or last) sample above the midpoint level.
+    A sample's CPU is the average over the interval before it, so the change is placed half an interval earlier than the first (or last) sample above a level a quarter of the way from idle to the busy level.
     Returns {start, end, interval, low, level, notes}; start or end is None when that side was not seen (the watcher began or stopped during the load)."""
     pts = [(float(r["t"]), float(r["cpu_cores_used"])) for r in watch if r.get("cpu_cores_used") not in (None, "")]
     pts.sort()
@@ -129,12 +129,12 @@ def find_load(watch: list[dict], run: int = 3) -> dict:
     gaps = [b[0] - a[0] for a, b in zip(pts, pts[1:])]
     interval = statistics.median(gaps)
     cpu = [c for _, c in pts]
-    low, level = sorted(cpu)[run], statistics.median(cpu)  # the idle level: a few of the lowest samples (a short idle stretch still counts), the running level: the median
+    low, level = sorted(cpu)[run], _percentile(cpu, 90)  # the idle level: a few of the lowest samples (a short idle stretch still counts); the running level: the 90th percentile (the load may be a minority of the watch)
     out.update(interval=interval, low=low, level=level)
     if level - low < 0.2 or level < 2 * low:
         out["notes"].append(f"no clear difference between idle ({low:.2f} cores) and running ({level:.2f} cores) in the watch: it needs idle minutes before and after the soak")
         return out
-    thr = low + (level - low) / 2.0
+    thr = low + (level - low) / 4.0  # a quarter of the way up: above idle noise, below any real load step
     above = [c > thr for c in cpu]
     for i in range(len(pts) - run + 1):
         if all(above[i:i + run]):

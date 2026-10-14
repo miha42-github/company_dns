@@ -138,7 +138,49 @@ python3 perf_tests/soak_analyze.py merge ./site-a ./site-b ./site-c --out ./soak
 The first soak's command, aimed at the production address (`--url`), with V3 standing by and `pod_watch.py --namespace company-dns` watching read-only. Compare with the staging baseline: p95 within noise of 116 ms from the same tester, no errors.
 This is the soak of the production cutover plan ([plans/v4-production-cutover.md](plans/v4-production-cutover.md), WP7).
 
+## Scenario 5: the rate limit, CORS and the ceiling (about 90 minutes, three machines)
+
+Three machines on three different addresses (for example a Mac Studio, a Mac mini and a laptop) can show what a single address gets through the limiter, whether each address has its own allowance, and, with all three as load generators,
+where the pods buckle. **Run it at an agreed time, never in the event window.** Staging shares the cluster's nodes and ingress with production: the pods are CPU-limited so they cannot take more than their own limit, but the ingress is shared, which is why production is watched too.
+
+**Part A: the limit, from each address (about 10 minutes).** On each machine, with a start time a few minutes ahead (`date -u -v+3M +%Y-%m-%dT%H:%M:%SZ` on a Mac prints one; give every machine the same):
+
+```bash
+python3.14 perf_tests/limit_probe.py --start-at <time> --seconds 60 --expect-per-minute 6000 --expect-burst 600 --label <machine>
+```
+
+Each prints the **burst** (let through before the first `429`), the **sustained rate** after it, and how they compare with the configured 6,000 a minute and burst 600. Add the three sustained rates for the aggregate that three addresses get together: about three times one address,
+because the allowance is per address. Many addresses at the full rate would reach what the pods carry (about 1,900 lookups a second) with about twenty.
+
+**The trusted-origin bypass.** `python3.14 perf_tests/limit_probe.py --origin https://mediumroast.io --seconds 10` shows a caller that sends `Origin: https://mediumroast.io` (or a `Referer` from it) is **never limited on lookups**. That is by design (the first-party sites are not limited), but the header is set by the client, so anyone can send it.
+The pods' capacity is then the only limit for such a caller. The SQL route ignores the header.
+
+**Part B: CORS (a few minutes, `curl` from any machine).** Lookups answer any origin (the response echoes the caller's origin); the credentialed SQL route answers only the first-party origins and allows no other. Expected, for a foreign origin `https://partner.example` and a first-party one `https://app.mediumroast.io`:
+
+- a preflight (`-X OPTIONS` with `Access-Control-Request-Method: POST`) to `/V4.0/sql` from the foreign origin: **no** `access-control-allow-origin` header; from the first-party origin: the header echoes it;
+- a lookup (`/V4.0/na/sic/code/3571`) with the foreign `Origin`: `access-control-allow-origin: https://partner.example`, and its preflight (`Access-Control-Request-Method: GET`) allows it too.
+
+**Part C: the ceiling (about 40 minutes).** Needs credentials with no rate limit (the `staging-test` profile) as `LOAD_AUTH` on each machine. On the build node run `pod_watch.py` for staging **and** for production (`--namespace company-dns`), 5 s apart, started 3 minutes before and stopped 3 minutes after.
+On each machine, at the same agreed time:
+
+```bash
+python3.14 perf_tests/ceiling.py run --machines 3 --start-at <time> --label <machine> --out ./tmp/ceiling-<machine>
+```
+
+The levels are the **total** requests in flight across the three machines (256 to 3,072), and each machine sends a third of each. A machine stops its own ramp at the first step where the service buckles (error rate above 2%, p95 above 5 s, or throughput fallen 15% below its peak for two steps).
+**Stop all three at once** (`Ctrl-c`) if the production watcher shows a pod not ready or restarting. Then merge, and join the cluster side:
+
+```bash
+python3.14 perf_tests/ceiling.py merge ./tmp/ceiling-studio ./tmp/ceiling-mini ./tmp/ceiling-laptop --out ./tmp/ceiling-merged
+```
+
+```bash
+python3.14 perf_tests/ceiling.py report --run ./tmp/ceiling-merged --watch ./tmp/watch-staging
+```
+
+The merged summary gives the **best sustained** rate (p95 within 1 s, error rate within 1%), the peak, and the step where it buckled; the report beside it gives, per step, the pods' CPU, throttling, memory, restarts and ready pods. Repeat with `--mix embedding --levels 48 96 192 384 768 1536` for the embedding searches, which were never measured at 20 pods.
+
 ## Optional: the limit biting (about 1 hour)
 
-A short soak with no credentials at a rate above the per-address quota (`--rps` above the quota's rate), to see that `429`s are clean (`Retry-After` present, no `5xx`) and the service recovers when the load drops. The `429`s are counted apart from errors and
+(`perf_tests/limit_probe.py`, scenario 5, now measures this directly.) A short soak with no credentials at a rate above the per-address quota (`--rps` above the quota's rate), to see that `429`s are clean (`Retry-After` present, no `5xx`) and the service recovers when the load drops. The `429`s are counted apart from errors and
 the run is expected to *miss the bar* only because of them; read the summary's `429` counts and the watch output.
