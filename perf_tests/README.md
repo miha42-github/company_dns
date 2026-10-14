@@ -186,5 +186,6 @@ Full raw data: `perf_tests/results/baseline-20260926.json`.
 - `load.py`: a closed-loop load generator (throughput and latency percentiles; `--rps` caps the rate).
 - `run_cluster.py`: compares replica configurations on the cluster (`docs/plans/v4-sizing-test.md`).
 - `soak.py`: a ramp-and-hold soak test for a remote tester, with periodic known-answer checks and per-window output (`docs/soak-test.md`).
+- `limit_probe.py`: what one address gets through the per-IP limiter (burst, sustained rate, the trusted-Origin bypass). `ceiling.py`: ramps the load, from one or several machines, until the service buckles, merges the machines' results and joins them with the pods' side (`docs/soak-scenarios.md`, scenario 5).
 - `pod_watch.py`: reads the pods from the cluster side while a soak runs (readiness, restarts, memory, CPU throttling), read-only. `soak_analyze.py`: merges several sites' soak results and judges each marked event (`docs/soak-scenarios.md`).
 - `report_cluster.py`: draws the sizing and soak figures of `docs/performance-report.md` from the committed result files.
