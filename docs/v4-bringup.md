@@ -4,8 +4,8 @@ From a clean checkout to **V4 serving `https://company-dns-staging.mediumroast.i
 
 > **Status: proven for deployment and stability (2026-10-13).** The scripts and this guide were followed on the build node on 2026-10-11 (tag `10112026-f255f85`; the API suite
 > passed, 57 OK and 3 skipped) and fixed wherever the first runs found a fault. A 24-hour soak from outside the network then passed (5.18 million requests, no errors, 7,200 of 7,200
-> known-answer checks correct, p95 between 110 and 126 ms, no drift) at a steady 60 requests/s: [`performance-report.md`](performance-report.md). The soak ran against tag `10112026-85feab8` at 20 pods, which showed 0 restarts after 38 hours. A two-hour rollout under load on 13 October (a rollback, a roll forward and one lost pod, with no errors) is in the report, section 4. **Not yet run at the current size (20 pods):**
-> the rate-limit check of step 6.3, the CORS check, losing two pods at once, a restart of all pods and scaling; the stability result covers one known workload, not the capacity ceiling
+> known-answer checks correct, p95 between 110 and 126 ms, no drift) at a steady 60 requests/s: [`performance-report.md`](performance-report.md). The soak ran against tag `10112026-85feab8` at 20 pods, which showed 0 restarts after 38 hours. Rollout under load (a rollback, a roll forward, one and two lost pods, a restart of all pods, scaling 20 to 16 and back; no errors; graceful shutdown verified) is in the report, section 4, on tags `10112026-85feab8` to `10142026-4446caf`. **Not yet run at the current size (20 pods):**
+> the rate-limit check of step 6.3, the CORS check, and embedding searches under load; the stability result covers one known workload, not the capacity ceiling
 > (the sizing results are in the report).
 
 ## What you end up with
