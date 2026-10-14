@@ -80,7 +80,11 @@ The same table shows, from the cluster, the fewest ready pods, the most terminat
 - Every event PASS; zero errors and zero wrong answers over the whole run.
 - Ready pods never below 18 at a pod kill, and back to 20 within a few minutes; no unplanned restarts (`new_restarts` 0 outside the changes you made), no out-of-memory kill, peak memory per pod well under the 1 GiB limit.
 
-### The first run (13 October)
+### The results (13 and 14 October)
+
+The second session (scenario 2b, 14 October, image `10142026-4446caf`) ran the three remaining changes on the graceful-shutdown build: all PASS, 0 errors, stopped pods left in 5 to 10 seconds (median 5, against 30 before). See [performance-report.md](performance-report.md), section 4b. What follows is the note on the first run.
+
+#### The first run (13 October)
 
 The first run passed for the rollback, the roll forward and one deleted pod; the three later changes were not reached because the steps started late (the first change came 48 minutes in, not 15). Results and the one finding (pods take the full 30 seconds to stop, because the server has no graceful shutdown) are in [performance-report.md](performance-report.md), section 4. Run the remaining three changes (two pods at once, restart all, scale down and up) in a shorter session, 10 minutes apart, with `pod_watch.py --interval 5` so a brief dip in ready pods is not missed. A mark made after the soak has ended (a note) is shown as NOT JUDGED and does not count against the run.
 

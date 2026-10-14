@@ -10,7 +10,7 @@ with the tools in this repository. Written for the maintainers and for anyone de
 | Is V4 faster than V3? | Faster on 26 of 28 checks, level on 2, slower on none (at the production limits of 0.5 CPU and 1 GiB) | single-image comparison, 2026-10-10 |
 | How should a replica be sized? | **About one core per pod, and as many pods as you want to dedicate.** Two or four half-core pods are throttled; pods of two or four cores waste cores on the embedding searches | cluster sizing, 2026-10-11 |
 | How much does it carry? | On the 20-pod staging shape (20 x 1000m): **about 1,900 lookups a second** (2,300 when the requests repeat) at p95 around 400 ms, through the real ingress | cluster sizing |
-| Does it survive change? | **Yes, for a rollback, a roll forward and a lost pod** at 60 requests/s: no errors, p95 within 4 ms of baseline, memory flat. One finding: pods take the full 30 s to stop (no graceful shutdown) | rollout under load, 2026-10-13 |
+| Does it survive change? | **Yes: a rollback, a roll forward, one and two lost pods, a restart of all pods, and scaling 20 to 16 and back**, at 60 requests/s: no errors, p95 within 5 ms of baseline, memory flat. A finding (pods took the full 30 s to stop) was fixed with a graceful shutdown: pods now leave in 5 to 10 s | rollout under load, 2026-10-13 and 14 |
 | Does it stay up and correct? | **Yes, for the known workload:** 24 hours at 60 requests/s from outside the network, 5.18 million requests, **no errors**, 7,200 of 7,200 known-answer checks correct, p95 110 to 126 ms with no drift | soak test, 2026-10-12 and 13 |
 
 What none of it shows is stated at the end ("What this does not show"). Read that before quoting a number.
@@ -116,7 +116,23 @@ CPU rising and falling; nobody compared clocks). The files are in [`results/2026
 **What the rollouts looked like.** A full 20-pod rollout took about a minute from the first new pod to the last, never fewer than 20 pods ready, and never more than 24 live pods (20 plus the surge of 4). The old pods were slower to go:
 **every one of the 41 pods that were stopped stayed in `Terminating` for 30 to 45 seconds**, the whole 30-second grace period. The server has no handler for the stop signal (it runs as the container's first process, which ignores it by default), so Kubernetes waits out the grace period and then kills it.
 Nothing was lost at this load, because traffic had already moved to the new pods, but: a rollout briefly holds up to 40 pods (20 of them stopping), requests still in flight when the kill arrives would be cut, and a pod lost under heavy traffic takes 30 seconds to leave. A graceful shutdown (stop accepting, finish what is running, exit) would make pods leave in a second or two.
-It is a small change; it has not been made.
+**The graceful shutdown has since been made and tested** (section 4b).
+
+### 4b. The remaining changes, on the graceful-shutdown build (14 October)
+
+The server now keeps serving for 5 seconds after the stop signal, then drains and exits (`v4/crates/server/src/shutdown.rs`). The same scenario, on image `10142026-4446caf` (commit 4446caf), run for 66 minutes with the pods sampled every 5 seconds: one pod deleted, two pods deleted at once (one per node), all pods restarted, the deployment scaled from 20 to 16 and back. The files are in [`results/2026-10-14-shutdown/`](results/2026-10-14-shutdown/).
+
+| | |
+|---|---|
+| the whole run | 66 windows, 236,830 requests, **0 errors, 0 `429`s, 330 of 330 canary answers correct**; p95 median 93 ms (worst window 98 ms), no drift (93.9 ms in the first quarter of the hold, 92.9 ms in the last) |
+| the six marks | all PASS; worst p95 around a change 92 to 98 ms against a 93 ms baseline; 60.0 requests/s held |
+| **stopped pods** | **27 pods were stopped; each stayed in `Terminating` 5 to 10 seconds (median 5)**, against 30 to 45 seconds before (41 of 41 pods). No more than 8 were stopping at once in a full restart (20 before) |
+| two pods lost at once | ready pods dipped to 18 for one 5-second sample and to 19 for the next, and were back at 20 about 10 seconds after the deletion; no errors |
+| restart of all pods | about 25 seconds from the first new pod to the last; never fewer than 20 ready; at most 32 pods existing at the peak (20 plus the surge of 4 plus 8 still stopping) |
+| scale 20 to 16 and back | the 4 extra pods left within about 5 to 10 seconds; scaling up, 4 new pods were ready about 10 seconds after the command |
+| cluster side | **0 restarts, no out-of-memory kills**, CPU throttling at most 0.4%, 0.89 cores used across the pods at 60 requests/s, memory flat (191 MiB on the oldest pods, 164 to 165 MiB on fresh ones throughout) |
+
+**All six changes planned for the rollout scenario have now been run** (rollback, roll forward, one pod, two pods, restart all, scaling), on the new build, with no request errors and no change in latency that the client could see.
 
 ## 5. What this means for sizing a deployment
 
@@ -134,7 +150,7 @@ Per-IP limits are settings, not capacity: with 20 pods and a quota of 6,000 a mi
 - **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below.
 - **Server memory and restarts during the soak.** A client cannot see them. They must be read from the cluster (restart counts, memory per pod).
 - **Server memory during the 24-hour soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October). The two-hour rollout run (section 4) did sample memory, and it was flat.
-- **Three of the six changes of the rollout run** (two pods at once, restart all, scaling) were not run, and the run was at 60 requests/s from the cluster's own network.
+- **The rollout runs** were at 60 requests/s from the cluster's own network, not at heavy load: whether a pod lost under hundreds of requests a second drops any in flight is untested (the graceful shutdown is meant to prevent it).
 - **One run per cell** in the sizing, on nodes shared with other services; the load is closed-loop (a fixed number of requests in flight), which measures capacity, not a traffic model. A real event is bursty.
 - **The tester's network.** A p50 of 28 ms suggests it was close to the cluster; a distant client sees more latency.
 - **The single-image comparison** is one machine, three runs per cell, and its repeat-traffic ratios measure the caches.

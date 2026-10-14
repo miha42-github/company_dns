@@ -1,0 +1,6 @@
+2026-10-14T01:58:11Z soak started
+2026-10-14T02:09:01Z delete one pod
+2026-10-14T02:19:49Z delete two pods
+2026-10-14T02:31:21Z restart all pods
+2026-10-14T02:38:11Z scale down to 16
+2026-10-14T02:48:30Z scale up to 20
