@@ -40,6 +40,8 @@ spec:
         fsGroup: 10001            # lets the non-root user read the mounted Secret
         seccompProfile:
           type: RuntimeDefault
+      # The server keeps serving 5 s after SIGTERM, then drains for at most 15 s (COMPANY_DNS_SHUTDOWN_DELAY_SECS / _GRACE_SECS defaults), so a pod leaves in a few
+      # seconds; this is the limit before Kubernetes kills it, and must stay above their sum (k8s/test_staging_manifests.py checks it).
       terminationGracePeriodSeconds: 30
 
       # The image package is public: no imagePullSecrets (docs/plans/v4-staging-rollout.md, S1).

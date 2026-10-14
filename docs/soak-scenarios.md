@@ -91,6 +91,30 @@ The first run passed for the rollback, the roll forward and one deleted pod; the
 - **Slow p95 but no errors** during a rollout: the new pods were taking traffic before they were warm; check the readiness probe's delay.
 - Anything else: keep the directory and the watch output, and read the event's windows in `events.md`.
 
+## Scenario 2b: the remaining changes, on the graceful-shutdown build (about 70 minutes)
+
+**Question:** the three changes the first run did not reach (two pods lost at once, a restart of all pods, scaling down and up), and: do pods now leave quickly? The first run found that every stopped pod stayed in `Terminating` for the whole 30 s because the server ignored the stop signal;
+the server now keeps serving 5 s after the signal, drains, and exits (`v4/crates/server/src/shutdown.rs`). Run this on an image that includes that change.
+
+**Pass:** every event PASS (no errors, every canary right, p95 within 1.5 times the baseline), no unplanned restarts, ready pods back to 20 after each change, and **stopped pods leave in about 6 to 10 seconds** (`soak_analyze.py terminating`; the median should be well under 15 s, against 30 s before).
+The watcher samples every 5 s here so short states show.
+
+The steps are the same as scenario 2 with these differences: rebuild first so the new image is running; the watcher uses `--interval 5`; the soak runs 66 minutes (`--hours 1.1`); the changes are 10 minutes apart, starting 10 minutes in:
+
+| After | Mark | Change |
+|---|---|---|
+| 10 min | `delete one pod` | one pod deleted (this is the measurement of the graceful shutdown) |
+| 20 min | `delete two pods` | one pod on each node deleted at once |
+| 30 min | `restart all pods` | `kubectl -n company-dns-staging rollout restart deployment/company-dns` |
+| 40 min | `scale down to 16` | `kubectl -n company-dns-staging scale deployment/company-dns --replicas=16` |
+| 50 min | `scale up to 20` | `kubectl -n company-dns-staging scale deployment/company-dns --replicas=20` |
+
+After the soak ends and 3 quiet minutes have passed, stop the watcher, and judge with `soak_analyze.py events ...` as before, then:
+
+```bash
+python3.14 perf_tests/soak_analyze.py terminating --watch ./tmp/watch-rollout
+```
+
 ## Scenario 3: breadth, from several places (12 to 24 hours)
 
 **Question:** is it stable under a wider mix, from more than one caller? Mostly lookups on both the V4 and the V3 paths, with a few embedding searches (the "bleed over" from the hackathon), from two or three locations at once, each with its own address (per-IP limits are independent).

@@ -7,6 +7,8 @@
 `merge` reads each directory's windows.csv and meta.json (written by soak.py), judges each site with the same bar as the soak's own summary, and writes the sites side by side
 (summary.md, windows.csv with a `site` column). The run passes only if every site passed.
 
+`terminating --watch WATCHDIR` shows how long each stopped pod stayed in Terminating (the check for graceful shutdown).
+
 `events` first lines the soak's timeline up with the watcher's by the load itself (see "Alignment"), then takes the marks you made during a run (events.txt, one per line: `2026-10-12T21:05:00Z rolling update to <tag>`, UTC; make them with `echo "$(date -u +%FT%TZ) text" >> events.txt`),
 and for each one shows the soak windows that overlap it (errors, `429`s, p95, the slowest request, the canaries) and, with pod_watch.py's directory, the pods around it
 (ready, terminating, restarts). Each event is judged: PASS if no errors, every canary right, and p95 within 1.5 times the quiet baseline, else REVIEW with the reason. A mark that falls outside the soak (a note made
@@ -245,12 +247,42 @@ def align(rows: list[dict], watch: list[dict], window_s: float, manual: float | 
                            f"ended ({edges}; resolution about {est['resolution']:.0f} s)." + (f" {notes}" if notes else ""))
 
 
+def terminating_times(watch_dir: Path) -> dict:
+    """How long each pod that was stopped stayed in Terminating, from pod_watch's pods.jsonl: first to last sample seen terminating, plus one interval (a pod seen once
+    was terminating for about one interval)."""
+    first, last, times = {}, {}, []
+    with open(watch_dir / "pods.jsonl") as f:
+        for line in f:
+            r = json.loads(line)
+            t = parse_utc(r["time_utc"])
+            times.append(t)
+            if r.get("terminating"):
+                first.setdefault(r["name"], t)
+                last[r["name"]] = t
+    gaps = sorted({b - a for a, b in zip(sorted(set(times)), sorted(set(times))[1:])})
+    interval = statistics.median(gaps) if gaps else 0.0
+    secs = sorted(last[n] - first[n] + interval for n in first)
+    return {"pods": len(secs), "interval": interval, "min": secs[0] if secs else None, "median": statistics.median(secs) if secs else None, "max": secs[-1] if secs else None,
+            "seconds": secs}
+
+
+def render_terminating(r: dict) -> str:
+    if not r["pods"]:
+        return "# Terminating pods\n\nNo pod was seen stopping in this watch.\n"
+    return ("# Terminating pods\n\n"
+            f"{r['pods']} pods were seen stopping. Each stayed in Terminating for **{r['median']:.0f} s** (median; shortest {r['min']:.0f} s, longest {r['max']:.0f} s), "
+            f"measured to the watcher's {r['interval']:.0f} s sampling. Before the server handled the stop signal, every stopped pod stayed the whole 30 s grace period (30 to 45 s as seen by a 15 s watcher). "
+            "With the delay of 5 s and a quick drain, a pod should leave in about 6 to 10 s; anything near 30 s means the signal is again being ignored.\n")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     m = sub.add_parser("merge", help="combine several soak directories")
     m.add_argument("dirs", nargs="+", type=Path)
     m.add_argument("--out", type=Path, required=True)
+    t = sub.add_parser("terminating", help="how long stopped pods stayed in Terminating")
+    t.add_argument("--watch", type=Path, required=True, help="pod_watch.py's output directory")
     e = sub.add_parser("events", help="judge each marked event")
     e.add_argument("--soak", type=Path, required=True)
     e.add_argument("--events", type=Path, required=True)
@@ -260,6 +292,10 @@ def main(argv=None) -> int:
     e.add_argument("--no-align", action="store_true", help="trust the clocks: no shift")
     a = ap.parse_args(argv)
     try:
+        if a.cmd == "terminating":
+            text = render_terminating(terminating_times(a.watch))
+            print(text)
+            return 0
         if a.cmd == "merge":
             overall, text = merge(a.dirs, a.out)
             print(text)
