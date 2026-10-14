@@ -122,7 +122,7 @@ def render(r: dict, expect_per_minute: float | None, expect_burst: float | None,
     else:
         verdict = "LIMITED"
     lines += ["| | observed | configured |", "|---|---|---|",
-              f"| burst: let through before the first `429` | {r['burst']} | {expect_burst if expect_burst is not None else ''} |",
+              f"| burst: let through before the first `429` (approximate: requests in flight when it came are not counted) | {r['burst']} | {expect_burst if expect_burst is not None else ''} |",
               f"| sustained, let through per second (median after the first {r['settle_seconds']} s) | {r['sustained_per_second']} | {round(expect_per_minute / 60, 1) if expect_per_minute else ''} |",
               f"| sustained, per minute | {round(r['sustained_per_second'] * 60) if r['sustained_per_second'] is not None else ''} | {expect_per_minute if expect_per_minute is not None else ''} |"]
     if r["retry_after"]:

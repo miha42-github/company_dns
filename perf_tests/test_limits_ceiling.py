@@ -40,11 +40,26 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     bucket = None      # a Bucket, or None for no limit
     fail = False       # answer 500
+    require_auth = False  # answer 401 to a request with no Authorization header
+    fail_after = None  # answer 500 once this many requests have been answered (the preflight is the first)
+    count = 0
+    seen_auth: list = []
     delay = 0.0
 
     def do_GET(self):
         origin = self.headers.get("Origin")
         status, headers = 200, {}
+        Handler.seen_auth.append(self.headers.get("Authorization"))
+        Handler.count += 1
+        if Handler.fail_after is not None and Handler.count > Handler.fail_after:
+            Handler.fail = True
+        if Handler.require_auth and not self.headers.get("Authorization"):
+            body = b"{}"
+            self.send_response(401)
+            self.send_header("Content-Length", "2")
+            self.end_headers()
+            self.wfile.write(body)
+            return
         if Handler.delay:
             time.sleep(Handler.delay)
         if Handler.fail:
@@ -76,6 +91,9 @@ class Server(unittest.TestCase):
 
     def setUp(self):
         Handler.bucket, Handler.fail, Handler.delay = None, False, 0.0
+        Handler.require_auth = False
+        Handler.fail_after, Handler.count = None, 0
+        Handler.seen_auth.clear()
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
@@ -85,7 +103,7 @@ class Probe(Server):
     def test_the_probe_measures_the_burst_and_the_sustained_rate(self):
         Handler.bucket = Bucket(rate=20.0, burst=15)
         r = lp.run_probe(load.Target(self.url), 8, 8, {"User-Agent": "x (+https://example.org)"})
-        self.assertTrue(12 <= r["burst"] <= 18, r["burst"])
+        self.assertTrue(8 <= r["burst"] <= 20, r["burst"])  # approximate: requests in flight when the first 429 came back are not counted
         self.assertTrue(17 <= r["sustained_per_second"] <= 23, r["sustained_per_second"])
         self.assertEqual(r["retry_after"]["max"], 1)
         verdict, text = lp.render(r, 1200, 15, None, "t")
@@ -171,7 +189,7 @@ class Ramp(Server):
         self.assertEqual(json.loads((out / "meta.json").read_text())["label"], "t")
 
     def test_the_ramp_stops_when_the_service_fails(self):
-        Handler.fail = True
+        Handler.fail_after = 1  # the preflight is answered; everything after fails
         code, out = self.run_ramp()
         self.assertEqual(code, 0)
         rows = list(csv.DictReader(open(out / "levels.csv")))
@@ -184,6 +202,36 @@ class Ramp(Server):
         self.assertEqual(ce.main(["run", "--anonymous", "--dry-run", "--url", "https://example.org"]), 2)
         self.assertEqual(ce.main(["run", "--anonymous", "--dry-run", "--url", self.url, "--allow-other-url", "--levels", "9000"]), 2)
         self.assertEqual(ce.main(["run", "--anonymous", "--dry-run", "--url", self.url, "--allow-other-url", "--machines", "9", "--levels", "4"]), 2)
+
+    def test_the_token_from_the_environment_is_sent_and_never_printed_or_written(self):
+        import base64
+        import contextlib
+        import io
+        Handler.require_auth = True
+        os.environ["LOAD_AUTH"] = "staging-test:s3cret-token"
+        self.addCleanup(os.environ.pop, "LOAD_AUTH", None)
+        out = self.root / "auth-run"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = ce.main(["run", "--url", self.url, "--allow-other-url", "--levels", "4", "--duration", "1", "--warmup", "0", "--pause", "0", "--processes", "2", "--out", str(out), "--label", "t"])
+        self.assertEqual(code, 0)
+        expected = "Basic " + base64.b64encode(b"staging-test:s3cret-token").decode()
+        self.assertTrue(Handler.seen_auth and all(h == expected for h in Handler.seen_auth), "every request, the preflight included, carried the credentials")
+        self.assertIn("profile staging-test", buf.getvalue())
+        self.assertIn("preflight: one request as the profile was answered normally", buf.getvalue())
+        self.assertNotIn("s3cret-token", buf.getvalue())
+        for f in out.iterdir():
+            self.assertNotIn("s3cret-token", f.read_text(), f.name)
+        self.assertEqual(json.loads((out / "meta.json").read_text())["profile"], "staging-test")
+
+    def test_a_wrong_token_or_an_unreachable_service_stops_before_the_ramp(self):
+        Handler.require_auth = True
+        self.assertIn("refused the credentials", ce.preflight(load.Target(self.url), None) or "")
+        self.assertIsNone(ce.preflight(load.Target(self.url), "p:t"))
+        self.assertIn("cannot reach", ce.preflight(load.Target("http://127.0.0.1:9"), "p:t"))
+        Handler.bucket = Bucket(rate=0.0, burst=0)
+        Handler.require_auth = False
+        self.assertIn("rate limited", ce.preflight(load.Target(self.url), "p:t"))
 
     def test_merge_and_report_commands(self):
         code, out = self.run_ramp()
