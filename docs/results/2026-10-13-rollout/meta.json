@@ -1,0 +1,21 @@
+{
+ "url": "https://company-dns-staging.mediumroast.io",
+ "label": "studio-lan",
+ "mix": "lookups",
+ "embedding_share": null,
+ "window_s": 60.0,
+ "steps": [
+  4
+ ],
+ "step_windows": 5,
+ "hold": 16,
+ "rps_cap": 60.0,
+ "via_connect_to": false,
+ "authenticated": false,
+ "started_utc": "2026-10-13T15:53:34Z",
+ "python": "3.14.8",
+ "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+ "planned_windows": 120,
+ "max_error_rate": 0.01,
+ "max_p95_ms": 2000.0
+}

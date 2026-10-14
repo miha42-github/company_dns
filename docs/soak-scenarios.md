@@ -80,6 +80,10 @@ The same table shows, from the cluster, the fewest ready pods, the most terminat
 - Every event PASS; zero errors and zero wrong answers over the whole run.
 - Ready pods never below 18 at a pod kill, and back to 20 within a few minutes; no unplanned restarts (`new_restarts` 0 outside the changes you made), no out-of-memory kill, peak memory per pod well under the 1 GiB limit.
 
+### The first run (13 October)
+
+The first run passed for the rollback, the roll forward and one deleted pod; the three later changes were not reached because the steps started late (the first change came 48 minutes in, not 15). Results and the one finding (pods take the full 30 seconds to stop, because the server has no graceful shutdown) are in [performance-report.md](performance-report.md), section 4. Run the remaining three changes (two pods at once, restart all, scale down and up) in a shorter session, 10 minutes apart, with `pod_watch.py --interval 5` so a brief dip in ready pods is not missed. A mark made after the soak has ended (a note) is shown as NOT JUDGED and does not count against the run.
+
 ### If an event is REVIEW
 
 - **Errors or resets at a pod kill or rollout** are most likely requests to a pod that is going away (keep-alive connections, or the pod leaving the load balancer after it stops accepting). The first things to try, in `k8s/staging/deployment.yaml`: a `preStop` delay of about 10 seconds

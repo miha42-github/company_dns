@@ -182,6 +182,18 @@ class Analyse(unittest.TestCase):
             self.assertIn("REVIEW", text)
             self.assertIn("the windows", text)
 
+    def test_a_mark_outside_the_soak_is_not_judged_and_is_not_a_failure(self):
+        write_soak(self.root / "s", make_rows())
+        # one real change inside the run, one note long after it ended
+        (self.root / "e.txt").write_text("2027-01-15T08:20:00Z delete a pod\n2027-01-15T12:00:00Z early end due to delayed steps\n")
+        rows, _ = sa.read_windows(self.root / "s")
+        events, _ = sa.read_events(self.root / "e.txt")
+        results, baseline = sa.judge_events(rows, 60.0, events, [], 5)
+        self.assertEqual([r["verdict"] for r in results], ["PASS", "NOT JUDGED"])
+        text = sa.render_events(results, baseline, [], "site-a", 5)
+        self.assertTrue(text.startswith("# Soak events: PASS"), text[:60])
+        self.assertEqual(sa.main(["events", "--soak", str(self.root / "s"), "--events", str(self.root / "e.txt")]), 0)
+
     def test_the_pods_around_an_event_are_shown_from_the_watch(self):
         import time
         start = 1_800_000_000
