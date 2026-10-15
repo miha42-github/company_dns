@@ -184,6 +184,18 @@ python3.14 perf_tests/ceiling.py report --run ./tmp/ceiling-merged --watch ./tmp
 
 The merged summary gives the **best sustained** rate (p95 within 1 s, error rate within 1%), the peak, and the step where it buckled; the report beside it gives, per step, the pods' CPU, throttling, memory, restarts and ready pods. Repeat with `--mix embedding --levels 48 96 192 384 768 1536` for the embedding searches, which were never measured at 20 pods.
 
+## Scenario 6: semantic-search throughput (about 40 minutes, three machines)
+
+**Question:** how many semantic searches a second do the 20 pods carry? Measured so far only at 12 pods and for a two-route mix (231 a second); never at 20 pods, and never route by route. The three semantic routes cost different amounts and none of them caches: US similarity (`/V4.0/na/sic/similarity/`), global similarity (`/V4.0/global/sic/similarity/`) and hybrid (`/V4.0/global/sic/hybrid/`, a fusion of keyword and semantic search across all systems).
+The mixes `similarity`, `similarity-global`, `hybrid` and `semantic` (all three together, 4:3:3) send them; run them with `perf_tests/ceiling.py` as in scenario 5, with these differences:
+
+- **Headline ramp:** `--mix semantic --levels 48 96 192 384 768 1536`: embedding throughput saturates at a few hundred a second, so the requests in flight needed are far fewer than for lookups (in flight is about throughput times latency).
+- **Per route:** the same command with each single-route mix and `--levels 192 384 768`, to see what each route costs.
+- **Watch memory:** stop all three ramps if any pod's memory passes 800 MiB (the limit is 1 GiB); embedding work holds model memory.
+- **The lookups ceiling is separate and still needed once:** the ingress change means one Traefik pod now carries all external traffic, and the lookups ramp (scenario 5, part C) has not been repeated since. Semantic searches do not stress Traefik (a few hundred requests a second), lookups do.
+
+**Pass:** nothing fails; the best sustained rate (p95 within 1 s, no errors) and the peak are recorded for each route; the pods' CPU and memory per step explain where it levels off (expected: CPU, at about 19 requests a second per US-similarity pod).
+
 ## Optional: the limit biting (about 1 hour)
 
 (`perf_tests/limit_probe.py`, scenario 5, now measures this directly.) A short soak with no credentials at a rate above the per-address quota (`--rps` above the quota's rate), to see that `429`s are clean (`Retry-After` present, no `5xx`) and the service recovers when the load drops. The `429`s are counted apart from errors and
