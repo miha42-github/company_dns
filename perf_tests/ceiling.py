@@ -151,6 +151,31 @@ def render_join(rows: list[dict], note: str) -> str:
 
 
 # ---------------------------------------------------------------- the commands
+def preflight(target: load.Target, auth: str | None) -> str | None:
+    """One request as the profile before anything is ramped: a problem sentence, or None. Catches a wrong token, a limited profile, and a machine that cannot reach the service."""
+    import base64
+    headers = {"User-Agent": "company_dns-ceiling/1.0 (+https://github.com/miha42-github/company_dns)", "Accept": "application/json"}
+    if auth:
+        headers["Authorization"] = "Basic " + base64.b64encode(auth.encode()).decode()
+    try:
+        conn = target.connect()
+        try:
+            conn.request("GET", "/V4.0/na/sic/code/3571", headers=headers)
+            resp = conn.getresponse()
+            resp.read()
+        finally:
+            conn.close()
+    except Exception as e:
+        return f"cannot reach the service from this machine ({type(e).__name__}: {str(e)[:100]}); if the name does not resolve to the cluster from here, add --connect-to <ingress-address>"
+    if resp.status in (401, 403):
+        return f"the service refused the credentials ({resp.status}): the profile or token in LOAD_AUTH is wrong"
+    if resp.status == 429:
+        return "the very first request was rate limited: this profile has a limit, so the ramp would only measure the limiter"
+    if resp.status not in load.OK_STATUSES:
+        return f"the first request was answered {resp.status}"
+    return None
+
+
 def cmd_run(a) -> int:
     auth = os.environ.get("LOAD_AUTH")
     problems = []
@@ -169,9 +194,16 @@ def cmd_run(a) -> int:
         return 2
     steps = len(a.levels)
     est = steps * (a.duration + a.warmup + a.pause) / 60
+    profile = auth.split(":", 1)[0] if auth else None
+    print(f"credentials: {'profile ' + profile + ' (from LOAD_AUTH; the token is sent with every request and is never printed or written)' if profile else 'none (--anonymous)'}")
     print(f"plan: levels {a.levels} in flight in total, {a.machines} machine(s), mix {a.mix}, {a.duration:g} s each: up to {est:.0f} minutes. Stops early when the service buckles.")
     if a.dry_run:
         return 0
+    problem = preflight(load.Target(a.url, connect_to=a.connect_to), auth)
+    if problem:
+        print(f"cannot start: {problem}", file=sys.stderr)
+        return 2
+    print("preflight: one request as the profile was answered normally")
     if a.start_at:
         start = parse_utc(a.start_at)
         wait = start - time.time()
@@ -183,7 +215,7 @@ def cmd_run(a) -> int:
             time.sleep(min(0.5, max(0.0, start - time.time())))
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "meta.json").write_text(json.dumps({"label": a.label, "url": a.url, "mix": a.mix, "levels": a.levels, "machines": a.machines, "duration": a.duration, "warmup": a.warmup, "pause": a.pause,
-                                                "processes": a.processes, "started_utc": utc(time.time())}, indent=1))
+                                                "processes": a.processes, "profile": profile, "started_utc": utc(time.time())}, indent=1))
     target = load.Target(a.url, connect_to=a.connect_to)
     levels: list[dict] = []
     stopped = None

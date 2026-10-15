@@ -154,7 +154,7 @@ python3.14 perf_tests/limit_probe.py --start-at <time> --seconds 60 --expect-per
 ```
 
 Each prints the **burst** (let through before the first `429`), the **sustained rate** after it, and how they compare with the configured 6,000 a minute and burst 600. Add the three sustained rates for the aggregate that three addresses get together: about three times one address,
-because the allowance is per address. Many addresses at the full rate would reach what the pods carry (about 1,900 lookups a second) with about twenty.
+because the allowance is per address. **If the three add up to about one address's rate, not three times it, the cluster is hiding the callers' addresses**: the ingress then sees the node's address for everyone, and in production every caller would share one allowance. The ingress service's `externalTrafficPolicy` decides this (`Local` keeps the caller's address; `Cluster` may replace it): `kubectl get svc -A | grep -i traefik`, then `kubectl -n <namespace> get svc <name> -o jsonpath='{.spec.externalTrafficPolicy}'`. Many addresses at the full rate would reach what the pods carry (about 1,900 lookups a second) with about twenty.
 
 **The trusted-origin bypass.** `python3.14 perf_tests/limit_probe.py --origin https://mediumroast.io --seconds 10` shows a caller that sends `Origin: https://mediumroast.io` (or a `Referer` from it) is **never limited on lookups**. That is by design (the first-party sites are not limited), but the header is set by the client, so anyone can send it.
 The pods' capacity is then the only limit for such a caller. The SQL route ignores the header.
@@ -164,7 +164,7 @@ The pods' capacity is then the only limit for such a caller. The SQL route ignor
 - a preflight (`-X OPTIONS` with `Access-Control-Request-Method: POST`) to `/V4.0/sql` from the foreign origin: **no** `access-control-allow-origin` header; from the first-party origin: the header echoes it;
 - a lookup (`/V4.0/na/sic/code/3571`) with the foreign `Origin`: `access-control-allow-origin: https://partner.example`, and its preflight (`Access-Control-Request-Method: GET`) allows it too.
 
-**Part C: the ceiling (about 40 minutes).** Needs credentials with no rate limit (the `staging-test` profile) as `LOAD_AUTH` on each machine. On the build node run `pod_watch.py` for staging **and** for production (`--namespace company-dns`), 5 s apart, started 3 minutes before and stopped 3 minutes after.
+**Part C: the ceiling (about 40 minutes).** Needs credentials with no rate limit (the `staging-test` profile) as `LOAD_AUTH` on each machine: the tool reads the variable (so the token is never on a command line or in the shell history), sends it as Basic credentials on every request, prints only the profile name, writes nothing secret to its files, and makes one request as the profile before it waits or ramps (it stops with the reason if the token is refused, the profile is limited, or the machine cannot reach the service). On the build node run `pod_watch.py` for staging **and** for production (`--namespace company-dns`), 5 s apart, started 3 minutes before and stopped 3 minutes after.
 On each machine, at the same agreed time:
 
 ```bash
