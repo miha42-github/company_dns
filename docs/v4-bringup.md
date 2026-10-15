@@ -50,11 +50,11 @@ Add this above the `forward` line, listing **every** name the cluster serves tha
     }
 ```
 
-then `kubectl -n kube-system rollout restart deploy/coredns`. `<traefik-lan-ip>` is the Ingress controller's LAN address: `kubectl get ingress -n company-dns-staging` shows it in the ADDRESS column. Check from a pod:
+then `kubectl -n kube-system rollout restart deploy/coredns`. **Since 2026-10-15 the address in the block is Traefik's ClusterIP** (`kubectl -n ingress get svc traefik -o jsonpath='{.spec.clusterIP}'`), not its LAN address (the ingress now keeps the callers' addresses with `externalTrafficPolicy: Local`, and a pod on a node without a Traefik pod cannot use the LAN address; `docs/plans/onprem-k8s-migration.md`, "The ingress keeps the callers' addresses"). Check from a pod:
 
 ```bash
 kubectl -n company-dns-staging run c1 --rm -it --restart=Never --image=curlimages/curl -- curl -sv -m 10 http://company-dns-staging.mediumroast.io/.well-known/acme-challenge/test
-# resolves to <traefik-lan-ip> and answers a 301 redirect to https (the path is not a real challenge token)
+# resolves to Traefik's ClusterIP and answers a 301 redirect to https (the path is not a real challenge token)
 ```
 
 Re-enabling MicroK8s DNS resets manual CoreDNS edits: repeat this step if you ever run `microk8s disable dns`. (The router doing NAT loopback would make this unnecessary.)

@@ -1,6 +1,6 @@
 # Ingress hides the callers' addresses: a fix for the MicroK8s cluster
 
-Status: **a change for the cluster administrator to make (written 2026-10-14). Nothing has been changed yet.**
+Status: **DONE and verified on 2026-10-15.** `externalTrafficPolicy: Local` is live and durable (Helm values); a probe from three machines on three addresses got 100 requests a second each (300 together, no trade-off). The record is in `docs/plans/onprem-k8s-migration.md` ("The ingress keeps the callers' addresses") and `docs/performance-report.md`, section 5c. What follows is the document as it was handed over; one addition from the work: a pod on a node without a Traefik pod (cert-manager's) cannot use the LAN address under `Local`, so the CoreDNS `hosts` block was repointed to Traefik's ClusterIP first.
 Audience: whoever administers the MicroK8s cluster. No knowledge of the application is needed beyond section 1.
 No addresses or host names of the lab's machines appear here (the repository is public): `<node-a>`, `<node-b>` and `<traefik-lan-ip>` stand for the two nodes and the ingress address.
 

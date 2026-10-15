@@ -105,6 +105,7 @@ class Probe(Server):
         r = lp.run_probe(load.Target(self.url), 8, 8, {"User-Agent": "x (+https://example.org)"})
         self.assertTrue(8 <= r["burst"] <= 20, r["burst"])  # approximate: requests in flight when the first 429 came back are not counted
         self.assertTrue(17 <= r["sustained_per_second"] <= 23, r["sustained_per_second"])
+        self.assertTrue(8 <= r["burst_effective"] <= 25, r["burst_effective"])  # the burst as the totals show it: about the bucket's 15
         self.assertEqual(r["retry_after"]["max"], 1)
         verdict, text = lp.render(r, 1200, 15, None, "t")
         self.assertEqual(verdict, "LIMITED")

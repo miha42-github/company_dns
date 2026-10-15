@@ -262,6 +262,32 @@ def fig_limit(runs: list[tuple[str, dict]], f: dict, out: Path, foot: str) -> No
     plt.close(fig)
 
 
+def fig_limit_before_after(before: list[tuple[str, dict]], after: list[tuple[str, dict]], expect_per_minute: float, out: Path, foot: str) -> None:
+    fb, fa = limit_findings(before, expect_per_minute), limit_findings(after, expect_per_minute)
+    expected = expect_per_minute / 60
+    each_after = ", ".join(f"{name} {r['sustained_per_second']:.0f}" for name, r in after if name in fa["names"])
+    fig, top = rcl._frame(f"Before the ingress fix {fb['addresses']} machines shared the limit ({fb['sustained_total']:.0f}/s together, split unevenly); after it each of {fa['addresses']} got its own {fa['mean_sustained']:.0f}/s "
+                          f"({fa['sustained_total']:.0f}/s together)",
+                          f"Requests let through per second by machines running flat out at the same time, each on its own address, against a limit of {expected:.0f} a second per address. Before: {fb['correlation']:.2f} correlation between "
+                          f"the two machines (what one gained the other lost). After ({each_after} a second): no trade-off.", foot)
+    axes = fig.subplots(1, 2, sharey=True, gridspec_kw={"left": 0.07, "right": 0.97, "bottom": 0.12, "top": top - 0.02, "wspace": 0.06})
+    for ax, runs, f, title in ((axes[0], before, fb, "before: callers' addresses hidden by the ingress"), (axes[1], after, fa, "after: externalTrafficPolicy Local")):
+        ok_runs = [(name, r) for name, r in runs if name in f["names"]]
+        secs = list(range(len(ok_runs[0][1]["per_second"]) - 1))
+        ax.stackplot(secs, *[[p["ok"] for p in r["per_second"][:-1]] for _, r in ok_runs], colors=[rcl.COLORS[k % 5] for k in range(len(ok_runs))], alpha=0.85,
+                     labels=[f"{name}: {r['sustained_per_second']:.0f}/s" for name, r in ok_runs])
+        ax.axhline(expected * len(ok_runs), color="#111827", ls="--", lw=1.2)
+        ax.set_title(title, fontsize=12)
+        ax.set_xlabel("seconds since the start")
+        ax.set_xlim(0, len(secs) - 1)
+        ax.legend(loc="upper right", frameon=False, fontsize=9)
+        ax.spines[["top", "right"]].set_visible(False)
+    axes[0].set_ylabel("let through per second (stacked)")
+    axes[0].set_ylim(0, expected * max(fb["addresses"], fa["addresses"]) * 1.7)
+    fig.savefig(out, dpi=rcl.DPI)
+    plt.close(fig)
+
+
 def read_limit_run(d: Path) -> dict:
     return json.loads((d / "per_second.json").read_text())
 
@@ -284,6 +310,7 @@ def main(argv=None) -> int:
     li.add_argument("dirs", nargs="+", type=Path, help="limit_probe.py output directories, one per address")
     li.add_argument("--out", type=Path, required=True)
     li.add_argument("--expect-per-minute", type=float, default=6000.0)
+    li.add_argument("--before", nargs="+", type=Path, help="the same probe from before a fix: also draws the before-and-after picture, with these directories as the before")
     a = ap.parse_args(argv)
     if plt is None:
         print("matplotlib is not installed: use perf_tests/.venv (perf_tests/requirements-report.txt)", file=sys.stderr)
@@ -315,6 +342,11 @@ def main(argv=None) -> int:
             f = limit_findings(runs, a.expect_per_minute)
             fig_limit(runs, f, a.out / "l1-limit-per-address.png", "Rate-limit probe: perf_tests/limit_probe.py, one run per address at the same time. Data: " + ", ".join(str(d) for d in a.dirs))
             print(f"wrote {a.out / 'l1-limit-per-address.png'}: sustained {f['sustained_each']}, total {f['sustained_total']:.0f}/s")
+            if a.before:
+                before = [(d.name.replace("limit-", ""), read_limit_run(d)) for d in a.before]
+                fig_limit_before_after(before, runs, a.expect_per_minute, a.out / "l2-limit-before-after.png",
+                                       "Rate-limit probe: perf_tests/limit_probe.py, before (14 October) and after (15 October) the ingress fix. Data: docs/results/2026-10-14-limit, docs/results/2026-10-15-limit-after")
+                print(f"wrote {a.out / 'l2-limit-before-after.png'}")
     except (OSError, KeyError, ValueError, StopIteration) as e:
         print(f"cannot read the results: {type(e).__name__}: {e}", file=sys.stderr)
         return 2
