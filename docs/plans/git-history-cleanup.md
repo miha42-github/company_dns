@@ -30,7 +30,7 @@ In a **fresh** clone (never your working checkout):
 ```bash
 git clone https://github.com/miha42-github/company_dns.git company_dns-rewrite && cd company_dns-rewrite
 HYGIENE_DENYLIST=~/company_dns-private/denylist python3 scripts/check_hygiene.py --messages     # the messages
-git rev-list --all | xargs git grep -I -n -i -F -f ~/company_dns-private/denylist | head -50     # the file contents, every commit
+HYGIENE_DENYLIST=~/company_dns-private/denylist python3 scripts/check_hygiene.py --history   # every line ever added to a file, with the same list (add --verbose for one line per finding)
 ```
 
 Also run a secret scanner over the whole history (for example `gitleaks detect --source . --log-opts="--all"`) and record what it finds; a found secret must be **rotated**, not just removed.
@@ -47,7 +47,7 @@ git filter-repo --replace-text ~/company_dns-private/replacements.txt --replace-
 
 ```bash
 HYGIENE_DENYLIST=~/company_dns-private/denylist python3 scripts/check_hygiene.py --messages
-git rev-list --all | xargs git grep -I -n -i -F -f ~/company_dns-private/denylist | head
+HYGIENE_DENYLIST=~/company_dns-private/denylist python3 scripts/check_hygiene.py --history
 python3 scripts/check_hygiene.py
 cd v4 && cargo test --workspace            # the code still builds and passes
 ```
