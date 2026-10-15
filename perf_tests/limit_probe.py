@@ -102,6 +102,9 @@ def summarise(samples: list, seconds: float) -> dict:
     return {"seconds": seconds, "requests": len(samples), "ok": ok, "limited": limited, "errors": errors, "burst": ok_before_first_limit,
             "sustained_per_second": round(statistics.median(tail), 1) if tail else None,
             "sustained_mean_per_second": round(statistics.mean(tail), 1) if tail else None, "settle_seconds": settle,
+            # the burst as the totals show it: what was let through above the sustained rate over the whole run (the count before the first `429` is a lower bound: the pods keep their own bursts and
+            # the first `429` comes from the first pod to use its share up)
+            "burst_effective": round(ok - statistics.median(tail) * seconds) if tail else None,
             "retry_after": {"min": min(retries), "median": statistics.median(retries), "max": max(retries)} if retries else None, "per_second": per_second}
 
 
@@ -122,7 +125,8 @@ def render(r: dict, expect_per_minute: float | None, expect_burst: float | None,
     else:
         verdict = "LIMITED"
     lines += ["| | observed | configured |", "|---|---|---|",
-              f"| burst: let through before the first `429` (approximate: requests in flight when it came are not counted) | {r['burst']} | {expect_burst if expect_burst is not None else ''} |",
+              f"| burst: let through above the sustained rate over the whole run | {r.get('burst_effective')} | {expect_burst if expect_burst is not None else ''} |",
+              f"| burst: let through before the first `429` (a lower bound: the first `429` comes from the first pod to use its share up) | {r['burst']} | |",
               f"| sustained, let through per second (median after the first {r['settle_seconds']} s) | {r['sustained_per_second']} | {round(expect_per_minute / 60, 1) if expect_per_minute else ''} |",
               f"| sustained, per minute | {round(r['sustained_per_second'] * 60) if r['sustained_per_second'] is not None else ''} | {expect_per_minute if expect_per_minute is not None else ''} |"]
     if r["retry_after"]:

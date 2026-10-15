@@ -12,7 +12,7 @@ with the tools in this repository. Written for the maintainers and for anyone de
 | How much does it carry? | On the 20-pod staging shape (20 x 1000m): **about 1,900 lookups a second** (2,300 when the requests repeat) at p95 around 400 ms, through the real ingress | cluster sizing |
 | Does it survive change? | **Yes: a rollback, a roll forward, one and two lost pods, a restart of all pods, and scaling 20 to 16 and back**, at 60 requests/s: no errors, p95 within 5 ms of baseline, memory flat. A finding (pods took the full 30 s to stop) was fixed with a graceful shutdown: pods now leave in 5 to 10 s | rollout under load, 2026-10-13 and 14 |
 | Where does it buckle? | **About 2,100 lookups a second**, CPU-limited (18 to 19 of 20 cores), from 768 in flight; best sustained 1,931/s at p95 0.9 s; nothing failed up to 3,072 in flight | ceiling test, three machines, 2026-10-14 |
-| Does the per-address limit work? | **Not as configured:** two machines on two addresses got exactly two allowances together but split 139 and 60, so the limit is shared (cause to be confirmed: the ingress probably hides the callers' addresses) | limit probe, 2026-10-14 |
+| Does the per-address limit work? | **Yes, since the ingress fix.** Before it, the ingress hid the callers' addresses and two machines shared two allowances (200/s, split 139 and 60). After `externalTrafficPolicy: Local`, three machines each got exactly 100/s (300 together), no trade-off | limit probe, 2026-10-14 and 15 |
 | Does it stay up and correct? | **Yes, for the known workload:** 24 hours at 60 requests/s from outside the network, 5.18 million requests, **no errors**, 7,200 of 7,200 known-answer checks correct, p95 110 to 126 ms with no drift | soak test, 2026-10-12 and 13 |
 
 What none of it shows is stated at the end ("What this does not show"). Read that before quoting a number.
@@ -164,7 +164,7 @@ Files: [`results/2026-10-14-ceiling/`](results/2026-10-14-ceiling/).
 
 Embedding searches at 20 pods were not run in this session.
 
-### 5b. The per-address limit does not tell the machines apart
+### 5b. Before the fix: the per-address limit did not tell the machines apart (14 October; fixed 15 October, see 5c)
 
 The probe `perf_tests/limit_probe.py` sent requests flat out for 60 seconds from each of two machines at the same time, each on its own address, as an identified caller, against a quota configured at 6,000 a minute (100 a second) with a burst of 600 for each address. Files: [`results/2026-10-14-limit/`](results/2026-10-14-limit/).
 
@@ -183,6 +183,26 @@ The probe `perf_tests/limit_probe.py` sent requests flat out for 60 seconds from
 - **A separate behaviour, checked only on a local server** (the Mac mini's check of it failed on DNS): a lookup that carries `Origin: https://mediumroast.io`, or a `Referer` from it, is not limited at all (60 of 60 let through from one address). The header is set by the client, so anyone can send it.
 - **The Mac mini's probe** failed outright (96 of 96 requests errored, its DNS was wrong at the time), so two addresses were measured, not three.
 
+### 5c. After the ingress fix (15 October): each address gets its own allowance
+
+The ingress service was changed to `externalTrafficPolicy: Local` (made durable in its Helm values) and the CoreDNS entry for the public names was repointed to Traefik's ClusterIP; see `docs/plans/onprem-k8s-migration.md`, "The ingress keeps the callers' addresses". The same probe was then run from **three machines on three addresses at the same time**, 60 seconds flat out, the same quota (6,000 a minute, burst 600 per address). Files: [`results/2026-10-15-limit-after/`](results/2026-10-15-limit-after/).
+
+![Before the fix two machines shared the limit; after it each of three got its own](results/2026-10-15/l2-limit-before-after.png)
+
+| | let through in 60 s | burst above the sustained rate | sustained, per second | per-second range (seconds 10 to 59) |
+|---|---|---|---|---|
+| Studio | 6,573 | about 573 | **100.0** | 93 to 107 |
+| Mac mini | 6,579 | about 579 | **100.0** | 94 to 105 |
+| laptop | 6,560 | about 560 | **100.0** | 75 to 109 |
+| **together** | 19,712 | | **300** (mean 300, between 274 and 313) | |
+
+- **Each address got exactly its configured allowance**: 100 a second after a burst of about 600 (the most one address can get in 60 seconds at 6,000 a minute with a burst of 600 is 6,600; each got 6,560 to 6,579). Three addresses together got three allowances, 300 a second; before the fix two addresses got 200 between them.
+- **No trade-off between the machines** (correlation of the per-second counts between pairs: 0.55 Studio and Mini, 0.08 Studio and laptop, -0.06 Mini and laptop; before the fix it was -0.96).
+- **The load was spread evenly across the 20 pods** while the three machines flooded the service with about 11,000 requests a second in all, mostly `429`s: each pod used between 14 and 19 CPU-seconds over the busy minute (largest over smallest 1.4). No pod restarted, all 20 stayed ready, peak memory 171 MiB.
+- **The count of requests let through before the first `429`** (404 to 445) is a lower bound on the burst, not the burst: the first `429` comes from the first pod to use up its own share. The probe now also reports the burst from the totals.
+
+The aggregate for many addresses is therefore each address's allowance times the number of addresses, up to what the pods carry (about 2,100 lookups a second): about 20 addresses at the full rate would reach it. **Not yet re-tested after the change:** the ceiling itself, because with `Local` one Traefik pod now carries all the external traffic.
+
 ## 6. What this means for sizing a deployment
 
 | Shape | Lookups | Embedding searches | Notes |
@@ -190,12 +210,12 @@ The probe `perf_tests/limit_probe.py` sent requests flat out for 60 seconds from
 | 20 x 1000m (the staging shape) | about 1,900 requests/s measured (2,300 repeated), p95 about 400 ms | **about 380 requests/s by extrapolation from 12 pods (19 per pod); not measured** | the shape chosen for the October load |
 | 12 x 1000m | about 1,260 measured | 231 measured | half the cores |
 
-The per-address limit is a setting, not capacity, and on this cluster it does not currently work per address (section 5b): the callers share about two allowances, so the limit configured for one address (6,000 a minute) is in practice the total for everyone, far below the 2,100 requests a second the pods carry.
+The per-address limit is a setting, not capacity: since the ingress fix (section 5c) each address gets its own 6,000 a minute (100 a second), and many addresses add up to what the pods carry. Before the fix all callers shared about 200 a second (section 5b).
 
 ## 7. What this does not show
 
 - **Capacity from a remote client.** The soak was capped at 60 requests/s (the soak's cap, chosen to stay under the per-address quota), about 3% of what the 20 pods carried in the sizing runs. Every step of its ramp ran at the same rate. The sizing figures come from a load generator inside the network.
-- **The cause of the shared per-address limit** (section 5b) is not confirmed, and no fix has been tried; the trusted-`Origin` behaviour is not in this section's data.
+- **The ceiling after the ingress change** (section 5c): with `Local` one Traefik pod carries all external traffic, and the ceiling of section 5a has not been repeated since. The trusted-`Origin` behaviour was checked on a local server only.
 - **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below. The ceiling (section 5a) is for lookups only.
 - **Server memory and restarts during the soak.** A client cannot see them. They must be read from the cluster (restart counts, memory per pod).
 - **Server memory during the 24-hour soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October). The two-hour rollout run (section 4) did sample memory, and it was flat.

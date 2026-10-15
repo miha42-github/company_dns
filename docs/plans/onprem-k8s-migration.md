@@ -695,7 +695,27 @@ Not a blocker for Azure teardown or repo cleanup — those only need Phase 1
 working. This phase has no target date in this plan; it's a follow-up
 cleanup step, done manually, at the user's discretion.
 
+## The ingress keeps the callers' addresses (added 2026-10-15)
+
+**A manual change to the cluster, made by the cluster administrator and recorded here.** Without it, the per-address rate limit of `company_dns` cannot tell callers apart.
+
+**The problem.** The `traefik` Service in the `ingress` namespace had `externalTrafficPolicy: Cluster`, so Kubernetes replaced every outside caller's address with a node's address before Traefik saw it. The application, which limits by the last `X-Forwarded-For` entry, saw one of two node addresses: all callers shared about two allowances. Measured on 2026-10-14: two machines on two addresses got 200 requests a second together (exactly two allowances, burst about 1,225), split 139 and 60, with a correlation of -0.96 between them (`docs/performance-report.md`, section 5b). Hand-over document: [`ingress-source-address-fix.md`](ingress-source-address-fix.md).
+
+**The change (2026-10-15).**
+- `externalTrafficPolicy: Local` on the `traefik` Service, applied with `kubectl -n ingress patch svc traefik -p '{"spec":{"externalTrafficPolicy":"Local"}}'` and **made durable in the Helm release** (Traefik is a Helm release, chart `traefik-37.4.0`; an upgrade without the value in the release's values would have put `Cluster` back).
+- **The CoreDNS `hosts` block now answers the public names with Traefik's ClusterIP, not its LAN address** (next section). Reason: cert-manager's controller runs on the node that has no Traefik pod, and under `Local` a connection to the LAN address on a node without a local endpoint has nowhere to go. A ClusterIP is balanced across the cluster from any node and has no effect on outside traffic (CoreDNS answers only in-cluster queries). Done before the policy change, so no certificate check was ever broken.
+- MetalLB's `L2Advertisement` is restricted (`nodeSelector`) to the two nodes that run Traefik, so the address can only be announced from a node that can serve it; a Traefik pod left over on the third (tiebreaker) node was removed.
+- The router's port forward points at the MetalLB address, not at a node's address (a node's address has no failover).
+
+**Verified (2026-10-15).** 273 consecutive requests through the address during the change all answered `200`; no Traefik pod restarted; the certificate self-check works from a pod on the node without Traefik. Then, with the probe `perf_tests/limit_probe.py` from three machines on three addresses at the same time: **each got 100 requests a second** (the configured rate) with the full burst of about 600, **300 a second together**, and no trade-off between them (`docs/performance-report.md`, section 5c).
+
+**To undo:** `kubectl -n ingress patch svc traefik -p '{"spec":{"externalTrafficPolicy":"Cluster"}}'` (and the Helm value).
+
+**Still to check:** with `Local` in layer 2 mode **one Traefik pod carries all the external traffic** at a time (the node that announces the address). It idled at about 12 to 13 millicores after the change; whether one pod holds the event load (about 2,100 requests a second measured through both pods) is tested by repeating the ceiling run. The router's DHCP range must not include the MetalLB pool (`<traefik-lan-ip>` and its neighbours): a device given one of those addresses would collide with the ingress.
+
 ## In-cluster DNS for the public names: the CoreDNS `hosts` block (added 2026-10-11)
+
+> **Updated 2026-10-15:** the block now answers with **Traefik's ClusterIP** (`kubectl -n ingress get svc traefik -o jsonpath='{.spec.clusterIP}'`), not the LAN address shown below, because of the ingress change above. Where the text below says `<traefik-lan-ip>` for what CoreDNS answers, read `<traefik-clusterip>`; the router's port forward still points at the MetalLB address.
 
 **A manual change to the cluster, not a file in `k8s/`, so it is recorded here.** Without it, cert-manager cannot issue or renew any certificate on this cluster.
 
