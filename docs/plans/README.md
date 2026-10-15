@@ -9,6 +9,7 @@ The current work is at the top.
 |---|---|---|
 | [v4-production-cutover.md](v4-production-cutover.md) | plan, nothing executed | moving V4 to production (blue/green), V3 retired and kept as source |
 | [v4-documentation-update.md](v4-documentation-update.md) | in progress | the documents for the pre-release: READMEs, data terms, guides, hygiene |
+| [ingress-source-address-fix.md](ingress-source-address-fix.md) | to be done by the cluster administrator | the ingress hides callers' addresses, so the per-address limit is shared by everyone; the fix (`externalTrafficPolicy: Local`), its checks and rollback |
 | [git-history-cleanup.md](git-history-cleanup.md) | not done (a runbook for the owner) | rewriting the Git history to remove internal names |
 | [v4-sizing-test.md](v4-sizing-test.md) | done | replica shapes compared on the cluster; the decision (20 x 1000m) |
 | [v4-staging-rollout.md](v4-staging-rollout.md) | done for staging | Kubernetes, manifests and scripting for the staging environment (its script parts are superseded by v4-staging-scripts) |
