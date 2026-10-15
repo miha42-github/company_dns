@@ -11,6 +11,8 @@ with the tools in this repository. Written for the maintainers and for anyone de
 | How should a replica be sized? | **About one core per pod, and as many pods as you want to dedicate.** Two or four half-core pods are throttled; pods of two or four cores waste cores on the embedding searches | cluster sizing, 2026-10-11 |
 | How much does it carry? | On the 20-pod staging shape (20 x 1000m): **about 1,900 lookups a second** (2,300 when the requests repeat) at p95 around 400 ms, through the real ingress | cluster sizing |
 | Does it survive change? | **Yes: a rollback, a roll forward, one and two lost pods, a restart of all pods, and scaling 20 to 16 and back**, at 60 requests/s: no errors, p95 within 5 ms of baseline, memory flat. A finding (pods took the full 30 s to stop) was fixed with a graceful shutdown: pods now leave in 5 to 10 s | rollout under load, 2026-10-13 and 14 |
+| Where does it buckle? | **About 2,100 lookups a second**, CPU-limited (18 to 19 of 20 cores), from 768 in flight; best sustained 1,931/s at p95 0.9 s; nothing failed up to 3,072 in flight | ceiling test, three machines, 2026-10-14 |
+| Does the per-address limit work? | **Not as configured:** two machines on two addresses got exactly two allowances together but split 139 and 60, so the limit is shared (cause to be confirmed: the ingress probably hides the callers' addresses) | limit probe, 2026-10-14 |
 | Does it stay up and correct? | **Yes, for the known workload:** 24 hours at 60 requests/s from outside the network, 5.18 million requests, **no errors**, 7,200 of 7,200 known-answer checks correct, p95 110 to 126 ms with no drift | soak test, 2026-10-12 and 13 |
 
 What none of it shows is stated at the end ("What this does not show"). Read that before quoting a number.
@@ -134,20 +136,67 @@ The server now keeps serving for 5 seconds after the stop signal, then drains an
 
 **All six changes planned for the rollout scenario have now been run** (rollback, roll forward, one pod, two pods, restart all, scaling), on the new build, with no request errors and no change in latency that the client could see.
 
-## 5. What this means for sizing a deployment
+## 5. The ceiling and the per-address limit (14 October)
+
+### 5a. Where the pods buckle: about 2,100 lookups a second, limited by CPU
+
+Three machines (a Mac Studio, a Mac mini and a laptop) ran the lookups ramp together against the 20-pod staging service as a profile with no rate limit (`perf_tests/ceiling.py`): 256, 512, 768, 1,024, 1,536, 2,048 and 3,072 requests in flight in total, 30 seconds each, with the pods watched from the cluster side and production watched alongside. Image `10142026-4446caf`.
+Files: [`results/2026-10-14-ceiling/`](results/2026-10-14-ceiling/).
+
+![Throughput levels off at about 2,100 requests/s while latency keeps climbing](results/2026-10-14/k1-ceiling.png)
+
+| in flight | requests/s | p50 ms | p95 ms | errors | pods' CPU, median (cores of 20) | throttled |
+|---|---|---|---|---|---|---|
+| 256 | 1,756 | 126 | 471 | 0 | 17.5 | 3.3% |
+| **512** | **1,931** | 184 | **876** | 0 | 18.1 | 5.6% |
+| 768 | 2,066 | 317 | 1,140 | 0 | 19.3 | 6.0% |
+| 1,024 | 2,061 | 351 | 1,551 | 0 | 19.2 | 7.7% |
+| 1,536 | 2,144 | 527 | 2,039 | 0 | 18.1 | 6.1% |
+| 2,048 | **2,145** | 815 | 2,722 | 0 | 18.3 | 5.9% |
+| 3,072 | 2,080 | 1,333 | 3,623 | 0 | 19.3 | 6.3% |
+
+- **Best sustained** (p95 within 1 s, no errors): **1,931 requests/s at 512 in flight.** **Peak** 2,145 requests/s at 2,048.
+- **The ceiling is CPU.** Throughput stops growing from about 768 in flight, at roughly 2,100 requests/s, while every extra request in flight only adds waiting: p95 goes from 0.9 s to 3.6 s. The pods used 18 to 19 of their 20 cores (highest samples a little over 21) with 3 to 8% of CPU periods throttled. This matches the sizing rounds (about 100 lookups a second per core).
+- **Nothing failed up to 3,072 in flight:** no request errors, no `429`s, 0 restarts, no out-of-memory kills (memory 166 to 172 MiB per pod).
+- **The first sign of strain is at the top step:** ready pods fell briefly to 18 (two pods failing their health check for a few seconds under saturation) and recovered by themselves, with no restart.
+- **The load generators were not the limit** (under 2.3 cores in total across the three machines' processes at the top step).
+- **Production was not affected:** its four pods stayed ready with 0 restarts, at 0.02 cores for the whole run.
+
+Embedding searches at 20 pods were not run in this session.
+
+### 5b. The per-address limit does not tell the machines apart
+
+The probe `perf_tests/limit_probe.py` sent requests flat out for 60 seconds from each of two machines at the same time, each on its own address, as an identified caller, against a quota configured at 6,000 a minute (100 a second) with a burst of 600 for each address. Files: [`results/2026-10-14-limit/`](results/2026-10-14-limit/).
+
+![Two machines together got 200 requests/s, exactly two allowances, but split 139 and 60](results/2026-10-14/l1-limit-per-address.png)
+
+| | burst (let through before the first `429`) | sustained, per second |
+|---|---|---|
+| Studio | 707 | 139 |
+| laptop | 518 | 60 |
+| **together** | 1,225 | **200** (mean 199.9 over seconds 10 to 59, between 189 and 210) |
+
+- **Together** they got exactly two allowances of 100 a second and, in the first second, about two bursts of 600. **Separately** they did not: one got 139 a second, more than its configured 100, and the other 60.
+- **What one gained, the other lost** (correlation of the two per-second counts −0.96). Two machines on separate allowances would each have had about 100.
+- **What this says:** the limiter is not counting the two machines as two separate addresses. It is counting them against shared allowances, a small number of them (two, judging by the total). The likely reason is that the ingress does not pass the callers' real addresses to the pods, so the pods see the address of the ingress or node instead. This is **not yet confirmed**: it needs the ingress service's `externalTrafficPolicy` and the ingress pods' layout.
+- **What it would mean:** the per-address limit would be a limit shared by all callers, about 200 requests a second in all for identified and anonymous lookups (two allowances), not 100 each. One heavy caller could use it all and leave the rest limited. For an event with hundreds of teams that is far below the 2,100 requests a second the pods can carry. Callers with a profile that has no limit are unaffected.
+- **A separate behaviour, checked only on a local server** (the Mac mini's check of it failed on DNS): a lookup that carries `Origin: https://mediumroast.io`, or a `Referer` from it, is not limited at all (60 of 60 let through from one address). The header is set by the client, so anyone can send it.
+- **The Mac mini's probe** failed outright (96 of 96 requests errored, its DNS was wrong at the time), so two addresses were measured, not three.
+
+## 6. What this means for sizing a deployment
 
 | Shape | Lookups | Embedding searches | Notes |
 |---|---|---|---|
 | 20 x 1000m (the staging shape) | about 1,900 requests/s measured (2,300 repeated), p95 about 400 ms | **about 380 requests/s by extrapolation from 12 pods (19 per pod); not measured** | the shape chosen for the October load |
 | 12 x 1000m | about 1,260 measured | 231 measured | half the cores |
 
-Per-IP limits are settings, not capacity: with 20 pods and a quota of 6,000 a minute (burst 600) a single address is held to 100 requests/s, far below what the pods carry.
+The per-address limit is a setting, not capacity, and on this cluster it does not currently work per address (section 5b): the callers share about two allowances, so the limit configured for one address (6,000 a minute) is in practice the total for everyone, far below the 2,100 requests a second the pods carry.
 
-## 6. What this does not show
+## 7. What this does not show
 
 - **Capacity from a remote client.** The soak was capped at 60 requests/s (the soak's cap, chosen to stay under the per-address quota), about 3% of what the 20 pods carried in the sizing runs. Every step of its ramp ran at the same rate. The sizing figures come from a load generator inside the network.
-- **The per-IP limiter at 20 pods.** The soak never reached the quota, so no `429` was seen. The step-6.3 check in the bring-up guide has not been run at this size.
-- **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below.
+- **The cause of the shared per-address limit** (section 5b) is not confirmed, and no fix has been tried; the trusted-`Origin` behaviour is not in this section's data.
+- **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below. The ceiling (section 5a) is for lookups only.
 - **Server memory and restarts during the soak.** A client cannot see them. They must be read from the cluster (restart counts, memory per pod).
 - **Server memory during the 24-hour soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October). The two-hour rollout run (section 4) did sample memory, and it was flat.
 - **The rollout runs** were at 60 requests/s from the cluster's own network, not at heavy load: whether a pod lost under hundreds of requests a second drops any in flight is untested (the graceful shutdown is meant to prevent it).
@@ -155,7 +204,7 @@ Per-IP limits are settings, not capacity: with 20 pods and a quota of 6,000 a mi
 - **The tester's network.** A p50 of 28 ms suggests it was close to the cluster; a distant client sees more latency.
 - **The single-image comparison** is one machine, three runs per cell, and its repeat-traffic ratios measure the caches.
 
-## 7. Reproducing it
+## 8. Reproducing it
 
 ```bash
 # 1. single image against single image: see docs/plans/v4-results-report.md (perf_tests/run_matrix.py, then perf_tests/report.py)
