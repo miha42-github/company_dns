@@ -55,6 +55,19 @@ class Hygiene(unittest.TestCase):
         self.assertTrue(scan("run on SecretNode-1 today", deny))
         self.assertEqual(scan("run on secretnode-12", deny), [])
 
+    def test_wildcards_and_regular_expressions_in_the_deny_list(self):
+        net = ".".join(("10", "9", "8")) + "."  # built at run time so this file stays clean
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+            f.write(f"# patterns\n{net}*\n*.corp.example\nre:svc(42)?user\nsecretbox\n")
+        self.addCleanup(os.unlink, f.name)
+        deny = ch.load_denylist(f.name)
+        self.assertTrue(any("deny-list" in w for w in scan(f"at {net}77 now", deny)), "any address in the network")
+        self.assertTrue(scan("host db1.corp.example is up", deny), "any host name under the domain")
+        self.assertTrue(scan("user svc42user and svcuser", deny), "a regular expression")
+        self.assertTrue(scan("run on SecretBox today", deny), "a literal term still works")
+        neighbours = ".".join(("10", "9", "80", "1")) + " corp.example.org.uk"
+        self.assertFalse(any("deny-list" in w for w in scan(neighbours, deny)), "no false matches on neighbours")
+
     def test_the_command_exits_1_on_a_finding_and_0_when_clean(self):
         with tempfile.TemporaryDirectory() as d:
             bad, good = Path(d) / "bad.txt", Path(d) / "good.txt"

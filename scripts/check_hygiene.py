@@ -7,11 +7,13 @@
     HYGIENE_DENYLIST=~/company_dns-private/denylist python3 scripts/check_hygiene.py
 
 What it looks for (docs/plans/v4-documentation-update.md, DP2): IPv4 addresses (the ranges reserved for documentation, loopback and 0.0.0.0 are fine, and so is an
-address that is clearly a version number or inside a lock file), host names under private suffixes (.local, .lan, .internal, .home.arpa), e-mail addresses other than the
+address that is clearly a version number or inside a lock file), host names under private suffixes (.local, .lan, .internal, .home.arpa), e-mail addresses other than the  # hygiene: allow
 project's, personal home-directory paths, and secret-looking strings (tokens, private keys). A line can opt out with `hygiene: allow` in a comment, for the rare deliberate case (this file's tests).
 
 The names of the lab's machines are NOT in this repository, so they cannot be in this script. Keep them in a file outside the repository, one term per line (`#` comments), and
-name it in HYGIENE_DENYLIST: every term is matched case-insensitively as a whole word. The same file feeds the Git history clean-up.
+name it in HYGIENE_DENYLIST: every term is matched case-insensitively as a whole word. The same file feeds the Git history clean-up. A term may contain `*`, which stands for any run
+of letters, digits, dots and dashes (`10.20.30.*` is every address in that network, `*.corp.example` every host name under that domain), and a line that starts with `re:` is a regular
+expression (`re:svc(42)?user`).
 Exit status: 0 clean, 1 findings, 2 usage error.
 """
 import ipaddress
@@ -52,14 +54,22 @@ def ip_finding(text: str) -> str | None:
     return f"an IP address ({text})"
 
 
+def term_pattern(line: str) -> re.Pattern:
+    """One deny-list line as a pattern: `re:...` is a regular expression; otherwise a literal, whole-word term in which `*` stands for any run of letters, digits, dots and dashes."""
+    if line.startswith("re:"):
+        return re.compile(line[3:], re.I)
+    body = "[A-Za-z0-9._-]*".join(re.escape(part) for part in line.split("*"))
+    return re.compile(rf"(?<![A-Za-z0-9]){body}(?![A-Za-z0-9])", re.I)
+
+
 def load_denylist(path: str | None) -> list[re.Pattern]:
     if not path:
         return []
     terms = []
     for line in Path(path).expanduser().read_text().splitlines():
-        line = line.split("#", 1)[0].strip()
+        line = line.split("#", 1)[0].strip() if not line.lstrip().startswith("re:") else line.strip()
         if line:
-            terms.append(re.compile(rf"(?<![A-Za-z0-9]){re.escape(line)}(?![A-Za-z0-9])", re.I))
+            terms.append(term_pattern(line))
     return terms
 
 
