@@ -72,7 +72,7 @@ mediumroast.io services, with TLS termination handled the same way
 
 ### Azure Container App (to be decommissioned)
 
-Defined in [container-app-config.yaml](../../container-app-config.yaml):
+Defined in `container-app-config.yaml` (removed from the repository when the Azure deployment was decommissioned):
 
 | Setting | Value |
 |---|---|
@@ -711,7 +711,7 @@ cleanup step, done manually, at the user's discretion.
 
 **To undo:** `kubectl -n ingress patch svc traefik -p '{"spec":{"externalTrafficPolicy":"Cluster"}}'` (and the Helm value).
 
-**Still to check:** with `Local` in layer 2 mode **one Traefik pod carries all the external traffic** at a time (the node that announces the address). It idled at about 12 to 13 millicores after the change; whether one pod holds the event load (about 2,100 requests a second measured through both pods) is tested by repeating the ceiling run. The router's DHCP range must not include the MetalLB pool (`<traefik-lan-ip>` and its neighbours): a device given one of those addresses would collide with the ingress.
+**Still to check:** with `Local` in layer 2 mode **one Traefik pod carries all the external traffic** at a time (the node that announces the address). It idled at about 12 to 13 millicores after the change; whether one pod holds the event load (about 2,100 requests a second measured through both pods) is tested by repeating the ceiling run. **Confirmed 2026-10-15 (the owner): the MetalLB address range is not managed by the router's DHCP service**, so no device can be given the ingress's address.
 
 ## In-cluster DNS for the public names: the CoreDNS `hosts` block (added 2026-10-11)
 
@@ -782,7 +782,7 @@ scheduled as a matter of course after a successful migration.
 6. On Namecheap, delete the `asuid.company-dns` TXT record (Azure's
    ownership-verification record — no longer meaningful once the Container
    App itself is deleted, and leaving it around is just clutter).
-7. Remove [container-app-config.yaml](../../container-app-config.yaml) from
+7. Remove `container-app-config.yaml` (the file no longer exists) from
    the repo in the same PR that strips the Azure steps from the workflow.
 
 ## Rollback plan
