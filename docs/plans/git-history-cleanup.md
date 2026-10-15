@@ -11,7 +11,7 @@ messages with findings; with a private deny-list (below) it also finds the machi
 ## 0. Before you start
 
 1. **Choose the window:** no open pull requests (merge or close them), no deploy or event in progress, and tell everyone who has a clone (the remote soak tester, the platform partner, forks) that they will have to re-clone.
-2. **Keep the private list outside the repository.** A file such as `~/company_dns-private/denylist` (one term per line, `#` comments) with the machine names and any other terms. It must never be committed. Also make
+2. **Keep the private list outside the repository.** A file such as `~/company_dns-private/denylist` (one term per line, `#` comments) with the machine names and any other terms. A term may use `*` for "any run of letters, digits, dots and dashes" (`10.20.30.*` for every address in a network, `*.corp.example` for every host under a domain), and a line starting with `re:` is a regular expression (`re:svc(42)?user`); `scripts/check_hygiene.py` explains the format. It must never be committed. Also make
    `~/company_dns-private/replacements.txt` for the rewrite, one rule per line in `old==>new` form, for example `<name>==><build-node>` and the private address `==><private-address>`.
 3. **Install `git-filter-repo`** (`brew install git-filter-repo`, or from its repository). Check `git filter-repo --version`.
 
