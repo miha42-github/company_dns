@@ -4,6 +4,8 @@
     python3 scripts/check_hygiene.py                 # check every tracked file
     python3 scripts/check_hygiene.py path ...        # check these files
     python3 scripts/check_hygiene.py --messages      # check every commit message on every branch and tag (the Git history clean-up)
+    python3 scripts/check_hygiene.py --history       # check every line ever added to any file on any branch and tag (what the history rewrite must remove)
+    python3 scripts/check_hygiene.py --history --verbose   # the same, one line per finding: commit, date, file and what it is
     HYGIENE_DENYLIST=~/company_dns-private/denylist python3 scripts/check_hygiene.py
 
 What it looks for (docs/plans/v4-documentation-update.md, DP2): IPv4 addresses (the ranges reserved for documentation, loopback and 0.0.0.0 are fine, and so is an
@@ -132,15 +134,77 @@ def scan_messages(denylist: list[re.Pattern]) -> list[tuple[str, int, str]]:
     return findings
 
 
+def _skip_path(path: str) -> bool:
+    name = path.rsplit("/", 1)[-1]
+    suffix = "." + name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return suffix in SKIP_SUFFIXES or name in SKIP_NAMES or name.endswith(".min.js")
+
+
+def scan_history(denylist: list[re.Pattern], lines=None) -> list[tuple[str, str, str, int, str]]:
+    """Every line ever ADDED to a file, in every commit on every ref, run through the same rules: (commit, date, path, line number in the diff, what). `lines` is for tests: the text of
+    `git log --all -p -U0`. Reads the log as a stream (the repository's whole history is tens of megabytes)."""
+    if lines is None:
+        proc = subprocess.Popen(["git", "-C", str(REPO_ROOT), "log", "--all", "-p", "-U0", "--no-color", "--date=short", "--format=commit %H %ad"], stdout=subprocess.PIPE, text=True, errors="replace")
+        lines = proc.stdout
+    findings, commit, date, path, seen = [], "", "", "", set()
+    for raw in lines:
+        raw = raw.rstrip("\n")
+        if raw.startswith("commit ") and len(raw.split()) == 3 and len(raw.split()[1]) == 40:
+            _, commit, date = raw.split()
+            path = ""
+        elif raw.startswith("+++ "):
+            path = raw[6:] if raw.startswith("+++ b/") else ""
+        elif raw.startswith("+") and path and not _skip_path(path):
+            for _, n, what in scan_text(path, raw[1:], denylist):
+                key = (commit, path, what)
+                if key not in seen:  # one finding per commit, file and kind, however many lines
+                    seen.add(key)
+                    findings.append((commit[:10], date, path, n, what))
+    return findings
+
+
+def summarise_history(findings: list[tuple[str, str, str, int, str]]) -> str:
+    if not findings:
+        return "clean: no line ever added to any file triggers a rule"
+    commits = {f[0] for f in findings}
+    files = {}
+    for c, d, p, _, w in findings:
+        files.setdefault(p, []).append((d, c, w))
+    kinds = {}
+    for *_, w in findings:
+        kind = w.split(" (")[0]
+        kinds[kind] = kinds.get(kind, 0) + 1
+    lines = [f"{len(findings)} finding(s) in {len(commits)} commit(s) across {len(files)} file(s); newest {max(f[1] for f in findings)}, oldest {min(f[1] for f in findings)}", "", "by kind:"]
+    lines += [f"  {n:5d}  {k}" for k, n in sorted(kinds.items(), key=lambda kv: -kv[1])]
+    lines += ["", "files (most findings first; the newest commit that added something):"]
+    for p, v in sorted(files.items(), key=lambda kv: -len(kv[1]))[:30]:
+        lines.append(f"  {len(v):4d}  {p}  (newest {max(x[0] for x in v)})")
+    if len(files) > 30:
+        lines.append(f"  ... and {len(files) - 30} more files")
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     args = sys.argv[1:] if argv is None else argv
     messages = "--messages" in args
-    args = [a for a in args if a != "--messages"]
+    history = "--history" in args
+    verbose = "--verbose" in args
+    args = [a for a in args if a not in ("--messages", "--history", "--verbose")]
     try:
         denylist = load_denylist(os.environ.get("HYGIENE_DENYLIST"))
     except OSError as e:
         print(f"cannot read HYGIENE_DENYLIST: {e}", file=sys.stderr)
         return 2
+    if history:
+        found = scan_history(denylist)
+        if verbose:
+            for c, d, p, _, w in sorted(found, key=lambda f: (f[1], f[0], f[2])):
+                print(f"{d} {c} {p}: {w}")
+            print()
+        print(summarise_history(found))
+        if not denylist:
+            print("\n(no HYGIENE_DENYLIST: lab-specific names were not checked)")
+        return 1 if found else 0
     paths = args or tracked_files()
     findings = scan_messages(denylist) if messages else scan_files(paths, denylist)
     for name, n, what in findings:

@@ -100,6 +100,16 @@ class Hygiene(unittest.TestCase):
             self.assertEqual(len(found), 1, found)
             self.assertIn("private address", found[0][2])
 
+    def test_the_history_scan_reads_added_lines_only_and_names_the_commit_and_file(self):
+        addr = ".".join(("10", "4", "5", "6"))
+        sha = "a" * 40
+        log = [f"commit {sha} 2026-10-01\n", "diff --git a/docs/x.md b/docs/x.md\n", "--- a/docs/x.md\n", "+++ b/docs/x.md\n", "@@ -1 +1 @@\n", f"-removed line with {addr}\n", f"+added line with {addr}\n",
+               f"+++ b/vendor/lib.min.js\n", f"+minified {addr}\n", "+++ b/Cargo.lock\n", f"+{addr}\n", f"commit {'b' * 40} 2026-10-02\n", "+++ b/ok.md\n", "+a documentation address 192.0.2.5\n"]
+        found = ch.scan_history([], iter(log))
+        self.assertEqual([(c, d, p) for c, d, p, _, _ in found], [("a" * 10, "2026-10-01", "docs/x.md")], "only the added line of a file that is not skipped")
+        self.assertIn("1 finding(s) in 1 commit(s) across 1 file(s)", ch.summarise_history(found))
+        self.assertTrue(ch.summarise_history([]).startswith("clean"))
+
     def test_the_repository_itself_is_clean(self):
         self.assertEqual(ch.scan_files(ch.tracked_files(), []), [])
 
