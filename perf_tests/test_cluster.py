@@ -88,6 +88,12 @@ class LoadGenerator(unittest.TestCase):
             load.blend(1.5)
         self.assertIn("breadth", load.MIXES)
 
+    def test_the_semantic_mixes_name_one_route_each_and_together_all_three(self):
+        for name, route in (("similarity", "/V4.0/na/sic/similarity/"), ("similarity-global", "/V4.0/global/sic/similarity/"), ("hybrid", "/V4.0/global/sic/hybrid/")):
+            self.assertEqual({p.split("{")[0] for _, p, _ in load.MIXES[name]}, {route}, name)
+        self.assertEqual({p.split("{")[0] for _, p, _ in load.MIXES["semantic"]},
+                         {"/V4.0/na/sic/similarity/", "/V4.0/global/sic/similarity/", "/V4.0/global/sic/hybrid/"})
+
     def test_the_repeated_mix_comes_round_again(self):
         import random
         rng = random.Random(2)

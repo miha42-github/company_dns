@@ -60,7 +60,17 @@ def blend(embedding_share: float) -> tuple:
     return scaled(LOOKUPS, rest // 2) + scaled(LOOKUPS_V3, rest - rest // 2) + (scaled(EMBEDDING, emb) if emb else ())
 
 
+# the semantic routes one at a time, and together: they cost very different amounts (US similarity is the cheapest, global similarity about twice and hybrid about three times as much as it)
+# and none of them caches, so a repeated query costs what a new one does
+SIMILARITY_US = (("similarity", "/V4.0/na/sic/similarity/{q}", 1),)
+SIMILARITY_GLOBAL = (("similarity_global", "/V4.0/global/sic/similarity/{q}", 1),)
+HYBRID = (("hybrid", "/V4.0/global/sic/hybrid/{q}", 1),)
+SEMANTIC = (("similarity", "/V4.0/na/sic/similarity/{q}", 4), ("similarity_global", "/V4.0/global/sic/similarity/{q}", 3), ("hybrid", "/V4.0/global/sic/hybrid/{q}", 3))
 MIXES = {
+    "similarity": SIMILARITY_US,
+    "similarity-global": SIMILARITY_GLOBAL,
+    "hybrid": HYBRID,
+    "semantic": SEMANTIC,
     "breadth": blend(0.05),
     "repeated": REPEATED,
     "lookups": LOOKUPS,
