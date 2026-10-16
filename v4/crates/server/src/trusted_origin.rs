@@ -1,10 +1,14 @@
-//! Stateless trusted-origin bypass - `docs/plans/v4-security-hardening.md`
-//! §3.4. The local dev site and mediumroast.io should not be
-//! rate-limited at all. Both are browser-driven, so they can't be
-//! identified by User-Agent (`user_agent::classify` would draconian-
-//! tier them same as any other browser) - identified by `Origin`
+//! Stateless trusted-origin check - `docs/plans/v4-security-hardening.md`
+//! §3.4. The local dev site and mediumroast.io are browser-driven, so
+//! they can't be identified by User-Agent (`user_agent::classify` would
+//! draconian-tier them same as any other browser) - identified by `Origin`
 //! (falling back to `Referer`) instead. Promoted from
-//! `experiments/rate-limit-spike/src/trusted_origin.rs`, unchanged.
+//! `experiments/rate-limit-spike/src/trusted_origin.rs`. Until 2026-10-16
+//! a trusted origin skipped the rate limiter altogether; the header is
+//! client-set, so now it earns only the normal tier (`rate_limit.rs`):
+//! the first-party pages keep working, and forging the header gains no
+//! more than a contact in the User-Agent already does. The CORS
+//! allow-list for the credentialed route uses the same check (`cors.rs`).
 //!
 //! Deliberately parses the header as a URL and compares the *host*,
 //! not a substring check - `Origin: https://mediumroast.io.evil.example`

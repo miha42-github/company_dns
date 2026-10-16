@@ -34,7 +34,7 @@ class (including a Traefik `Middleware` for the HTTP redirect), cert-manager wit
 |---|---|
 | The application and image: self-contained, non-root, `/health`, settings as environment variables or two optional mounted files, no Kubernetes dependency, a public image | The scripts hard-code the registry and owner, the namespace, host and certificate names, the Traefik class and the `letsencrypt-prod` issuer; they assume SealedSecrets, a GitHub token in `.env` and `microk8s kubectl`. Move the constants into a config file or environment overrides |
 | The manifest shapes (probes, resources, spread, ConfigMaps) | The manifests assume Traefik, a named issuer and our host names. Kustomize overlays (a shared base plus per-environment changes) or documented substitutions |
-| The deploy script's pattern (preflight, tag applied at deploy time, rollback, build log) | The default allow-list for the credentialed routes, and the rate limiter's trusted-origin bypass, name `mediumroast.io`. Make the trusted origins an explicit setting with no built-in default for outside deployments |
+| The deploy script's pattern (preflight, tag applied at deploy time, rollback, build log) | The default allow-list for the credentialed routes, and the rate limiter's trusted-origin check (which earns the normal tier), name `mediumroast.io`. Make the trusted origins an explicit setting with no built-in default for outside deployments |
 | The load and soak tools (`perf_tests/`) work against any URL | `COMPANY_DNS_REPLICAS` must equal `replicas` by hand. Derive it where possible, warn loudly where not |
 | | The verification path through the ingress address and the CoreDNS section of the bring-up guide are workarounds for our router. Label them as ours; the generic check is the public name |
 | | `svc_ctl.sh` controls V3 only. Fold V3 and V4 into one controller, or retire it with V3 |
@@ -205,10 +205,14 @@ design and live-verification record:
   the gate entirely — it protects the firmographics/SIC data
   endpoints, not Kubernetes' own liveness/readiness probes or a human
   reading documentation.
-- The local dev site and mediumroast.io skip the limiter via a
-  trusted-`Origin` check. That header is set by the client, so it is a
-  convenience for browsers, not proof of identity, and it is never
-  honoured by the SQL endpoint. The earlier hourly-HMAC `User-Agent`
+- The local dev site and mediumroast.io are recognised by a
+  trusted-`Origin` (or, without one, `Referer`) check and get the **normal
+  tier**, not an exemption: a browser page cannot hold credentials or set a
+  contact `User-Agent`, so without this the web UI would be an anonymous
+  caller. That header is set by the client, so it is a convenience for
+  browsers, not proof of identity (forging it earns no more than a contact
+  in the `User-Agent` does), and it is never honoured by the SQL endpoint.
+  (Until 2026-10-16 it skipped the limiter entirely.) The earlier hourly-HMAC `User-Agent`
   secret (`MEDIUMROAST_SHARED_SECRET`) was removed; authenticated access
   is the profiles mechanism (HTTP Basic Auth, see "Profiles" below).
   Access is a ladder: no or generic `User-Agent` gets the draconian tier,

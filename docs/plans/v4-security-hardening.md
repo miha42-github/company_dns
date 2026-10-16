@@ -336,6 +336,8 @@ Enable `limit`, `timeout`, `trace` features in `v4/Cargo.toml:40`, add:
 
 ### 3.4 Trusted-origin bypass: local dev site + mediumroast.io
 
+> **Changed (2026-10-16):** the bypass no longer skips the limiter. A trusted `Origin`/`Referer` now earns the normal tier (it is still needed, so that browser pages that cannot hold credentials or send a contact `User-Agent` are not anonymous callers), and forging the header gains no more than a contact in the `User-Agent` does. See `docs/origin-bypass-check.md` and `rate_limit.rs`. The text below is the original design.
+
 > **Note (2026-10-05):** `Origin`/`Referer` are client-set headers, so any
 > caller that sends `Origin: https://mediumroast.io` is treated as trusted and
 > skips the limiter on every data route. Acceptable for cheap lookups, but it

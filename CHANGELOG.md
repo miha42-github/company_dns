@@ -17,6 +17,7 @@ A rewrite of the service in Rust (`v4/`). It answers V3's URLs and, on its `/V3.
 - Deploy and test tooling: `scripts/build-and-deploy-v4.sh`, `scripts/seal-secrets-v4.sh`, `perf_tests/` (load, cluster sizing, soak), `scripts/check_hygiene.py`.
 
 ### Changed
+- A trusted `Origin` or `Referer` (mediumroast.io, its subdomains, localhost) no longer skips the rate limit: it gets the standard per-address tier, so the first-party web pages keep working and forging the header earns no more than a contact in the `User-Agent` does. A wrong credential from such an origin is now a `401`.
 - Runtime: Rust (axum, DataFusion, ONNX Runtime) instead of Python; the image is self-contained and starts without a network. Faster than V3 on 26 of the 28 checks compared (`docs/results/`).
 - Errors are JSON envelopes (V3 returned an HTML page for a 404); the `dependencies` block is V4's.
 - Japan SIC answers come from the corrected full classification file; ticker lists hold symbols only; the merged firmographics shape is `{edgar, wikipedia, ...}` on `/V4.0/` paths.
