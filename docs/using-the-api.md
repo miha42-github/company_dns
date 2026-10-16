@@ -96,10 +96,14 @@ def lookup(path, retries=5):
 print(lookup("/V4.0/na/sic/code/3571")["data"][0]["class_desc"])
 ```
 
+## Fetching a whole classification in one request
+
+The lookups match with a case-insensitive `LIKE`, as V3 did, so `%` (written `%25` in a URL) matches everything. One request therefore returns a whole classification, and the path segment chooses the level: for example `/V4.0/eu/sic/class/%25` returns all 615 NACE classes, and `/V4.0/eu/sic/section/%25` the 21 sections. Each row carries its parents, and `total` is the number of rows. The US, EU and Japan classifications are 1,005, 615 and 1,460 classes (about 270 KB, 190 KB and 420 KB); a coarser level is a smaller download. This is the right way to load a classification into your own tables (for example from Zetaris AI Data Harness, see [integrations/zetaris.md](integrations/zetaris.md)): one request per classification, cached on your side, instead of a request per code.
+
 ## Be a good neighbour
 
 - **Cache on your side.** Industry-classification data changes rarely (the classifications are revised over years); the EDGAR catalog is refreshed quarterly. Ask once, keep the answer.
-- **Look up codes, do not scan.** To list a classification, fetch its sections and divisions and walk down; do not request every code one by one.
+- **Look up codes, do not scan.** To list a classification, fetch it in one request with `%` (see above) or walk down from its sections and divisions; do not request every code one by one.
 - **Keep concurrency modest** (a handful of parallel requests), and back off when you see `429`s or `5xx`.
 - **Do not send secrets in URLs.** Credentials go in the Basic `Authorization` header only.
 - Semantic and hybrid searches (`similarity`, `hybrid`) cost far more computing than a code lookup; use them where they matter.

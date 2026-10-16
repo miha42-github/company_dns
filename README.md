@@ -12,6 +12,7 @@ A Rust rewrite of the service, **V4.0.0-pre**, is being prepared and runs in a s
 - Start here: [v4/README.md](v4/README.md) (running it, the settings, the endpoints, how it is deployed).
 - Moving from V3: [docs/migrating-to-v4.md](docs/migrating-to-v4.md) and the using-the-API guide [docs/using-the-api.md](docs/using-the-api.md).
 - What changed: [CHANGELOG.md](CHANGELOG.md). Plans: [docs/plans/README.md](docs/plans/README.md).
+- Integrations: [Zetaris AI Data Harness](docs/integrations/zetaris.md) (loading the US SIC, EU NACE and Japan SIC classifications as SQL tables).
 - **Data sources and terms:** see [Data sources and terms](#data-sources-and-terms) below, including a pending permission for the ISIC data.
 
 # Changes
