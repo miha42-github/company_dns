@@ -14,7 +14,7 @@ request, merged by the owner, and **a document never claims something that is no
 |---|---|---|
 | R1 | **The root README does not advertise the staging URL** before the event. The URL goes in the client guide sent to the teams. | The README describes V4 and where staging fits without a link; DP3 and DP7. |
 | R2 | **Documents call this release `V4.0.0-pre`.** The version strings in code are **`4.0.0`** everywhere (`/health`, the OpenAPI document, all Cargo crates), so nothing is reset at release. | Dropping "-pre" at release is a documents-only change (DP1). |
-| R3 | **No Zetaris mention in the user-facing guide for now.** Later: a configuration example, a pointer to the Zetaris getting-started repository and its worked examples, and an example link from the README. The owner (also the Zetaris CTO) will make sure the integration guide material exists. | DP9 is a parked item with its place reserved; nothing is written now. |
+| R3 | **(Superseded 2026-10-16: the owner asked for the Zetaris guide, see DP9.)** No Zetaris mention in the user-facing guide for now. Later: a configuration example, a pointer to the Zetaris getting-started repository and its worked examples, and an example link from the README. The owner (also the Zetaris CTO) will make sure the integration guide material exists. | DP9 is a parked item with its place reserved; nothing is written now. |
 | R4 | **Be honest that the scripts are maintainer-focused**, state the intention to make them generic, report what is already generic, and keep a debt list. | DP4 and the appendix. |
 | R5 | **Data terms.** Redistribution rights are in hand for the **US SIC, Japan SIC and EU NACE** data. **ISIC (UN) is pending**: an email has gone out with no answer yet. The README states this and carries a risk that the ISIC data could be removed. | DP5. |
 | R6 | **Sweep the repository for IP addresses and internal host names, and clean the Git history** (an action, not just a note). | DP2. |
@@ -96,7 +96,9 @@ Also: `k8s/README.md` gets the same honesty paragraph; `docs/v4-bringup.md` is l
 
 - `docs/migrating-to-v4.md`: what is identical, what is added, what differs, what to test in a client; link the differences ledger (`docs/results/differences.json` and its readable form) so it is found from the README and the changelog.
 
-### DP9. Zetaris integration example (parked; R3)
+### DP9. Zetaris integration example (done 2026-10-16; was parked under R3)
+
+Written as `docs/integrations/zetaris.md` (US SIC, EU NACE and Japan SIC as Zetaris REST tables, the placeholder-`User-Agent` pitfall, the level naming, rate limits for many teams), a README link under "Integrations", a docs index row and a `%` section in `docs/using-the-api.md`. What follows is the original plan.
 
 - **Not written now.** When the owner has the integration guide material: a short `docs/integrations/zetaris.md` that points to the Zetaris getting-started repository and its worked examples, a configuration example for the three data sets (US SIC, EU NACE, Japan SIC), and a README link under an "Integrations" heading. The owner coordinates the content with Zetaris; this repository only links to it.
 - **Placeholder:** the README's "Integrations" heading is added only when there is something to link to.
