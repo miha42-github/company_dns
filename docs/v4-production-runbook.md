@@ -8,7 +8,7 @@ The idea: V4 runs in the `company-dns` namespace beside V3 as its own Deployment
 
 ## Before you start
 
-- V4 has already passed staging and **you know the tag** that did. It is the tag the staging Deployment runs (`./scripts/build-and-deploy-v4.sh --status` prints it). Production runs exactly that tag: **promote, do not rebuild.**
+- V4 has already passed staging and **you know the tag** that did. For the first cutover that is a tag built from `main` **with pull request 164 in it** (a trusted `Origin` or `Referer` earns the standard tier instead of skipping the limit): deploy it to staging, run `python3 perf_tests/origin_check.py --expect closed` against staging, and let the soak run on it before you promote it. It is the tag the staging Deployment runs (`./scripts/build-and-deploy-v4.sh --status` prints it). Production runs exactly that tag: **promote, do not rebuild.**
 - You are on the build node, in a checkout of this repository on `main`, up to date.
 - `kubeseal` is installed (`seal-secrets-v4.sh` tells you if not).
 
