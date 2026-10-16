@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # seal-secrets-v4.sh
-# Make V4's staging credentials and seal them for the on-prem MicroK8s cluster
-# (namespace: company-dns-staging). Companion to scripts/build-and-deploy-v4.sh;
-# the whole procedure is in docs/v4-bringup.md, step 3.
+# Make V4's credentials and seal them for the on-prem MicroK8s cluster: staging
+# (namespace company-dns-staging, the default) or production (--env prod, namespace
+# company-dns). Companion to scripts/build-and-deploy-v4.sh; the staging procedure is
+# docs/v4-bringup.md, step 3, and the production one is docs/v4-production-runbook.md.
 #
 # Usage:
-#   ./scripts/seal-secrets-v4.sh [--rotate] [--reseal] [--apply] [--out DIR]
+#   ./scripts/seal-secrets-v4.sh [--env staging|prod] [--rotate] [--reseal] [--apply] [--out DIR]
 #                                [--controller-namespace NS --controller-name NAME]
 #
 # What it does:
@@ -22,6 +23,12 @@
 #     SEALED_SECRETS_NAMESPACE / SEALED_SECRETS_NAME).
 #
 # Arguments:
+#   --env prod production: the profiles named in k8s/prod-v4/configmap-rules.yaml, tokens kept in
+#              ~/company_dns-prod-secrets (V4_PROD_SECRETS_DIR; never V4_SECRETS_DIR, which is
+#              staging's), sealed to k8s/prod-v4/sealedsecret-credentials.yaml as the Secret
+#              company-dns-v4-credentials in company-dns. It refuses to use the staging
+#              secrets directory (staging tokens must never work in production), and with
+#              --apply it does not touch the namespace manifest (the namespace is V3's).
 #   --rotate   new tokens for every profile (the old ones stop working at the next deploy)
 #   --reseal   seal again even though nothing changed (sealing is not repeatable
 #              byte for byte, so by default an unchanged credentials file is left alone)
@@ -31,7 +38,7 @@
 #
 # What this script does NOT do: it never downloads or installs anything (kubeseal
 # included: it names the command), never prints a token, and only ever touches
-# the namespace company-dns-staging.
+# the namespace of the environment it was asked for (company-dns-staging, or company-dns with --env prod).
 
 set -Eeuo pipefail
 # Never fail silently: any command that stops the script says which one and where (set -E so functions and substitutions report too).
@@ -40,13 +47,10 @@ trap 'echo "ERROR: unexpected failure (exit $?) at line ${LINENO}: ${BASH_COMMAN
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"   # -P: so "inside the repository" cannot be fooled by a symlink
 
-NAMESPACE="company-dns-staging"
-SECRET="company-dns-credentials"
-MANIFEST_DIR="k8s/staging"
-RULES_MANIFEST="${REPO_ROOT}/${MANIFEST_DIR}/configmap-rules.yaml"
-SEALED_FILE="${REPO_ROOT}/${MANIFEST_DIR}/sealedsecret-credentials.yaml"
-
-OUT_DIR="${V4_SECRETS_DIR:-${HOME}/company_dns-staging-secrets}"
+STAGING_SECRETS_DIR="${V4_SECRETS_DIR:-${HOME}/company_dns-staging-secrets}"
+PROD_SECRETS_DIR="${V4_PROD_SECRETS_DIR:-${HOME}/company_dns-prod-secrets}"
+OUT_DIR=""
+ENVIRONMENT="staging"
 CONTROLLER_NS="${SEALED_SECRETS_NAMESPACE:-}"
 CONTROLLER_NAME="${SEALED_SECRETS_NAME:-}"
 ROTATE=0; RESEAL=0; APPLY=0
@@ -56,6 +60,7 @@ while [[ $# -gt 0 ]]; do
     --rotate) ROTATE=1; shift;;
     --reseal) RESEAL=1; shift;;
     --apply) APPLY=1; shift;;
+    --env) ENVIRONMENT="${2:-}"; shift 2;;
     --out) OUT_DIR="$2"; shift 2;;
     --controller-namespace) CONTROLLER_NS="$2"; shift 2;;
     --controller-name) CONTROLLER_NAME="$2"; shift 2;;
@@ -63,6 +68,16 @@ while [[ $# -gt 0 ]]; do
     *) echo "ERROR: unknown argument $1" >&2; exit 2;;
   esac
 done
+
+case "${ENVIRONMENT}" in
+  staging)
+    NAMESPACE="company-dns-staging"; SECRET="company-dns-credentials"; MANIFEST_DIR="k8s/staging"; : "${OUT_DIR:=${STAGING_SECRETS_DIR}}"; OTHER_DIR="${PROD_SECRETS_DIR}";;
+  prod)
+    NAMESPACE="company-dns"; SECRET="company-dns-v4-credentials"; MANIFEST_DIR="k8s/prod-v4"; : "${OUT_DIR:=${PROD_SECRETS_DIR}}"; OTHER_DIR="${STAGING_SECRETS_DIR}";;
+  *) echo "ERROR: --env must be staging or prod, got '${ENVIRONMENT}'" >&2; exit 2;;
+esac
+RULES_MANIFEST="${REPO_ROOT}/${MANIFEST_DIR}/configmap-rules.yaml"
+SEALED_FILE="${REPO_ROOT}/${MANIFEST_DIR}/sealedsecret-credentials.yaml"
 
 # --- kubectl (or microk8s kubectl, as the cluster nodes have it) ---
 if command -v kubectl >/dev/null 2>&1; then KUBECTL=(kubectl)
@@ -100,7 +115,7 @@ if [[ -z "${CONTROLLER_NS}" || -z "${CONTROLLER_NAME}" ]]; then
   CONTROLLER_NAME="${CONTROLLER_NAME:-${found##* }}"
 fi
 echo "==> Controller  : ${CONTROLLER_NS}/${CONTROLLER_NAME}"
-echo "==> Namespace   : ${NAMESPACE}"
+echo "==> Environment : ${ENVIRONMENT} (namespace ${NAMESPACE}, secret ${SECRET})"
 
 # --- Where the secrets live: outside the repository ---
 mkdir -p "${OUT_DIR}"
@@ -111,6 +126,11 @@ case "${OUT_DIR}/" in
     echo "ERROR: refusing to write secrets inside the repository (${OUT_DIR}); choose a directory outside it with --out" >&2
     exit 1;;
 esac
+# staging and production must never share a secrets directory: a staging token must not work in production
+if [[ -d "${OTHER_DIR}" && "$(cd "${OTHER_DIR}" && pwd -P)" == "${OUT_DIR}" ]]; then
+  echo "ERROR: ${OUT_DIR} is the other environment's secrets directory; use a separate one for ${ENVIRONMENT} (--out)" >&2
+  exit 1
+fi
 chmod 700 "${OUT_DIR}"
 umask 077
 TOKENS="${OUT_DIR}/tokens"; CREDS="${OUT_DIR}/credentials"; MARK="${OUT_DIR}/.sealed-for"
@@ -140,7 +160,7 @@ for p in ${PROFILES}; do
   fi
 done
 printf '%s' "${NEW}" > "${TOKENS}"
-{ echo "# staging credentials, made by scripts/seal-secrets-v4.sh: profile:sha256-of-token"
+{ echo "# ${ENVIRONMENT} credentials, made by scripts/seal-secrets-v4.sh: profile:sha256-of-token"
   while IFS=: read -r p t; do [[ -z "${p}" ]] || echo "${p}:$(hash_of "${t}")"; done < "${TOKENS}"; } > "${CREDS}"
 chmod 600 "${TOKENS}" "${CREDS}"
 echo "==> Wrote       : ${TOKENS} (the tokens: the only copy) and ${CREDS} (hashes)"
@@ -172,8 +192,12 @@ fi
 
 # --- Optionally apply it, so the deploy finds the Secret ---
 if [[ ${APPLY} -eq 1 ]]; then
-  echo "==> Applying the namespace and the sealed secret"
-  "${KUBECTL[@]}" apply -f "${REPO_ROOT}/${MANIFEST_DIR}/namespace.yaml"
+  if [[ "${ENVIRONMENT}" == "staging" ]]; then
+    echo "==> Applying the namespace and the sealed secret"
+    "${KUBECTL[@]}" apply -f "${REPO_ROOT}/${MANIFEST_DIR}/namespace.yaml"
+  else
+    echo "==> Applying the sealed secret (the namespace ${NAMESPACE} already exists)"
+  fi
   "${KUBECTL[@]}" apply -f "${SEALED_FILE}"
   echo "==> Waiting for the controller to create the Secret"
   for _ in $(seq 1 "${V4_WAIT_SECRET_TRIES:-60}"); do
@@ -187,4 +211,4 @@ fi
 echo "==> Done."
 echo "    1. Put the tokens in the password manager now: ${TOKENS}"
 echo "    2. Commit only ${MANIFEST_DIR}/sealedsecret-credentials.yaml (git status should show nothing else new)."
-[[ ${APPLY} -eq 1 ]] || echo "    3. Deploy with ./scripts/build-and-deploy-v4.sh (it applies the sealed secret first), or re-run with --apply."
+[[ ${APPLY} -eq 1 ]] || echo "    3. Apply it (re-run with --apply); for staging ./scripts/build-and-deploy-v4.sh also applies it first."

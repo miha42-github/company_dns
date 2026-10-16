@@ -92,9 +92,10 @@ class ProductionV4Manifests(unittest.TestCase):
         self.assertNotIn("COMPANY_DNS_SQL_ENABLED", env, "decision D4: SQL stays off in production")
         self.assertFalse([k for k in env if k.startswith("COMPANY_DNS_SQL")], "no SQL setting at all")
 
-    def test_the_container_is_the_staging_container_except_for_the_sql_setting(self):
-        prod = {**self.c, "env": [e for e in self.c["env"]]}
-        stag = {**self.staging_c, "env": [e for e in self.staging_c["env"] if e["name"] != "COMPANY_DNS_SQL_ENABLED"]}
+    def test_the_container_is_the_staging_container_except_for_the_sql_setting_and_the_event_anonymous_tier(self):
+        deliberate = {"COMPANY_DNS_SQL_ENABLED"}
+        prod = {**self.c, "env": [e for e in self.c["env"] if "ANONYMOUS" not in e["name"]]}
+        stag = {**self.staging_c, "env": [e for e in self.staging_c["env"] if e["name"] not in deliberate]}
         prod.pop("image"), stag.pop("image")
         self.assertEqual(prod, stag, "production runs what staging proved; only deliberate differences belong here")
 
@@ -123,10 +124,13 @@ class ProductionV4Manifests(unittest.TestCase):
         self.assertGreaterEqual(live["periodSeconds"] * live["failureThreshold"], 60)
         self.assertGreater(live["periodSeconds"] * live["failureThreshold"], ready["periodSeconds"] * ready["failureThreshold"])
 
-    def test_the_per_ip_quota_is_the_hackathon_setting_and_the_anonymous_tier_is_the_default(self):
+    def test_the_per_ip_quotas_are_the_hackathon_settings(self):
         env = env_of(self.c)
         self.assertEqual((env["COMPANY_DNS_RATE_LIMIT_PER_MINUTE"], env["COMPANY_DNS_RATE_LIMIT_BURST"]), ("6000", "600"))
-        self.assertFalse([k for k in env if "ANONYMOUS" in k], "open question 3 of the plan: the anonymous tier stays at its default until the owner decides")
+        anon, anon_burst = int(env["COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE"]), int(env["COMPANY_DNS_RATE_LIMIT_ANONYMOUS_BURST"])
+        self.assertEqual((anon, anon_burst), (600, 60))
+        self.assertLess(anon, int(env["COMPANY_DNS_RATE_LIMIT_PER_MINUTE"]), "identifying yourself must still earn more than not doing so")
+        self.assertGreaterEqual(anon_burst // self.dep["spec"]["replicas"], 1, "each pod keeps a usable burst")
 
     def test_the_pod_has_time_to_shut_down_gracefully(self):
         env = env_of(self.c)
