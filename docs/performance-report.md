@@ -12,6 +12,7 @@ with the tools in this repository. Written for the maintainers and for anyone de
 | How much does it carry? | On the 20-pod staging shape (20 x 1000m): **about 1,900 lookups a second** (2,300 when the requests repeat) at p95 around 400 ms, through the real ingress | cluster sizing |
 | Does it survive change? | **Yes: a rollback, a roll forward, one and two lost pods, a restart of all pods, and scaling 20 to 16 and back**, at 60 requests/s: no errors, p95 within 5 ms of baseline, memory flat. A finding (pods took the full 30 s to stop) was fixed with a graceful shutdown: pods now leave in 5 to 10 s | rollout under load, 2026-10-13 and 14 |
 | Where does it buckle? | **About 2,100 lookups a second**, CPU-limited (18 to 19 of 20 cores), from 768 in flight; best sustained 1,931/s at p95 0.9 s; nothing failed up to 3,072 in flight | ceiling test, three machines, 2026-10-14 |
+| How many semantic searches? | **About 340 a second for a mix of the three routes, 815 for US similarity, 286 for global similarity, 207 for hybrid**, CPU-limited on the 20 pods, no errors; the lookups ceiling is unchanged by the ingress change (2,153/s) | route-by-route ceiling, 2026-10-16 |
 | Does the per-address limit work? | **Yes, since the ingress fix.** Before it, the ingress hid the callers' addresses and two machines shared two allowances (200/s, split 139 and 60). After `externalTrafficPolicy: Local`, three machines each got exactly 100/s (300 together), no trade-off | limit probe, 2026-10-14 and 15 |
 | Does it stay up and correct? | **Yes, for the known workload:** 24 hours at 60 requests/s from outside the network, 5.18 million requests, **no errors**, 7,200 of 7,200 known-answer checks correct, p95 110 to 126 ms with no drift | soak test, 2026-10-12 and 13 |
 
@@ -201,13 +202,44 @@ The ingress service was changed to `externalTrafficPolicy: Local` (made durable 
 - **The load was spread evenly across the 20 pods** while the three machines flooded the service with about 11,000 requests a second in all, mostly `429`s: each pod used between 14 and 19 CPU-seconds over the busy minute (largest over smallest 1.4). No pod restarted, all 20 stayed ready, peak memory 171 MiB.
 - **The count of requests let through before the first `429`** (404 to 445) is a lower bound on the burst, not the burst: the first `429` comes from the first pod to use up its own share. The probe now also reports the burst from the totals.
 
-The aggregate for many addresses is therefore each address's allowance times the number of addresses, up to what the pods carry (about 2,100 lookups a second): about 20 addresses at the full rate would reach it. **Not yet re-tested after the change:** the ceiling itself, because with `Local` one Traefik pod now carries all the external traffic.
+The aggregate for many addresses is therefore each address's allowance times the number of addresses, up to what the pods carry (about 2,100 lookups a second): about 20 addresses at the full rate would reach it. The ceiling itself was re-tested the next day and is unchanged (section 5d).
+
+### 5d. Semantic searches at 20 pods, route by route, and the lookups ceiling again (16 October)
+
+Two questions were still open after 5c: how many semantic searches a second the 20 pods carry (measured before only at 12 pods and for a two-route mix: 231 a second), and whether the lookups ceiling of 5a still holds now that one Traefik pod carries all the external traffic. Five runs from three machines at the same time, as the `staging-test` profile, with the pods watched from the cluster side. Files: [`results/2026-10-16-semantic/`](results/2026-10-16-semantic/); protocol: scenario 6 in `docs/soak-scenarios.md`.
+
+![Peak, cost per request and p95 for each semantic route](results/2026-10-16/k2-routes.png)
+
+| Route | Peak | Per pod | Pod CPU per request | p95 at the lowest level tried | Best sustained (p95 within 1 s) |
+|---|---|---|---|---|---|
+| US similarity | **815/s** | 41/s | 25 ms | 759 ms at 192 in flight | 801/s at 192 |
+| global similarity | **286/s** | 14/s | 70 ms | 1,987 ms at 192 | none: 192 in flight was already past it |
+| hybrid (keyword and semantic, all systems) | **207/s** | 10/s | 97 ms | 2,610 ms at 192 | none: 192 in flight was already past it |
+| all three together (4:3:3) | **338/s** | 17/s | 59 ms | 421 ms at 48 | 310/s at 48 |
+| SIC lookups | **2,153/s** | 108/s | 9 ms | 432 ms at 256 | 2,002/s at 512 |
+
+- **Every route is limited by CPU, and more requests in flight only add latency.** Throughput is flat from the lowest level to the highest (for example hybrid 206, 206, 207 a second at 192, 384 and 768 in flight) while the pods use 18 to 20 of their 20 cores and p95 climbs from 2.6 s to 7.3 s. Requests did not fail (no errors until the last lookups step, no `429`s); the one exception is the pod restarts described below.
+- **The routes differ by a factor of four.** A US similarity search costs about 25 ms of pod CPU, a global one 70 ms, a hybrid one 97 ms. The mix's peak agrees with the single routes: weighting them 4:3:3 predicts 335 a second, and the measured peak was 338.
+- **The best sustained rate for global similarity and hybrid was not found.** The lowest level tried (192 in flight) was already past p95 of 1 s. The mixed run suggests where they stand (it passed at 48 in flight and failed at 96), so about 280 and 200 a second are their capacities, but a run at lower levels (for example 24, 48 and 96) is needed for a "sustained" figure. This is the only gap left from this run.
+- **Memory is not a constraint:** the largest pod reached 299 MiB (limit 1 GiB), and it did not grow with the load.
+- **The lookups ceiling is unchanged by the ingress change:** peak 2,153 a second at 1,536 in flight, against 2,145 before (5a); best sustained 2,002 at 512. One Traefik pod is not the limit. CPU is, at 19 of 20 cores.
+
+![Lookups ceiling, 16 October](results/2026-10-16/k1-lookups.png)
+
+**A finding at extreme overload: two health-check restarts.** Both came well past the rates that matter (hybrid at 768 in flight, far past its capacity, and lookups at 3,072 in flight):
+
+- During hybrid at 768 in flight (about 13:18 UTC): one pod was restarted and two more were out of "ready" for about 10 seconds each.
+- During lookups at 3,072 in flight (about 13:27 UTC): one pod was restarted; 14 requests failed (0.02%).
+
+Our reading, from the manifest and the timing and not confirmed in the pod logs: a pod running flat out at its CPU limit can miss the `/health` check, which times out after 3 seconds (`timeoutSeconds: 3`), and three misses in a row (`failureThreshold: 3`, every 10 s) make Kubernetes restart it. Restarting an already overloaded pod removes its capacity and sends its share to the others, which can make an overload worse. A liveness probe that is more patient (for example `timeoutSeconds: 5`, `failureThreshold: 6`) would avoid this; the readiness probe can stay strict, because taking an overloaded pod out of rotation sheds load. Changed afterwards in the staging Deployment, from which the production one is copied: liveness now allows 5 s and 6 failures, a full minute before a restart (`k8s/staging/deployment.yaml`, pull request 160); the readiness probe is unchanged. The clocks of the machines and of the pods were trusted as they are (the watcher had no idle stretch to line them up from); the restarts fall inside the steps named above by their start times.
+
+What this means for the event: a mix of searches peaks at about 340 a second, and a single route between 200 and 800. Even if every one of 300 teams ran one semantic search a second at the same time, that would be at the edge of what hybrid or global similarity alone can carry, and well within lookups. A realistic load is far lower, and the service degrades by slowing down (queueing), not by failing, up to several times its capacity.
 
 ## 6. What this means for sizing a deployment
 
 | Shape | Lookups | Embedding searches | Notes |
 |---|---|---|---|
-| 20 x 1000m (the staging shape) | about 1,900 requests/s measured (2,300 repeated), p95 about 400 ms | **about 380 requests/s by extrapolation from 12 pods (19 per pod); not measured** | the shape chosen for the October load |
+| 20 x 1000m (the staging shape) | about 1,900 requests/s measured (2,300 repeated), p95 about 400 ms | **338 requests/s for the mix of three routes (815 US similarity, 286 global, 207 hybrid), measured** at 20 pods | the shape chosen for the October load |
 | 12 x 1000m | about 1,260 measured | 231 measured | half the cores |
 
 The per-address limit is a setting, not capacity: since the ingress fix (section 5c) each address gets its own 6,000 a minute (100 a second), and many addresses add up to what the pods carry. Before the fix all callers shared about 200 a second (section 5b).
@@ -215,8 +247,8 @@ The per-address limit is a setting, not capacity: since the ingress fix (section
 ## 7. What this does not show
 
 - **Capacity from a remote client.** The soak was capped at 60 requests/s (the soak's cap, chosen to stay under the per-address quota), about 3% of what the 20 pods carried in the sizing runs. Every step of its ramp ran at the same rate. The sizing figures come from a load generator inside the network.
-- **The ceiling after the ingress change** (section 5c): with `Local` one Traefik pod carries all external traffic, and the ceiling of section 5a has not been repeated since. The trusted-`Origin` behaviour was checked on a local server only.
-- **Embedding searches at 20 pods**, the credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers: not measured. The measured embedding figures are at 12 pods and below. The ceiling (section 5a) is for lookups only.
+- **The trusted-`Origin` behaviour** was checked on a local server only.
+- **The credentialed (profile) path, the SQL endpoint, and 300 simultaneous callers:** not measured. The best sustained rate of global similarity and hybrid (section 5d) was not found, only their peaks; the health-check restarts at extreme overload were read from the pods' samples, not from their logs.
 - **Server memory and restarts during the soak.** A client cannot see them. They must be read from the cluster (restart counts, memory per pod).
 - **Server memory during the 24-hour soak was not sampled.** The cluster showed the 20 pods with **0 restarts** after 38 hours (checked 13 October). The two-hour rollout run (section 4) did sample memory, and it was flat.
 - **The rollout runs** were at 60 requests/s from the cluster's own network, not at heavy load: whether a pod lost under hundreds of requests a second drops any in flight is untested (the graceful shutdown is meant to prevent it).

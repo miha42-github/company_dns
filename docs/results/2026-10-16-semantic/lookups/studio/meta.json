@@ -1,0 +1,21 @@
+{
+ "label": "studio",
+ "url": "https://company-dns-staging.mediumroast.io",
+ "mix": "lookups",
+ "levels": [
+  256,
+  512,
+  768,
+  1024,
+  1536,
+  2048,
+  3072
+ ],
+ "machines": 3,
+ "duration": 30.0,
+ "warmup": 5.0,
+ "pause": 15.0,
+ "processes": 8,
+ "profile": "staging-test",
+ "started_utc": "2026-10-16T13:21:26Z"
+}

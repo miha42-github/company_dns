@@ -194,6 +194,8 @@ The mixes `similarity`, `similarity-global`, `hybrid` and `semantic` (all three 
 - **Watch memory:** stop all three ramps if any pod's memory passes 800 MiB (the limit is 1 GiB); embedding work holds model memory.
 - **The lookups ceiling is separate and still needed once:** the ingress change means one Traefik pod now carries all external traffic, and the lookups ramp (scenario 5, part C) has not been repeated since. Semantic searches do not stress Traefik (a few hundred requests a second), lookups do.
 
+**Run on 16 October 2026** (results in `docs/results/2026-10-16-semantic/`, analysis in `docs/performance-report.md`, section 5d). It showed the per-route peaks and that the lowest per-route level (192 in flight) is too high for global similarity and hybrid; use `--levels 24 48 96` for them if their best sustained rate is wanted.
+
 **Pass:** nothing fails; the best sustained rate (p95 within 1 s, no errors) and the peak are recorded for each route; the pods' CPU and memory per step explain where it levels off (expected: CPU, at about 19 requests a second per US-similarity pod).
 
 ## Optional: the limit biting (about 1 hour)

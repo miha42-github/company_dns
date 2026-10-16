@@ -70,6 +70,22 @@ class Ceiling(unittest.TestCase):
         self.assertEqual(f["first_low_ready"]["level"], 3072)
         self.assertIn("shifted by -4", note)
 
+    def test_a_run_with_no_step_inside_the_bar_has_no_best_step(self):
+        levels = [lv(192, 284, 1987), lv(384, 284, 3201), lv(768, 286, 4999)]
+        joined = [jn(192, 284, 19.7), jn(384, 284, 19.8), jn(768, 286, 19.8)]
+        f = rr.ceiling_findings(levels, joined, 20.0)
+        self.assertIsNone(f["best"])
+        self.assertEqual(f["plateau"]["level"], 192)
+
+    def test_routes_peak_cost_per_request_and_the_mix_predicted_from_them(self):
+        runs = [("similarity", [lv(192, 800, 700)]), ("global", [lv(192, 280, 2000)]), ("hybrid", [lv(192, 200, 2600)]), ("head", [lv(48, 330, 400)])]
+        f = rr.route_findings(runs, 20)
+        self.assertAlmostEqual(f["routes"]["similarity"]["per_pod"], 40.0)
+        self.assertAlmostEqual(f["routes"]["hybrid"]["ms_per_request"], 100.0)
+        self.assertAlmostEqual(f["predicted_mix"], 1 / (0.4 / 800 + 0.3 / 280 + 0.3 / 200), places=6)
+        self.assertEqual(f["measured_mix"], 330)
+        self.assertIsNone(rr.route_findings(runs[:2], 20)["predicted_mix"], "no prediction without all three routes and the mix")
+
     def test_the_real_two_address_probe_looks_like_a_shared_allowance(self):
         runs = [(n, rr.read_limit_run(ROOT / "docs/results/2026-10-14-limit" / n)) for n in ("studio", "laptop")]
         f = rr.limit_findings(runs, 6000)
@@ -113,6 +129,18 @@ class Drawing(unittest.TestCase):
             self.assertTrue((out / "k1-ceiling.png").stat().st_size > 20000)
             self.assertEqual(rr.main(["limit", str(ROOT / "docs/results/2026-10-14-limit/studio"), str(ROOT / "docs/results/2026-10-14-limit/laptop"), "--out", d]), 0)
             self.assertTrue((out / "l1-limit-per-address.png").stat().st_size > 20000)
+
+    def test_the_semantic_route_pictures_draw_from_the_committed_runs(self):
+        base = ROOT / "docs/results/2026-10-16-semantic"
+        if not base.exists():
+            self.skipTest("the 16 October results are not in this checkout")
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d)
+            for name in ("global", "similarity"):
+                self.assertEqual(rr.main(["ceiling", "--run", str(base / name / "merged"), "--watch", str(base / "watch-staging"), "--out", d, "--name", name]), 0)
+                self.assertTrue((out / f"k1-{name}.png").stat().st_size > 20000)
+            self.assertEqual(rr.main(["routes", *[str(base / n / "merged") for n in ("similarity", "global", "hybrid", "head")], "--out", d]), 0)
+            self.assertTrue((out / "k2-routes.png").stat().st_size > 20000)
 
 
 if __name__ == "__main__":
