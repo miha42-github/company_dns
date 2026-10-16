@@ -1,6 +1,6 @@
 # V4 to production, and V3 demoted to source code
 
-Status: **PLAN, nothing executed (2026-10-11).** Decisions D1 to D8 are open; recommendations are given first.
+Status: **STARTED (2026-10-16): WP2 written (`k8s/prod-v4/`, tests), nothing applied to the cluster.** Decisions D1 to D8 are open; recommendations are given first. Section 8 says where each gate stands and what is next.
 Owner: michael.hay@mediumroast.io
 Scope: everything between "V4 is verified on staging" and "`company-dns.mediumroast.io` is served by V4, V3 is gone from the cluster, and V3 is only source code in the
 repository". It follows [`v4-staging-rollout.md`](v4-staging-rollout.md) (staging, done) and [`v4-staging-scripts.md`](v4-staging-scripts.md) (the script conventions this plan extends), uses the
@@ -156,7 +156,32 @@ If the gates slip, the fallback is D5's alternative: cut over after the event an
 
 1. D5 (before or after the event) and D6 (when V3 leaves).
 2. Whether the platform partner and the hackathon need profiles of their own, and who holds those tokens.
-3. Whether the anonymous tier (5 a minute, no identifying User-Agent) should stay as strict as it is for an event with unknown callers.
+3. Whether the anonymous tier (5 a minute, no identifying User-Agent) should stay as strict as it is for an event with unknown callers. **New evidence (2026-10-16):** the Zetaris scripts the teams will run send the placeholder `user-agent "YOUR_APP_NAME YOUR_CONTACT_EMAIL"`, which has no e-mail address or URL and so is classed as an unidentified caller; measured on staging, a client sending it got about a dozen answers and then `429`s. A team that follows Zetaris's 15-second pacing can still load its three data sets at 5 a minute, but if the teams' Zetaris instances fetch from a shared address (a managed cluster, a venue), all 300 teams share one anonymous allowance and most will be refused. As of 16 October the placeholder is unchanged in Zetaris's repository (last change to those scripts 13 October). Options: (a) the owner has Zetaris replace the placeholder with a contact-bearing default and tell teams to set their own (no change here); (b) raise the anonymous tier for the event window with `COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE` and `_BURST` (a ConfigMap-free env change and a restart; keep it well below the standard tier); (c) both. Recommendation: (c), decided before the freeze on 21 October. See [`docs/integrations/zetaris.md`](../integrations/zetaris.md).
 4. Whether production should keep the SQL endpoint off (recommended) and the `mediumroast.io` profile bypass.
 5. A named watcher for 22 to 25 October and how an incident is raised.
 6. Where the SIC files will be delivered from (WP9), and whether the monthly or a quarterly cadence is wanted for the V4 build.
+
+## 8. Status, 2026-10-16: where each gate stands, and what is next
+
+Evidence is what is in the repository; "owner to confirm" means nothing in it settles the item.
+
+| Gate (WP1) | State |
+|---|---|
+| Staging at 20 pods with the rate-limit settings | **Done** (staging runs 20 x 1000m, 6000 a minute, burst 600). The patient liveness probe (pull request 160) is merged but not yet applied to staging. |
+| Rate-limit check across 20 pods | **Done**: each address gets its own allowance since the ingress fix (performance report 5c, 15 October); the limit is shared fairly across pods. |
+| CORS | **Done** (14 and 15 October, `docs/soak-scenarios.md` scenario 5). |
+| Rollback and change drills under load | **Done**: rollback, roll forward, lost pods, restart of all pods, scaling (performance report sections 4 and 4b, 13 and 14 October). |
+| Soak | **Partly**: 24 hours at 60 requests/s from outside the network, no errors (section 3). The gate asks for 48 hours at least; the shorter run, the ceiling and rollout evidence are what exists. Owner to accept or extend. |
+| Capacity | **Done**: lookups ceiling about 2,100 a second (re-measured 16 October through the single ingress pod); semantic searches per route (section 5d). |
+| L3 parity against live V3; the UI pass; the cost of the `total` layer; changelog | Owner to confirm (the changelog has the V4 entry). |
+| Platform partner's integration test | **In progress**: the Zetaris scripts work against staging; the test from outside the owner's network is pending. |
+| Cluster hygiene | The CoreDNS block and the ingress source address are done. `dex-staging-tls` is due to renew on 19 October. |
+
+| Work package | State |
+|---|---|
+| WP2 production manifests | **Written**: `k8s/prod-v4/` (Deployment, Service, rules and log-level ConfigMaps; no Ingress, Middleware or Certificate, no SQL) and `k8s/test_prod_v4_manifests.py`. Not applied. `kubectl apply --dry-run=server` has to be run from the build node (there is no cluster context here). |
+| WP3 production secrets | **Next.** Needs the owner's production secrets directory and the cluster's sealing certificate; `scripts/seal-secrets-v4.sh --env prod`. The rules ConfigMap names one profile, `mediumroast.io`, so the Secret must hold exactly that line (the server refuses to start otherwise). |
+| WP4 promotion and cutover script | After WP3. |
+| WP5 to WP7 | Need the owner at the cluster; nothing starts before WP2 to WP4 are merged and the dry run passes. |
+
+**The calendar.** D5 asked for a cutover by about 15 October with five days of soak before the freeze on 21 October, and for the fall-back decision no later than 17 October. Today is the 16th: a cutover on the 17th to 19th still leaves two to four days of soak with V3 as the standing rollback; later than that, the fallback (the event on the staging host, cut over after it) is the safer path. The decision is the owner's.
