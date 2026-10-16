@@ -96,13 +96,16 @@ spec:
             periodSeconds: 2
             failureThreshold: 30
             timeoutSeconds: 3
+          # Patient on purpose: a pod running flat out at its CPU limit can miss a 3 s check, and restarting an overloaded pod only moves its share
+          # to the others (two restarts at extreme overload on 16 October, docs/performance-report.md section 5d). A pod must fail for a full minute
+          # (6 checks, 10 s apart, 5 s each) before it is killed. The readiness probe below stays strict: leaving rotation sheds load.
           livenessProbe:
             httpGet:
               path: /health
               port: 4000
             periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
             httpGet:
               path: /health

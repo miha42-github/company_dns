@@ -95,6 +95,13 @@ class StagingManifests(unittest.TestCase):
                 self.assertEqual(backend["name"], svc["metadata"]["name"])
                 self.assertEqual(backend["port"]["number"], svc["spec"]["ports"][0]["port"])
 
+    def test_liveness_is_patient_and_readiness_is_strict(self):
+        live, ready = self.c["livenessProbe"], self.c["readinessProbe"]
+        self.assertGreaterEqual(live["timeoutSeconds"], 5, "a pod at its CPU limit can miss a 3 s check")
+        self.assertGreaterEqual(live["periodSeconds"] * live["failureThreshold"], 60, "a pod must fail for a full minute before it is restarted")
+        self.assertGreater(live["periodSeconds"] * live["failureThreshold"], ready["periodSeconds"] * ready["failureThreshold"],
+                           "leaving rotation (readiness) must come well before a restart (liveness)")
+
     def test_tls_secret_certificate_and_issuer_agree(self):
         cert = of_kind(self.docs, "Certificate")[0]
         main = of_kind(self.docs, "Ingress")[0]
