@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Pictures that explain the test runs, from their result files: pods coming and going under a steady load, the ceiling, and the rate-limit probe.
+"""Pictures that explain the test runs, from their result files: pods coming and going under a steady load, the ceiling, the routes side by side, and the rate-limit probe.
 
     perf_tests/.venv/bin/python perf_tests/report_runs.py rollout docs/results/2026-10-13-rollout docs/results/2026-10-14-shutdown --out docs/results/2026-10-14 --zoom "restart all pods"
     perf_tests/.venv/bin/python perf_tests/report_runs.py ceiling --run ./tmp/ceiling-merged --watch ./tmp/watch-ceiling-staging --out docs/results/2026-10-14
+    perf_tests/.venv/bin/python perf_tests/report_runs.py routes docs/results/2026-10-16-semantic/{similarity,global,hybrid,head}/merged --out docs/results/2026-10-16
     perf_tests/.venv/bin/python perf_tests/report_runs.py limit ./tmp/limit-studio ./tmp/limit-mini ./tmp/limit-laptop --out docs/results/2026-10-14
 
 Needs matplotlib (perf_tests/requirements-report.txt, the gitignored perf_tests/.venv). Same conventions as report.py and report_cluster.py: 16:9, the finding in the title computed from the data (never
@@ -168,11 +169,13 @@ def ceiling_findings(levels: list[dict], joined: list[dict], cpu_limit: float) -
 def fig_ceiling(levels: list[dict], joined: list[dict], f: dict, note: str, out: Path, foot: str) -> None:
     n = len(levels)
     xs = list(range(n))
-    nothing = "nothing failed" if f["errors"] == 0 and f["restarts"] == 0 else f"{f['errors']} request errors"
+    nothing = "nothing failed" if f["errors"] == 0 and f["restarts"] == 0 else f"{f['errors']} request errors" + (f" and {f['restarts']} pod restarts" if f["restarts"] else "")
+    best_text = (f"Best sustained (p95 within 1 s, no errors): {f['best']['rps']:,.0f} requests/s at {f['best']['level']:,} in flight." if f["best"]
+                 else f"No step kept p95 within 1 s: the lowest level tried ({levels[0]['level']:,} in flight) was already past it.")
     fig, top = rcl._frame(f"Throughput levels off at about {round(f['peak']['rps'], -2):,.0f} requests/s from {f['plateau']['level']:,} in flight while latency keeps climbing: the pods use about {f['cpu_at_plateau']:.0f} of "
                           f"{f['cpu_limit']:.0f} cores; {nothing}",
-                          f"Closed-loop load from three machines, each step held 30 s. Best sustained (p95 within 1 s, no errors): {f['best']['rps']:,.0f} requests/s at {f['best']['level']:,} in flight. Requests in flight are the total across the machines. "
-                          f"Pods’ clock: {note}.", foot)
+                          f"Closed-loop load from three machines, each step held 30 s. {best_text} Requests in flight are the total across the machines. "
+                          f"Pods’ clock: {note.replace('**', '')}.", foot)
     h = top - 0.12
     a1 = fig.add_axes([0.07, 0.12 + h * 0.46, 0.84, h * 0.52])
     a2 = fig.add_axes([0.07, 0.12, 0.84, h * 0.34], sharex=a1)
@@ -181,9 +184,9 @@ def fig_ceiling(levels: list[dict], joined: list[dict], f: dict, note: str, out:
         a1.annotate(f"{r['rps']:,.0f}", (x, r["rps"]), textcoords="offset points", xytext=(0, 10), ha="center", fontsize=10, color=BLUE)
     a1.set_ylabel("requests per second", color=BLUE)
     a1.set_ylim(0, max(r["rps"] for r in levels) * 1.3)
-    bx = f["best"]["level"]
-    a1.axvline(levels.index(f["best"]), color=GREEN, ls="--", lw=1.2)
-    a1.text(levels.index(f["best"]), a1.get_ylim()[1] * 0.97, " best sustained", color=GREEN, fontsize=10, va="top")
+    if f["best"]:
+        a1.axvline(levels.index(f["best"]), color=GREEN, ls="--", lw=1.2)
+        a1.text(levels.index(f["best"]), a1.get_ylim()[1] * 0.97, " best sustained", color=GREEN, fontsize=10, va="top")
     a1b = a1.twinx()
     a1b.plot(xs, [r["p95_ms"] for r in levels], color=ORANGE, lw=2, marker="s", ms=6, label="p95")
     a1b.plot(xs, [r["p50_ms"] for r in levels], color=PINK, lw=1.6, marker="^", ms=5, label="p50")
@@ -206,6 +209,73 @@ def fig_ceiling(levels: list[dict], joined: list[dict], f: dict, note: str, out:
     for ax in (a1, a2):
         ax.spines[["top"]].set_visible(False)
     a1.tick_params(labelbottom=False)
+    fig.savefig(out, dpi=rcl.DPI)
+    plt.close(fig)
+
+
+# ---------------------------------------------------------------- routes side by side
+MIX_WEIGHTS = {"similarity": 4, "global": 3, "hybrid": 3}  # the `semantic` mix in load.py
+
+
+def route_findings(runs: list[tuple[str, list[dict]]], pods: int) -> dict:
+    """Peak throughput and cost per route, and, when the three single-route runs and the mix are all there, the mix's throughput predicted from them: the time one request of the mix costs is
+    the weighted sum of what each route costs (1 / its peak), so the mix should peak near 1 / sum(weight_i / peak_i)."""
+    routes = {}
+    for name, levels in runs:
+        peak = max(levels, key=lambda r: r["rps"])
+        best = ce.best_sustained(levels)
+        routes[name] = {"peak": peak["rps"], "per_pod": peak["rps"] / pods, "ms_per_request": 1000 * pods / peak["rps"], "best": best["rps"] if best else None, "p95_at_lowest": levels[0]["p95_ms"], "lowest": levels[0]["level"]}
+    predicted = measured = None
+    if all(k in routes for k in MIX_WEIGHTS) and "head" in routes:
+        total = sum(MIX_WEIGHTS.values())
+        predicted = 1 / sum((w / total) / routes[k]["peak"] for k, w in MIX_WEIGHTS.items())
+        measured = routes["head"]["peak"]
+    return {"routes": routes, "pods": pods, "predicted_mix": predicted, "measured_mix": measured}
+
+
+ROUTE_TITLES = {"similarity": "US similarity", "global": "global similarity", "hybrid": "hybrid", "head": "all three (4:3:3)", "lookups": "SIC lookups"}
+
+
+def fig_routes(runs: list[tuple[str, list[dict]]], f: dict, out: Path, foot: str) -> None:
+    names = [n for n, _ in runs]
+    label = [ROUTE_TITLES.get(n, n) for n in names]
+    r = f["routes"]
+    semantic = [n for n in names if n != "lookups"]
+    low, high = min(semantic, key=lambda n: r[n]["peak"]), max(semantic, key=lambda n: r[n]["peak"])
+    mix = (f" The mix of all three peaked at {f['measured_mix']:.0f}/s; weighting the single routes 4:3:3 predicts {f['predicted_mix']:.0f}/s." if f["predicted_mix"] else "")
+    fig, top = rcl._frame(f"Semantic searches cost very differently: {ROUTE_TITLES.get(high, high)} {r[high]['peak']:.0f}/s against {ROUTE_TITLES.get(low, low)} {r[low]['peak']:.0f}/s on {f['pods']} pods, "
+                          f"{r[high]['peak'] / r[low]['peak']:.1f} times apart",
+                          f"Peak requests per second of each run, with what one request costs in pod CPU time (a pod has one core, so {f['pods']} pods give {f['pods']} cores), and the p95 as the load rises. "
+                          f"Every route is CPU-bound: the pods run at their limit and more requests in flight only add latency.{mix}", foot)
+    h = top - 0.12
+    a1 = fig.add_axes([0.07, 0.12 + h * 0.5, 0.40, h * 0.46])
+    a2 = fig.add_axes([0.57, 0.12 + h * 0.5, 0.40, h * 0.46])
+    a3 = fig.add_axes([0.07, 0.12, 0.90, h * 0.36])
+    xs = list(range(len(names)))
+    a1.bar(xs, [r[n]["peak"] for n in names], color=[rcl.COLORS[i % 5] for i in xs], width=0.6)
+    for x, n in zip(xs, names):
+        a1.text(x, r[n]["peak"], f"{r[n]['peak']:,.0f}", ha="center", va="bottom", fontsize=10)
+    a1.set_xticks(xs)
+    a1.set_xticklabels(label, fontsize=9)
+    a1.set_ylabel("peak requests per second")
+    a1.set_ylim(0, max(r[n]["peak"] for n in names) * 1.15)
+    a2.bar(xs, [r[n]["ms_per_request"] for n in names], color=[rcl.COLORS[i % 5] for i in xs], width=0.6)
+    for x, n in zip(xs, names):
+        a2.text(x, r[n]["ms_per_request"], f"{r[n]['ms_per_request']:.0f} ms", ha="center", va="bottom", fontsize=10)
+    a2.set_xticks(xs)
+    a2.set_xticklabels(label, fontsize=9)
+    a2.set_ylabel("pod CPU time per request (ms)")
+    a2.set_ylim(0, max(r[n]["ms_per_request"] for n in names) * 1.15)
+    for i, (n, levels) in enumerate(runs):
+        a3.plot([x["level"] for x in levels], [x["p95_ms"] for x in levels], marker="o", lw=2, color=rcl.COLORS[i % 5], label=ROUTE_TITLES.get(n, n))
+    a3.axhline(1000, color=RED, ls="--", lw=1.2)
+    a3.text(a3.get_xlim()[0], 1000, " p95 of 1 s", color=RED, fontsize=9, va="bottom")
+    a3.set_xscale("log", base=2)
+    a3.set_xlabel("requests in flight, in total")
+    a3.set_ylabel("p95 (ms): worst machine")
+    a3.legend(loc="upper left", frameon=False, fontsize=9, ncol=3)
+    for ax in (a1, a2, a3):
+        ax.spines[["top", "right"]].set_visible(False)
     fig.savefig(out, dpi=rcl.DPI)
     plt.close(fig)
 
@@ -306,6 +376,11 @@ def main(argv=None) -> int:
     c.add_argument("--out", type=Path, required=True)
     c.add_argument("--cpu-limit", type=float, default=20.0, help="the pods' CPU limit in cores (20 pods of 1000m)")
     c.add_argument("--label", default="")
+    c.add_argument("--name", default="ceiling", help="the picture is k1-<name>.png")
+    ro = sub.add_parser("routes", help="compare runs of different routes (merged ceiling directories; each is named after its parent directory)")
+    ro.add_argument("dirs", nargs="+", type=Path)
+    ro.add_argument("--out", type=Path, required=True)
+    ro.add_argument("--pods", type=int, default=20)
     li = sub.add_parser("limit")
     li.add_argument("dirs", nargs="+", type=Path, help="limit_probe.py output directories, one per address")
     li.add_argument("--out", type=Path, required=True)
@@ -327,15 +402,23 @@ def main(argv=None) -> int:
                 print(f"wrote {a.out / ('r1-' + name + '.png')}: {f['n_changes']} changes, {f['errors']} errors, worst p95 {f['worst_p95']:.0f} ms against {f['baseline']:.0f} ms, up to {f['max_terminating']} pods stopping at once")
                 if a.zoom and fig_rollout_zoom(run, f, a.zoom, a.out / f"r2-{name}-zoom.png", foot):
                     print(f"wrote {a.out / ('r2-' + name + '-zoom.png')}")
+        elif a.cmd == "routes":
+            runs = [(d.resolve().parent.name, ce.read_levels(d)) for d in a.dirs]
+            f = route_findings(runs, a.pods)
+            fig_routes(runs, f, a.out / "k2-routes.png", "Ceiling tests per route: perf_tests/ceiling.py from three machines. Data: " + ", ".join(sorted({str(d.resolve().parent.parent.name) for d in a.dirs})))
+            print(f"wrote {a.out / 'k2-routes.png'}: " + ", ".join(f"{n} {v['peak']:.0f}/s ({v['per_pod']:.1f}/pod)" for n, v in f["routes"].items())
+                  + (f"; the mix predicted from its routes {f['predicted_mix']:.0f}/s, measured {f['measured_mix']:.0f}/s" if f["predicted_mix"] else ""))
         elif a.cmd == "ceiling":
             levels = ce.read_levels(a.run)
             watch = sa.read_watch(a.watch)
             joined, note = ce.join_watch(levels, watch)
             f = ceiling_findings(levels, joined, a.cpu_limit)
             meta = a.run / "meta.json"
-            foot = f"Ceiling test {a.label}: perf_tests/ceiling.py from three machines, pods watched by pod_watch.py. Data: {a.run}"
-            fig_ceiling(levels, joined, f, note, a.out / "k1-ceiling.png", foot)
-            print(f"wrote {a.out / 'k1-ceiling.png'}: peak {f['peak']['rps']:.0f}/s, best sustained {f['best']['rps']:.0f}/s at {f['best']['level']}, pods' CPU at the plateau {f['cpu_at_plateau']} of {f['cpu_limit']:.0f}")
+            foot = f"Ceiling test{' ' + a.label if a.label else ''}: perf_tests/ceiling.py from three machines, pods watched by pod_watch.py. Data: {a.run}"
+            png = a.out / f"k1-{a.name}.png"
+            fig_ceiling(levels, joined, f, note, png, foot)
+            best = f"best sustained {f['best']['rps']:.0f}/s at {f['best']['level']}" if f["best"] else "no step within p95 of 1 s"
+            print(f"wrote {png}: peak {f['peak']['rps']:.0f}/s, {best}, pods' CPU at the plateau {f['cpu_at_plateau']} of {f['cpu_limit']:.0f}")
         else:
             runs = [(d.name.replace("limit-", ""), read_limit_run(d)) for d in a.dirs]
             print("addresses with usable results:", [n for n, r in runs if r.get("ok", 0) > 0], " without:", [n for n, r in runs if not r.get("ok", 0)])

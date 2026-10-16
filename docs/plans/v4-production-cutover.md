@@ -61,7 +61,7 @@ Each has a deliverable and a way to see it is done. Merges are the owner's.
 
 ### WP2. Production manifests (config only)
 
-- New `k8s/prod-v4/`: Deployment `company-dns-v4` (20 replicas, port 4000, probes on `/health`, locked down as staging, `maxSurge` 4, the same anti-affinity), Service `company-dns-v4`, the rules ConfigMap, the log-level ConfigMap, the SealedSecret. **No Ingress, Middleware or Certificate** in this directory: those stay in `k8s/prod/` and keep serving V3 until the flip. No scripts in the directory.
+- New `k8s/prod-v4/`: Deployment `company-dns-v4` (20 replicas, port 4000, probes on `/health` (consider a more patient liveness probe, `timeoutSeconds: 5` and `failureThreshold: 6`: at extreme overload a busy pod missed the 3 s check and was restarted, see `docs/performance-report.md` section 5d), locked down as staging, `maxSurge` 4, the same anti-affinity), Service `company-dns-v4`, the rules ConfigMap, the log-level ConfigMap, the SealedSecret. **No Ingress, Middleware or Certificate** in this directory: those stay in `k8s/prod/` and keep serving V3 until the flip. No scripts in the directory.
 - `COMPANY_DNS_SQL_ENABLED` absent (off); `COMPANY_DNS_CORS_ORIGINS` explicit; the rate-limit settings per D4; `COMPANY_DNS_REPLICAS` equal to `replicas` (a test pins it, as for staging).
 - A manifest test file in the style of `k8s/test_staging_manifests.py`: placeholder tag `UNSET`, replicas agree, no SQL, no secrets in the tree, the Service selects the Deployment, no Ingress in the directory.
 - **Done when:** the tests pass and `kubectl apply --dry-run=server` accepts the directory.
