@@ -32,6 +32,36 @@ If the build node only has `microk8s kubectl`, define this once in the shell you
 kubectl() { microk8s kubectl "$@"; }
 ```
 
+## Before part 1: can the build node reach the names?
+
+Several steps below use the staging and production names (the origin check, the suite, the public-name checks of the cutover). The build node is a cluster node, and its own resolver does not necessarily answer these names with Traefik's LAN address: it can answer with the public address, which a machine inside the network cannot use, and a request by name then stalls for its whole timeout. The deploy script and the origin check's `--connect-to` do not depend on this; the rest does.
+
+**0.1. See what the build node resolves** (the staging name and the production name). Both should print Traefik's LAN address:
+
+```bash
+getent hosts company-dns-staging.mediumroast.io company-dns.mediumroast.io
+```
+
+**0.2. If they print a public address, or nothing, make this machine use Traefik's address for these two names.** Get the address first (the Ingress's load balancer address) and check it prints one:
+
+```bash
+LB=$(kubectl -n company-dns-staging get ingress company-dns -o jsonpath='{.status.loadBalancer.ingress[0].ip}'); echo "$LB"
+```
+
+Then add both names to this machine's hosts file (it affects this machine only, not the pods or other machines):
+
+```bash
+echo "$LB company-dns-staging.mediumroast.io company-dns.mediumroast.io" | sudo tee -a /etc/hosts
+```
+
+**0.3. Check again.** Both names must now print the address from 0.2:
+
+```bash
+getent hosts company-dns-staging.mediumroast.io company-dns.mediumroast.io
+```
+
+From here on, a check by name from this machine tests the path inside the network. That is why the cutover also asks for a check from outside the LAN (a phone on mobile data): only that proves the public path.
+
 ## Part 1: build the image and put it on staging
 
 **1.1. Open a `tmux` session**, so a dropped connection does not kill a build that has taken twenty minutes:
@@ -322,7 +352,7 @@ kubectl -n company-dns patch ingress company-dns-http --type=json -p '[{"op":"re
 kubectl -n company-dns get ingress -o jsonpath='{range .items[*]}{.metadata.name}{" -> "}{.spec.rules[0].http.paths[0].backend.service.name}{"\n"}{end}'
 ```
 
-**4.6. Within a minute, check the public name.** Health, then lookups from each family, then the V3-shaped path, then the redirect (from a machine that cannot reach the public address, add `--resolve company-dns.mediumroast.io:443:<traefik-lan-ip>` to each `curl`):
+**4.6. Within a minute, check the public name.** Health, then lookups from each family, then the V3-shaped path, then the redirect (from the build node this uses the hosts entry of step 0.2; from a machine that cannot reach the public address and has no such entry, add `--resolve company-dns.mediumroast.io:443:${LB}` to each `curl`, with `LB` set as in step 0.2):
 
 ```bash
 curl -s https://company-dns.mediumroast.io/health
