@@ -31,8 +31,11 @@ docker rm -f "$name-net" >/dev/null
 echo "== 2. the test layers that need no upstream calls, against a published port"
 # SQL on with the checked-in placeholder profiles (no token matches their zero hashes), so the contract layer sees the whole
 # API surface, as in the staging configuration.
+# The tests send hundreds of requests in a few seconds, as `Origin: http://localhost`. A trusted origin gets the normal tier (it used to skip the
+# limiter altogether, until 2026-10-16), so the limits are raised out of the way here: one replica, so nothing is divided, and the largest quota.
 docker run -d --name "$name" -p "$port:4000" \
   -v "$repo/v4/credentials.example:/run/secrets/credentials:ro" -v "$repo/v4/rules.example.json:/run/secrets/rules.json:ro" \
+  -e COMPANY_DNS_REPLICAS=1 -e COMPANY_DNS_RATE_LIMIT_PER_MINUTE=1000000 -e COMPANY_DNS_RATE_LIMIT_BURST=1000000 \
   -e COMPANY_DNS_SQL_ENABLED=true -e COMPANY_DNS_CREDENTIALS_FILE=/run/secrets/credentials -e COMPANY_DNS_RULES_FILE=/run/secrets/rules.json \
   "$image" >/dev/null
 for i in $(seq 1 60); do curl -fsS "http://127.0.0.1:$port/health" >/dev/null 2>&1 && break; sleep 1; done

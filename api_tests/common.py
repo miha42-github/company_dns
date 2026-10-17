@@ -7,8 +7,10 @@ Standard library only, so a laptop or a CI runner can run it unchanged (docs/pla
     API_TESTS_TOKEN
     API_TESTS_NETWORK=1   also run the tests that make the server call Wikipedia / SEC (off by default)
 
-On a local server the client sends an `Origin: http://localhost` header, which the server's rate limiter trusts, so a run
-is not throttled. Against any other server use a profile (a trusted Origin is not identity there).
+On a local server the client sends an `Origin: http://localhost` header, which the server's rate limiter treats as a first-party page: it earns the
+normal tier, not an exemption (until 2026-10-16 it skipped the limiter). A run sends hundreds of requests in seconds, so start a local server with the
+limits raised out of the way: COMPANY_DNS_REPLICAS=1 COMPANY_DNS_RATE_LIMIT_PER_MINUTE=1000000 COMPANY_DNS_RATE_LIMIT_BURST=1000000 (the container
+smoke test, v4/scripts/docker-smoke.sh, does this). Against any other server use a profile (a trusted Origin is not identity there).
 """
 import base64
 import json
