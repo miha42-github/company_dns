@@ -132,10 +132,16 @@ tail -n 1 v4/.build-log
 kubectl -n company-dns-staging get deployment company-dns -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.timeoutSeconds} {.spec.template.spec.containers[0].livenessProbe.failureThreshold}{"\n"}'
 ```
 
-**2.4. Check that a trusted `Origin` no longer skips the rate limit.** This sends about 1,500 lookups seven ways, one flood after another, and takes a couple of minutes. It changes nothing on the cluster. It must end with **CLOSED** (if it ends with BYPASS PRESENT, the image does not have the change: stop). If the machine's DNS does not reach staging, add `--connect-to <traefik-lan-ip>`:
+**2.4. Check that a trusted `Origin` no longer skips the rate limit.** This sends about 1,500 lookups seven ways, one flood after another, and takes about three minutes. It changes nothing on the cluster. From the build node the staging name usually resolves to the public address, which this machine cannot use, so reach the service through Traefik's own LAN address (the Ingress's load balancer address, which is what the deploy script does). First get it, and check it prints an address:
 
 ```bash
-python3 perf_tests/origin_check.py --expect closed
+LB=$(kubectl -n company-dns-staging get ingress company-dns -o jsonpath='{.status.loadBalancer.ingress[0].ip}'); echo "$LB"
+```
+
+Then run the check through it. It starts with one lookup and says at once if it cannot reach the service (it prints `reached ...` and then a line before each flood). It must end with **CLOSED** (if it ends with BYPASS PRESENT, the image does not have the change: stop):
+
+```bash
+python3 perf_tests/origin_check.py --expect closed --connect-to "$LB"
 ```
 
 **2.5. Part 2 is done when** staging runs your tag with all pods ready, the suite passed in step 1.9, the probe shows 5 and 6, and the origin check says CLOSED. The tag you have written down is the release. **There is no soak on staging**: the soak runs on production after the cutover (part 6).

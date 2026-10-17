@@ -41,12 +41,36 @@ CASES = [
 ]
 
 
+FAIL_FAST = 50   # this many errors with not one answer: the service is not reachable, so stop instead of waiting out every timeout
+
+
+def reach_problem(target: load.Target) -> str | None:
+    """One lookup before anything is flooded: a problem sentence, or None. A machine that cannot reach the service (a name that resolves to an address this machine cannot
+    use, for example the public one from inside the network) would otherwise sit through a timeout per request and print nothing for many minutes."""
+    try:
+        conn = target.connect()
+        try:
+            conn.request("GET", "/V4.0/na/sic/code/3571", headers={"User-Agent": UA, "Accept": "application/json"})
+            resp = conn.getresponse()
+            resp.read()
+        finally:
+            conn.close()
+    except Exception as e:
+        return (f"cannot reach {target.host} from this machine ({type(e).__name__}: {str(e)[:100]}); if the name does not resolve to the cluster from here "
+                "(from inside the network it often resolves to the public address), add --connect-to <ingress-address>")
+    if resp.status not in load.OK_STATUSES and resp.status != 429:
+        return f"the first lookup was answered {resp.status}: is this the service?"
+    return None
+
+
 def flood(target: load.Target, headers: dict, requests: int, concurrency: int) -> dict:
-    """`requests` lookups from `concurrency` threads as fast as they go; the answers counted."""
+    """`requests` lookups from `concurrency` threads as fast as they go; the answers counted. Stops early, reporting what it had, if nothing at all is being answered."""
     h = {"User-Agent": UA, "Accept": "application/json", **headers}
     counts = {"ok": 0, "limited": 0, "errors": 0}
     lock = threading.Lock()
     remaining = [requests]
+    answered = [0]
+    failed = [0]
 
     def worker(seed: int) -> None:
         import random
@@ -55,7 +79,7 @@ def flood(target: load.Target, headers: dict, requests: int, concurrency: int) -
         mine = {"ok": 0, "limited": 0, "errors": 0}
         while True:
             with lock:
-                if remaining[0] <= 0:
+                if remaining[0] <= 0 or (answered[0] == 0 and failed[0] >= FAIL_FAST):
                     break
                 remaining[0] -= 1
             path = load.build_path(rng, "/V4.0/na/sic/code/{c}")
@@ -65,6 +89,7 @@ def flood(target: load.Target, headers: dict, requests: int, concurrency: int) -
                 conn.request("GET", path, headers=h)
                 resp = conn.getresponse()
                 resp.read()
+                answered[0] += 1
                 if resp.status in load.OK_STATUSES:
                     mine["ok"] += 1
                 elif resp.status == 429:
@@ -76,6 +101,8 @@ def flood(target: load.Target, headers: dict, requests: int, concurrency: int) -
                     conn = None
             except Exception:
                 mine["errors"] += 1
+                with lock:
+                    failed[0] += 1
                 try:
                     if conn:
                         conn.close()
@@ -142,7 +169,8 @@ def main(argv=None) -> int:
     ap.add_argument("--requests", type=int, default=1500, help="lookups per row (more than the burst, 600 by default)")
     ap.add_argument("--concurrency", type=int, default=40)
     ap.add_argument("--pause", type=float, default=12.0, help="seconds between rows, for the allowance to refill")
-    ap.add_argument("--connect-to", metavar="ADDRESS")
+    ap.add_argument("--connect-to", metavar="ADDRESS", help="reach the service at this address, with the URL's host name for TLS (from inside the network the name often resolves to an address this machine cannot use)")
+    ap.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for one answer")
     ap.add_argument("--expect", choices=["closed", "bypass"], help="exit with status 1 unless the result is this (a check for after a fix)")
     ap.add_argument("--out", type=Path, help="also write the table to this file")
     a = ap.parse_args(argv)
@@ -154,14 +182,20 @@ def main(argv=None) -> int:
     if problems:
         print("cannot start:\n  - " + "\n  - ".join(problems), file=sys.stderr)
         return 2
-    target = load.Target(a.url, connect_to=a.connect_to)
+    target = load.Target(a.url, connect_to=a.connect_to, timeout=a.timeout)
+    problem = reach_problem(target)
+    if problem:
+        print(f"cannot start: {problem}", file=sys.stderr)
+        return 2
+    print(f"reached {a.url}{' via ' + a.connect_to if a.connect_to else ''}; {len(CASES)} rows of {a.requests:,} lookups, {a.pause:g} s between them (about {len(CASES) * (a.pause + 10) / 60:.0f} minutes)", flush=True)
     results = []
     for i, (name, headers, must, what) in enumerate(CASES):
         if i:
             time.sleep(a.pause)
+        print(f"{name:18s} sending {a.requests:,} lookups ...", flush=True)
         c = flood(target, headers, a.requests, a.concurrency)
         results.append({"name": name, "what": what, "must_be_limited": must, "requests": a.requests, **c})
-        print(f"{name:18s} let through {c['ok']:5d}  429 {c['limited']:5d}  errors {c['errors']}")
+        print(f"{name:18s} let through {c['ok']:5d}  429 {c['limited']:5d}  errors {c['errors']}", flush=True)
     verdict = judge(results)
     text = render(results, verdict, a.url)
     print()
