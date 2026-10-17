@@ -11,6 +11,8 @@ Checked against the V4 staging service on 16 October 2026 (the row counts and si
 
 The Zetaris scripts send `user-agent "YOUR_APP_NAME YOUR_CONTACT_EMAIL"` and tell you to replace it. **Do replace it, with a real contact, such as `MyTeam/1.0 (you@example.org)`.** The service gives the standard limit only to a `User-Agent` that contains an e-mail address or a URL (`@`, `http://` or `https://`). The placeholder has neither, so it is treated as an unidentified caller and gets the strictest limit: by default 5 a minute with a burst of 1. In a test on 16 October a client sending the placeholder text got about a dozen answers and then `429`s (`Retry-After` about a minute, and a message that says to set a self-identifying `User-Agent`).
 
+As of 16 October 2026 the placeholder is still what Zetaris's scripts carry, so every team has to make this change itself (or Zetaris has to change the default).
+
 How to set it: put the real value in the three `HEADER (user-agent "...")` lines, or run the scripts with Zetaris's `scripts/run_sql.py`, which fills it in from the `ZETARIS_USER_AGENT` environment variable.
 
 | The `User-Agent` | What the service does with it |

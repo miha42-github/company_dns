@@ -20,6 +20,12 @@ k8s/prod/
 Single environment (prod only) - no dev/staging tiers, matching the
 footprint of the single Azure Container App revision this replaces.
 
+## Production V4, beside V3: `k8s/prod-v4/`
+
+V4 for production, in the same `company-dns` namespace as V3 and **taking no public traffic**: its own Deployment, Service, rules and log-level ConfigMaps (all named `company-dns-v4...`, with their own labels so V3's Service can never select V4's pods), and no Ingress, Middleware or Certificate. Those stay in `k8s/prod/` and serve V3 until the cutover points the Ingress backend at `company-dns-v4`; the rollback is the same change back (plan: [docs/plans/v4-production-cutover.md](../docs/plans/v4-production-cutover.md)).
+
+It is the staging container, promoted rather than rebuilt (the tag that passed staging; the committed tag is `UNSET`), with deliberate differences only: the SQL endpoint is off, its own credentials Secret (`company-dns-v4-credentials`, sealed to production, not committed yet) and one profile, `mediumroast.io`. `python3 -m unittest k8s/test_prod_v4_manifests.py` (needs PyYAML) pins this, including that the container equals staging's apart from the SQL setting.
+
 ## Cluster DNS (not a manifest here)
 
 CoreDNS answers the cluster's public host names with Traefik's LAN address (`<traefik-lan-ip>`), because pods cannot reach the router's public address and cert-manager's self-check of an HTTP-01 challenge needs to. It is a manual edit of `kube-system`'s `coredns` ConfigMap, so it is **not** in this directory; it is recorded, with the host list and the rules for keeping it right, in [docs/plans/onprem-k8s-migration.md](../docs/plans/onprem-k8s-migration.md) ("In-cluster DNS for the public names"). Add a host there and in the ConfigMap whenever a site with a certificate is added.

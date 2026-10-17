@@ -1,0 +1,18 @@
+# V4's own Service, beside V3's (which is named company-dns and selects company-dns). It receives no public traffic until the cutover
+# points the Ingress backend here (docs/plans/v4-production-cutover.md, WP4 and WP6); rollback points the backend back at V3's Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: company-dns-v4
+  namespace: company-dns
+  labels:
+    app.kubernetes.io/name: company-dns-v4
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: company-dns-v4
+  ports:
+    - name: http
+      port: 80
+      targetPort: 4000
+      protocol: TCP

@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: company-dns-v4
+  namespace: company-dns
+  labels:
+    app.kubernetes.io/name: company-dns-v4
+spec:
+  # V4 beside V3 in the same namespace (docs/plans/v4-production-cutover.md, D1): its own Deployment, Service and labels, and no Ingress here, so it takes
+  # no public traffic until the cutover moves the Ingress backend. The labels differ from V3's on purpose: V3's Service selects app.kubernetes.io/name: company-dns
+  # and must never pick up these pods (k8s/test_prod_v4_manifests.py checks it).
+  # Twenty one-core replicas, for the hackathon load: at equal CPU, many ~1-core pods beat a few large ones, and lookups kept scaling
+  # with pod count up to 20 (docs/plans/v4-sizing-test.md). Re-decide the size after the event (D2).
+  # COMPANY_DNS_REPLICAS below must equal this: k8s/test_prod_v4_manifests.py checks it.
+  replicas: 20
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: company-dns-v4
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 4       # 20 pods one at a time would take many minutes; four extra at once, still none unavailable
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: company-dns-v4
+    spec:
+      # Spread the pods across the two worker nodes.
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: company-dns-v4
+                topologyKey: kubernetes.io/hostname
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001            # lets the non-root user read the mounted Secret
+        seccompProfile:
+          type: RuntimeDefault
+      # The server keeps serving 5 s after SIGTERM, then drains for at most 15 s (COMPANY_DNS_SHUTDOWN_DELAY_SECS / _GRACE_SECS defaults), so a pod leaves in a few
+      # seconds; this is the limit before Kubernetes kills it, and must stay above their sum (k8s/test_staging_manifests.py checks it).
+      terminationGracePeriodSeconds: 30
+
+      # The image package is public: no imagePullSecrets (docs/plans/v4-staging-rollout.md, S1).
+      # Promote, do not rebuild: the tag is the one that passed staging (scripts/build-and-deploy-v4.sh, the production mode).
+      containers:
+        - name: company-dns
+          # ghcr.io/miha42-github/company_dns/company_dns_v4:<tag>. The tag is put in by scripts/build-and-deploy-v4.sh as it applies this file, on every
+          # deploy (never edit it by hand, never `latest`). UNSET is deliberately not pullable.
+          image: ghcr.io/miha42-github/company_dns/company_dns_v4:UNSET
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+              protocol: TCP
+          env:
+            # The Deployment's replicas: the fleet-wide rate limits are divided by it.
+            - name: COMPANY_DNS_REPLICAS
+              value: "20"
+            # Per-IP quotas for callers that identify themselves (fleet-wide, divided across the replicas: 600 over 20 pods is 30 each).
+            # The anonymous tier stays at its default of 5 per minute. See v4/README.md.
+            - name: COMPANY_DNS_RATE_LIMIT_PER_MINUTE
+              value: "6000"
+            - name: COMPANY_DNS_RATE_LIMIT_BURST
+              value: "600"
+            # The experimental SQL endpoint is OFF in production: COMPANY_DNS_SQL_ENABLED is deliberately absent (decision D4; a test pins it).
+            - name: COMPANY_DNS_CREDENTIALS_FILE
+              value: /etc/company-dns/credentials/credentials
+            - name: COMPANY_DNS_RULES_FILE
+              value: /etc/company-dns/rules/rules.json
+            - name: LOG_LEVEL_CONFIG_PATH
+              value: /etc/company-dns-log-level/log-level
+            # COMPANY_DNS_CORS_ORIGINS is left at its default (it only concerns the credentialed SQL route, which is off here; lookups answer any origin).
+            # The anonymous tier stays at its default too (decision D4, open question 3 of the plan).
+
+          # One core per pod, as the sizing test measured (peak memory about 250 MiB, so 1Gi has room). The CPU request is half the limit,
+          # so 20 pods reserve 10 cores and the other workloads on these nodes are not crowded out; raise it to 1000m to reserve all 20.
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+
+          # The model and data load at start (1 to 2 s measured on the nodes); the startup probe allows a minute.
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            periodSeconds: 2
+            failureThreshold: 30
+            timeoutSeconds: 3
+          # Patient on purpose: a pod running flat out at its CPU limit can miss a 3 s check, and restarting an overloaded pod only moves its share
+          # to the others (two restarts at extreme overload on 16 October, docs/performance-report.md section 5d). A pod must fail for a full minute
+          # (6 checks, 10 s apart, 5 s each) before it is killed. The readiness probe below stays strict: leaving rotation sheds load.
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 4000
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true     # proven: the image starts, answers lookups and embedding searches with a read-only root
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+
+          volumeMounts:
+            - name: credentials
+              mountPath: /etc/company-dns/credentials
+              readOnly: true
+            - name: rules
+              mountPath: /etc/company-dns/rules
+              readOnly: true
+            # A directory mount, not subPath, so an edit to the ConfigMap reaches the pod.
+            - name: log-level
+              mountPath: /etc/company-dns-log-level
+              readOnly: true
+
+      volumes:
+        # Production's own credentials (profile:sha256 lines), sealed by scripts/seal-secrets-v4.sh --env prod (WP3). Never staging's.
+        - name: credentials
+          secret:
+            secretName: company-dns-v4-credentials
+            defaultMode: 0440
+        - name: rules
+          configMap:
+            name: company-dns-v4-rules
+        - name: log-level
+          configMap:
+            name: company-dns-v4-log-level

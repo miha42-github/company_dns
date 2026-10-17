@@ -1,0 +1,22 @@
+# Production's profiles: defaults and per-profile overrides, no secrets (docs/plans/v4-sql-endpoint.md 5a).
+# One profile, mediumroast.io, with no rate limit (the first-party applications). The SQL endpoint is off in production (decision D4), so there are no SQL
+# grants. A profile for the platform partner or the hackathon is open question 2 of the plan; add it here and in the credentials Secret together.
+# Every profile named here must also have a line in the production credentials Secret, or the server refuses to start.
+# Profiles are read at start, so a change here needs a rollout restart.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: company-dns-v4-rules
+  namespace: company-dns
+  labels:
+    app.kubernetes.io/name: company-dns-v4
+data:
+  rules.json: |
+    {
+      "defaults": {"rate_limit": {"requests_per_minute": 300, "burst": 30}},
+      "profiles": {
+        "mediumroast.io": {
+          "rate_limit": {"bypass": true}
+        }
+      }
+    }
