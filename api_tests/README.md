@@ -14,7 +14,8 @@ python3 -m unittest discover -s api_tests -v               # the same, without t
 ```
 
 A server that is not running makes the tests skip with the reason, not fail. On a local server the client sends an `Origin: http://localhost`
-header, which the rate limiter trusts; against any other server use a profile (`--profile` and `--token`). L5 starts its own server (needs a built
+header, which the rate limiter treats as a first-party page and gives the normal tier (it no longer skips the limit): start a local server with the limits raised,
+`COMPANY_DNS_REPLICAS=1 COMPANY_DNS_RATE_LIMIT_PER_MINUTE=1000000 COMPANY_DNS_RATE_LIMIT_BURST=1000000`, or a run will be throttled; against any other server use a profile (`--profile` and `--token`). L5 starts its own server (needs a built
 `v4/target/{debug,release-lean,release-small,release}/company-dns-server`, or `V4_BINARY`) and is skipped without one.
 
 | Layer | File | What it covers |

@@ -759,5 +759,15 @@ class SealProduction(Base):
         self.assertEqual(r.returncode, 2)
 
 
+class SmokeScript(unittest.TestCase):
+    def test_the_container_that_runs_the_test_layers_has_its_rate_limits_raised(self):
+        # the tests send hundreds of requests in seconds as Origin: http://localhost, which earns only the normal tier; with the defaults a run is throttled
+        # into hundreds of 429 failures (it was, on 2026-10-17, after the trusted-origin bypass was closed)
+        text = (REPO / "v4/scripts/docker-smoke.sh").read_text()
+        second = text.split("== 2.")[1]
+        for setting in ("COMPANY_DNS_REPLICAS=1", "COMPANY_DNS_RATE_LIMIT_PER_MINUTE=1000000", "COMPANY_DNS_RATE_LIMIT_BURST=1000000"):
+            self.assertIn(f"-e {setting}", second)
+
+
 if __name__ == "__main__":
     unittest.main()
