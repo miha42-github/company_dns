@@ -240,13 +240,13 @@ kubectl -n company-dns get pods -o wide
 
 You should see 20 `company-dns-v4-...` pods on both nodes and the same 4 V3 pods as in step 3.2, with no new restarts.
 
-**3.12. Look at V4 without public traffic.** In one terminal (a second `tmux` window works: `Ctrl-b c`):
+**3.12. Look at V4 without public traffic.** This opens a tunnel to the V4 Service, and **the command does not return: it prints `Forwarding from 127.0.0.1:18090 -> 4000` and then stays running. That is the tunnel working; do not wait for it to finish.** Leave it running and open a **second `tmux` window** (`Ctrl-b c`) for everything until step 3.14 (`Ctrl-b 0` and `Ctrl-b 1` switch between the windows). In the first window:
 
 ```bash
 kubectl -n company-dns port-forward svc/company-dns-v4 18090:80
 ```
 
-In another, check health and a lookup (a port-forward reaches one pod, which is enough to see it answers):
+In the second window, check health and a lookup (a port-forward reaches one pod, which is enough to see it answers):
 
 ```bash
 curl -s http://127.0.0.1:18090/health
@@ -284,7 +284,7 @@ printf 'user = "staging-test:%s"\n' "${STAGING_TOKEN}" | curl -s -K - -o /dev/nu
 BASE_URL=http://127.0.0.1:18090 API_TESTS_PROFILE=mediumroast.io API_TESTS_TOKEN="${PROD_TOKEN}" python3 api_tests/run.py --layers L0,L1,L2
 ```
 
-Stop the port-forward (`Ctrl-c` in its window). **Part 3 is done when** all 20 pods are ready, the digests match, V3 is unchanged, the production token is accepted, the staging token is refused and the suite passes.
+Stop the port-forward (`Ctrl-b 0`, then `Ctrl-c` in the first window). **Part 3 is done when** all 20 pods are ready, the digests match, V3 is unchanged, the production token is accepted, the staging token is refused and the suite passes.
 
 ## Part 4: the cutover (a quiet moment, someone watching)
 
