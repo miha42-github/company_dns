@@ -1,6 +1,6 @@
 # Does a client-set `Origin` or `Referer` skip the rate limit? A check for the cluster administrator
 
-Status: **a check to run (written 2026-10-15); expected result today: the bypass is present.** It changes nothing on the cluster and sends about 10,000 lookups in a minute from the machine it runs on.
+Status: **the bypass was closed in the code on 2026-10-16** (a trusted `Origin` or `Referer` now gets the standard tier, 6,000 a minute per address on staging, instead of no limit). On a build from before that change the check reports the bypass; on a build with it, the expected result is **CLOSED**: run it against staging after the new image is deployed, and again against production after the cutover. It changes nothing on the cluster and sends about 10,000 lookups in a minute from the machine it runs on.
 
 ## What is being checked
 
@@ -53,8 +53,6 @@ python3 perf_tests/origin_check.py --expect closed
 
 It exits with status 1 if any header still skips the limit (status 3 if it cannot judge), so it can be used in a script.
 
-## Options, for the owner (not decided)
+## What was decided (2026-10-16)
 
-- **Accept it.** The pods' capacity is the only limit for callers who use the headers; the per-address limit still holds for everyone else.
-- **Make the trusted origins a setting** (the debt list in `v4/README.md` already names this) and empty it for the event, so nothing skips the limit. This needs a code change and a new image.
-- **Keep the first-party bypass but close local development origins** (`localhost`): also a code change.
+The first-party web pages cannot hold credentials or set a contact `User-Agent`, so they cannot simply lose the exemption: V4's own `/ui/` and the `html/` app would become anonymous callers (5 a minute by default). Instead of no limit, a trusted `Origin` or `Referer` now earns the **standard tier**: the pages keep working, and anyone forging the header gets no more than a contact in their `User-Agent` already gives. Credentials are looked at first: a profile's own grant applies, and a wrong credential is a `401`. The SQL route never honoured the headers. Making the trusted origins a setting for outside deployments remains on the debt list in `v4/README.md`.

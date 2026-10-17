@@ -2,9 +2,12 @@
 //! built on `experiments/rate-limit-spike/`'s proven design: two
 //! independent `governor` keyed rate limiters (one per tier) selected
 //! per-request by `user_agent::classify` (a self-identifying
-//! `User-Agent` gets the normal tier, anything else the draconian one),
-//! checked only after the trusted-origin bypass (§3.4) has had a chance
-//! to skip the limiter. The rolling shared-secret `User-Agent` bypass
+//! `User-Agent` gets the normal tier, anything else the draconian one).
+//! A trusted `Origin`/`Referer` (§3.4) used to skip the limiter altogether;
+//! since 2026-10-16 it gets the normal tier instead (browsers cannot set a
+//! contact `User-Agent` or hold credentials, so the first-party pages need
+//! at least that, but the header is client-set, so it must not mean "no
+//! limit"). The rolling shared-secret `User-Agent` bypass
 //! (§3.5) was removed 2026-10-05. Authenticated callers are the profiles
 //! mechanism's job (`access.rs`, `docs/plans/v4-sql-endpoint.md` §5a):
 //! HTTP Basic Auth identifies a profile, and its `rate_limit` grant is
@@ -147,8 +150,9 @@ fn per_pod_for(aggregate: u32, replicas: u32) -> NonZeroU32 {
 pub struct TieredLimiterState {
     normal: Arc<DefaultKeyedRateLimiter<IpAddr>>,
     draconian: Arc<DefaultKeyedRateLimiter<IpAddr>>,
-    /// Whether a trusted `Origin`/`Referer` skips the limiter. True for the lookup routes;
-    /// false for the SQL route, where a client-set header must never be a bypass.
+    /// Whether a trusted `Origin`/`Referer` earns the normal tier (a browser page cannot send a
+    /// contact `User-Agent`). True for the lookup routes; false for the SQL route, where a
+    /// client-set header must never improve a caller's tier. It is never a way past the limit.
     trust_origin: bool,
     /// Profiles; `None` when no credentials file is configured (everyone is anonymous).
     access: Option<Arc<Access>>,
@@ -187,7 +191,7 @@ impl TieredLimiterState {
     }
 
     /// The same buckets (so SQL requests count against the same per-IP and per-profile
-    /// limits as lookups), but a trusted `Origin`/`Referer` is not a bypass. Used for the
+    /// limits as lookups), but a trusted `Origin`/`Referer` earns nothing. Used for the
     /// SQL route.
     pub fn without_origin_trust(&self) -> Self {
         Self { trust_origin: false, ..self.clone() }
@@ -262,9 +266,9 @@ pub async fn tiered_rate_limit(
         .get(header::USER_AGENT)
         .and_then(|v| v.to_str().ok());
 
-    if state.trust_origin && trusted_origin::is_trusted(origin, referer) {
-        return next.run(request).await;
-    }
+    // A first-party page (a browser cannot hold credentials or set a contact User-Agent) is treated as an identified caller: the normal tier, never
+    // "no limit" - the header is client-set. Credentials are still looked at first, so a profile's grant applies and a wrong credential is a 401.
+    let from_trusted_origin = state.trust_origin && trusted_origin::is_trusted(origin, referer);
 
     let ip = client_ip(headers, peer);
     let mut identified = false;
@@ -299,7 +303,7 @@ pub async fn tiered_rate_limit(
         }
     }
 
-    let tier = if identified { Tier::Normal } else { classify(ua) };
+    let tier = if identified || from_trusted_origin { Tier::Normal } else { classify(ua) };
     let limiter = match tier {
         Tier::Normal => &state.normal,
         Tier::Draconian => &state.draconian,
@@ -452,6 +456,12 @@ mod tests {
         hit_as(app, ua, origin, None).await
     }
 
+    async fn hit_as_referer(app: &Router, referer: &str) -> StatusCode {
+        let mut req = Request::builder().uri("/x").header(header::REFERER, referer).body(Body::empty()).unwrap();
+        req.extensions_mut().insert(ConnectInfo::<SocketAddr>("192.0.2.1:1".parse().unwrap()));
+        app.clone().oneshot(req).await.unwrap().status()
+    }
+
     #[tokio::test]
     async fn the_429_message_matches_the_tier_that_was_exceeded() {
         // the strictest tier (no User-Agent): told how to get a higher limit
@@ -515,11 +525,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn trusted_origin_still_skips_the_limiter() {
+    async fn a_trusted_origin_gets_the_normal_tier_not_unlimited() {
+        // the default normal burst of 20 over 4 replicas is 5 per pod: five requests, then a 429, where it used to be no limit
         let a = app();
-        for _ in 0..30 {
-            assert_eq!(hit(&a, None, Some("https://mediumroast.io")).await, StatusCode::OK);
+        let mut codes = vec![];
+        for _ in 0..7 {
+            codes.push(hit(&a, None, Some("https://mediumroast.io")).await);
         }
+        assert_eq!(&codes[..5], &[StatusCode::OK; 5], "the normal tier's burst, not the draconian burst of one");
+        assert_eq!(&codes[5..], &[StatusCode::TOO_MANY_REQUESTS; 2], "and then it is limited like any identified caller");
+    }
+
+    #[tokio::test]
+    async fn a_trusted_referer_works_the_same_way_and_a_lookalike_host_earns_nothing() {
+        let a = app();
+        assert_eq!(hit_as_referer(&a, "https://mediumroast.io/ui/").await, StatusCode::OK);
+        assert_eq!(hit_as_referer(&a, "https://mediumroast.io/ui/").await, StatusCode::OK, "more than the draconian burst of one");
+        let b = app();
+        assert_eq!(hit(&b, None, Some("https://mediumroast.io.evil.example")).await, StatusCode::OK);
+        assert_eq!(hit(&b, None, Some("https://mediumroast.io.evil.example")).await, StatusCode::TOO_MANY_REQUESTS, "an ordinary anonymous caller");
+    }
+
+    #[tokio::test]
+    async fn a_trusted_origin_shares_the_identified_callers_bucket() {
+        // forging the header gains no more than an identifying User-Agent already does: the same normal-tier bucket for the same address
+        let a = app();
+        for _ in 0..5 {
+            assert_eq!(hit(&a, Some("YourApp/1.0 (contact@example.com)"), None).await, StatusCode::OK);
+        }
+        assert_eq!(hit(&a, None, Some("https://mediumroast.io")).await, StatusCode::TOO_MANY_REQUESTS);
     }
 
     // --- profiles ---
@@ -599,8 +633,16 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn trusted_origin_wins_even_over_a_bad_credential() {
+    async fn a_bad_credential_is_refused_even_from_a_trusted_origin() {
         let a = app_with(Some(profiles()));
-        assert_eq!(hit_as(&a, None, Some("https://mediumroast.io"), Some(basic("capped", "wrong"))).await, StatusCode::OK);
+        assert_eq!(hit_as(&a, None, Some("https://mediumroast.io"), Some(basic("capped", "wrong"))).await, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
+    async fn a_profile_grant_applies_from_a_trusted_origin_too() {
+        let a = app_with(Some(profiles()));
+        for _ in 0..50 {
+            assert_eq!(hit_as(&a, None, Some("https://mediumroast.io"), Some(basic("unlimited", "tok"))).await, StatusCode::OK);
+        }
     }
 }
