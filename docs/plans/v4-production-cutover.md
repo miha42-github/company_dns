@@ -1,6 +1,6 @@
 # V4 to production, and V3 demoted to source code
 
-Status: **STARTED (2026-10-16): WP2 written (`k8s/prod-v4/`, tests), WP3 ready (`seal-secrets-v4.sh --env prod`), the cutover steps written as a runbook ([`../v4-production-runbook.md`](../v4-production-runbook.md)); nothing applied to the cluster. Cutover decided for 17 October.** Section 8 says where each gate stands and what is next.
+Status: **CUTOVER DONE (2026-10-17): `company-dns.mediumroast.io` is served by V4**, image tag `10172026-0eaeb0b`, digest `sha256:50bfef01cf781543478b6f3e26231ae937b2f9387676b00550d8b51f717d28cb`, the same image staging ran (checked pod by pod). V3 stands by with its four pods, taking no traffic, as the rollback (the Ingress backend is the one switch; see the runbook, part 5). Next: the two-hour watch, then the 48-hour soak against production, the freeze on 21 October, the event on 22 to 25 October, then WP8 (retire V3) and WP9/WP10 after about 26 October. Section 8 has the gates.
 Owner: michael.hay@mediumroast.io
 Scope: everything between "V4 is verified on staging" and "`company-dns.mediumroast.io` is served by V4, V3 is gone from the cluster, and V3 is only source code in the
 repository". It follows [`v4-staging-rollout.md`](v4-staging-rollout.md) (staging, done) and [`v4-staging-scripts.md`](v4-staging-scripts.md) (the script conventions this plan extends), uses the
@@ -163,6 +163,8 @@ If the gates slip, the fallback is D5's alternative: cut over after the event an
 6. Where the SIC files will be delivered from (WP9), and whether the monthly or a quarterly cadence is wanted for the V4 build.
 
 ## 8. Status, 2026-10-16: where each gate stands, and what is next
+
+**Cutover, 2026-10-17 (done):** the runbook's parts 1 to 4 were followed on the build node: the image `10172026-0eaeb0b` was built and put on staging (container smoke test, the API suite and `origin_check.py --expect closed` passed), then deployed to production beside V3 (20 pods, ten on each node, V3 untouched; the production token accepted, a staging token refused, the suite 44 tests OK), then both Ingress backends were pointed at V4 and the public name, the V3-shaped paths, the redirect and the UI answered. Three things went wrong on the way, all fixed in the repository: the container smoke test was throttled once the trusted-Origin bypass closed (#166), `origin_check.py` seemed to hang because the build node does not resolve the names to Traefik's address (#167, and a runbook step to make it so), and `kubectl port-forward` looked like a hang (the runbook now says it stays running).
 
 **Decided by the owner on 2026-10-16:** (1) the anonymous tier is raised for the event (600 a minute, burst 60, in `k8s/prod-v4/deployment.yaml`, to be put back after about 26 October) and the owner has Zetaris replace the placeholder User-Agent (open question 3 is closed by doing both); (2) **the cutover is on 17 October**; (3) the soak is extended rather than accepted as it is, and it runs **on production after the cutover**, not on staging (part 6 of the runbook: a 48-hour soak against production with V3 standing by); (4) the trusted-`Origin` bypass becomes a standard-tier grant, option B of open question 4 (pull request 164; the cutover promotes the image that has it).
 
