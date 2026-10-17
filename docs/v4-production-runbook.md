@@ -102,7 +102,7 @@ echo "$TAG"
 ./scripts/build-and-deploy-v4.sh --suite "$TAG"
 ```
 
-Expect it to end with `Done. <your tag> is running` and 20 of 20 replicas ready. If the suite reports failures, **stop here**: the image does not go to production. If the package is reported as private, the script says exactly where to make it public and waits; the package was made public for staging, so this should not happen.
+Expect it to end with `Done. <your tag> is running` and 20 of 20 replicas ready. If the **container smoke test** fails before anything is pushed (a long list of failures from `docker-smoke.sh`), nothing has reached the registry or the cluster: send the output to the maintainer, and after a fix is merged start again from step 1.2. The commit changes, so **the tag changes too: set it again in step 1.5 and write the new one down.** Docker's build cache makes the second build much faster. If the suite reports failures, **stop here**: the image does not go to production. If the package is reported as private, the script says exactly where to make it public and waits; the package was made public for staging, so this should not happen.
 
 ## Part 2: prove it on staging, and write down the tag
 
