@@ -64,11 +64,19 @@ spec:
             - name: COMPANY_DNS_REPLICAS
               value: "20"
             # Per-IP quotas for callers that identify themselves (fleet-wide, divided across the replicas: 600 over 20 pods is 30 each).
-            # The anonymous tier stays at its default of 5 per minute. See v4/README.md.
+            # See v4/README.md for the settings.
             - name: COMPANY_DNS_RATE_LIMIT_PER_MINUTE
               value: "6000"
             - name: COMPANY_DNS_RATE_LIMIT_BURST
               value: "600"
+            # The anonymous tier (no self-identifying User-Agent) raised for the hackathon, 22 to 25 October: the teams' Zetaris scripts send a placeholder
+            # User-Agent that the service classes as anonymous, and teams behind one shared address would otherwise share 5 requests a minute
+            # (docs/plans/v4-production-cutover.md, open question 3; docs/integrations/zetaris.md). 600 over 20 pods is 30 a minute each, a burst of 60 is 3 each.
+            # Put back to the defaults (delete both lines) after the event, about 26 October.
+            - name: COMPANY_DNS_RATE_LIMIT_ANONYMOUS_PER_MINUTE
+              value: "600"
+            - name: COMPANY_DNS_RATE_LIMIT_ANONYMOUS_BURST
+              value: "60"
             # The experimental SQL endpoint is OFF in production: COMPANY_DNS_SQL_ENABLED is deliberately absent (decision D4; a test pins it).
             - name: COMPANY_DNS_CREDENTIALS_FILE
               value: /etc/company-dns/credentials/credentials
@@ -77,7 +85,7 @@ spec:
             - name: LOG_LEVEL_CONFIG_PATH
               value: /etc/company-dns-log-level/log-level
             # COMPANY_DNS_CORS_ORIGINS is left at its default (it only concerns the credentialed SQL route, which is off here; lookups answer any origin).
-            # The anonymous tier stays at its default too (decision D4, open question 3 of the plan).
+            
 
           # One core per pod, as the sizing test measured (peak memory about 250 MiB, so 1Gi has room). The CPU request is half the limit,
           # so 20 pods reserve 10 cores and the other workloads on these nodes are not crowded out; raise it to 1000m to reserve all 20.

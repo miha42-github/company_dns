@@ -44,7 +44,7 @@ case "$args" in
     printf 'kube-system   sealed-secrets-controller   ClusterIP   192.0.2.2   <none>   8080/TCP   1d\n'
     # a real cluster lists far more services than fit in a pipe buffer, after the match
     [ -n "${STUB_BIG_SVC:-}" ] && for i in $(seq 1 6000); do printf 'ns%d   svc-%d   ClusterIP   10.1.%d.%d   <none>   80/TCP   1d\n' $i $i $((i / 250)) $((i % 250)); done;;
-  *"get secret company-dns-credentials"*) [ "${STUB_SECRET:-present}" = missing ] && exit 1; echo secret;;
+  *"get secret company-dns-credentials"*|*"get secret company-dns-v4-credentials"*) [ "${STUB_SECRET:-present}" = missing ] && exit 1; echo secret;;
   *"get ingress company-dns -o jsonpath"*) [ -n "${STUB_NO_LB:-}" ] && exit 0; echo 192.0.2.10;;
   *"get certificate company-dns-staging-io-tls -o jsonpath"*)
     if [ -n "${STUB_CERT_FALSE_POLLS:-}" ]; then
@@ -164,6 +164,8 @@ class Base(unittest.TestCase):
         for name in (DEPLOY_SH, SEAL_SH):
             shutil.copy(REPO / "scripts" / name, self.repo / "scripts" / name) if (self.repo / "scripts").exists() else (self.repo / "scripts").mkdir(parents=True) or shutil.copy(REPO / "scripts" / name, self.repo / "scripts" / name)
         shutil.copytree(REPO / "k8s/staging", self.repo / "k8s/staging")
+        shutil.copytree(REPO / "k8s/prod-v4", self.repo / "k8s/prod-v4")
+        (self.repo / "k8s/prod-v4/sealedsecret-credentials.yaml").unlink(missing_ok=True)
         # the real sealed secret is committed now; the tests start from a repository without one (the Deploy tests add a stand-in)
         (self.repo / "k8s/staging/sealedsecret-credentials.yaml").unlink(missing_ok=True)
         exe(self.repo / "v4/scripts/docker-build.sh", BUILD_STUB)
@@ -689,6 +691,72 @@ class Seal(Base):
         namespaces = {m for c in self.kubectl_calls() for m in re.findall(r" -n (\S+)", c)}
         self.assertEqual(namespaces, {"company-dns-staging"})
         self.assertNotIn(" delete", "\n".join(self.calls()))
+
+
+class SealProduction(Base):
+    """The same script with --env prod: its own profiles, directory, secret and namespace, and never staging's."""
+    def setUp(self):
+        super().setUp()
+        self.prod_secrets = self.home / "company_dns-prod-secrets"
+
+    def run_script(self, *args, **env):
+        return super().run_script(SEAL_SH, *args, **env)
+
+    def prod(self, *args, **env):
+        return self.run_script("--env", "prod", *args, **env)
+
+    def test_production_tokens_cover_only_the_profiles_production_names_and_live_in_their_own_directory(self):
+        r = self.prod()
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        tokens = dict(l.split(":", 1) for l in (self.prod_secrets / "tokens").read_text().splitlines())
+        self.assertEqual(set(tokens), {"mediumroast.io"}, "staging-test must not exist in production")
+        self.assertFalse(self.secrets.exists(), "nothing is written to staging's directory")
+        self.assertEqual(stat.S_IMODE((self.prod_secrets / "tokens").stat().st_mode), 0o600)
+        self.assertIn("# prod credentials", (self.prod_secrets / "credentials").read_text())
+        for t in tokens.values():
+            self.assertNotIn(t, r.stdout + r.stderr + "\n".join(self.calls()))
+
+    def test_it_seals_into_the_production_directory_for_the_production_secret_and_namespace(self):
+        self.prod()
+        self.assertTrue((self.repo / "k8s/prod-v4/sealedsecret-credentials.yaml").exists())
+        self.assertFalse((self.repo / "k8s/staging/sealedsecret-credentials.yaml").exists())
+        self.assertIn("kubectl create secret generic company-dns-v4-credentials -n company-dns ", "\n".join(self.calls()))
+
+    def test_it_refuses_staging_s_secrets_directory(self):
+        self.write_tokens()
+        r = self.prod("--out", str(self.secrets))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("other environment's secrets directory", r.stderr)
+        self.assertEqual([c for c in self.calls() if c.startswith("kubeseal")], [], "nothing was sealed")
+
+    def test_staging_refuses_the_production_directory_too(self):
+        self.prod()
+        r = self.run_script("--out", str(self.prod_secrets))
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("other environment's secrets directory", r.stderr)
+
+    def test_the_staging_variable_does_not_move_production_s_directory(self):
+        other = self.tmp / "elsewhere"
+        self.prod(V4_SECRETS_DIR=str(other))
+        self.assertTrue((self.prod_secrets / "tokens").exists())
+        self.assertFalse(other.exists() and (other / "tokens").exists())
+
+    def test_apply_leaves_the_namespace_alone_and_touches_only_production(self):
+        r = self.prod("--apply")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        calls = "\n".join(self.calls())
+        self.assertNotIn("namespace.yaml", calls)
+        self.assertRegex(calls, r"apply -f \S*/k8s/prod-v4/sealedsecret-credentials\.yaml")
+        self.assertIn("get secret company-dns-v4-credentials", calls)
+        namespaces = {m for c in self.kubectl_calls() for m in re.findall(r" -n (\S+)", c)}
+        self.assertEqual(namespaces, {"company-dns"})
+        self.assertNotIn(" delete", calls)
+        r = self.prod("--apply", STUB_SECRET="missing")
+        self.assertEqual(r.returncode, 1)
+
+    def test_an_unknown_environment_is_refused(self):
+        r = self.run_script("--env", "qa")
+        self.assertEqual(r.returncode, 2)
 
 
 if __name__ == "__main__":
