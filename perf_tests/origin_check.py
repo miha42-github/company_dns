@@ -57,7 +57,7 @@ def reach_problem(target: load.Target) -> str | None:
             conn.close()
     except Exception as e:
         return (f"cannot reach {target.host} from this machine ({type(e).__name__}: {str(e)[:100]}); if the name does not resolve to the cluster from here "
-                "(from inside the network it often resolves to the public address), add --connect-to <ingress-address>")
+                "(from inside the network it can fail to resolve, or resolve to an address this machine cannot use), add --connect-to <ingress-address>")
     if resp.status not in load.OK_STATUSES and resp.status != 429:
         return f"the first lookup was answered {resp.status}: is this the service?"
     return None
@@ -169,7 +169,7 @@ def main(argv=None) -> int:
     ap.add_argument("--requests", type=int, default=1500, help="lookups per row (more than the burst, 600 by default)")
     ap.add_argument("--concurrency", type=int, default=40)
     ap.add_argument("--pause", type=float, default=12.0, help="seconds between rows, for the allowance to refill")
-    ap.add_argument("--connect-to", metavar="ADDRESS", help="reach the service at this address, with the URL's host name for TLS (from inside the network the name often resolves to an address this machine cannot use)")
+    ap.add_argument("--connect-to", metavar="ADDRESS", help="reach the service at this address, with the URL's host name for TLS (from inside the network the name can fail to resolve, or resolve to an address this machine cannot use)")
     ap.add_argument("--timeout", type=float, default=10.0, help="seconds to wait for one answer")
     ap.add_argument("--expect", choices=["closed", "bypass"], help="exit with status 1 unless the result is this (a check for after a fix)")
     ap.add_argument("--out", type=Path, help="also write the table to this file")

@@ -132,7 +132,7 @@ tail -n 1 v4/.build-log
 kubectl -n company-dns-staging get deployment company-dns -o jsonpath='{.spec.template.spec.containers[0].livenessProbe.timeoutSeconds} {.spec.template.spec.containers[0].livenessProbe.failureThreshold}{"\n"}'
 ```
 
-**2.4. Check that a trusted `Origin` no longer skips the rate limit.** This sends about 1,500 lookups seven ways, one flood after another, and takes about three minutes. It changes nothing on the cluster. From the build node the staging name usually resolves to the public address, which this machine cannot use, so reach the service through Traefik's own LAN address (the Ingress's load balancer address, which is what the deploy script does). First get it, and check it prints an address:
+**2.4. Check that a trusted `Origin` no longer skips the rate limit.** This sends about 1,500 lookups seven ways, one flood after another, and takes about three to four minutes. It changes nothing on the cluster. From the build node the staging name does not always resolve (a plain `curl` by name can stall for its whole timeout, while a request straight to the ingress answers in milliseconds), so reach the service through Traefik's own LAN address (the Ingress's load balancer address, which is what the deploy script does). First get it, and check it prints an address:
 
 ```bash
 LB=$(kubectl -n company-dns-staging get ingress company-dns -o jsonpath='{.status.loadBalancer.ingress[0].ip}'); echo "$LB"
