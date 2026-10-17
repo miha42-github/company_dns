@@ -114,5 +114,68 @@ class Check(unittest.TestCase):
         self.assertFalse(v["valid"])
 
 
+class Unreachable(unittest.TestCase):
+    """A service this machine cannot use used to make the check sit through a 30 s timeout per request and print nothing for many minutes."""
+
+    def closed_port_url(self):
+        import socket
+        sock = socket.socket()
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+        sock.close()
+        return f"http://127.0.0.1:{port}"
+
+    def test_a_service_that_refuses_connections_stops_at_once_and_says_what_to_try(self):
+        import contextlib
+        import io
+        err = io.StringIO()
+        started = time.monotonic()
+        with contextlib.redirect_stderr(err):
+            code = oc.main(["--url", self.closed_port_url(), "--allow-other-url"])
+        self.assertEqual(code, 2)
+        self.assertLess(time.monotonic() - started, 5)
+        self.assertIn("cannot reach", err.getvalue())
+        self.assertIn("--connect-to", err.getvalue())
+
+    def test_a_service_that_accepts_but_never_answers_gives_up_after_the_timeout(self):
+        import contextlib
+        import io
+        import socket
+        server = socket.socket()
+        server.bind(("127.0.0.1", 0))
+        server.listen(16)
+        self.addCleanup(server.close)
+        err = io.StringIO()
+        started = time.monotonic()
+        with contextlib.redirect_stderr(err):
+            code = oc.main(["--url", f"http://127.0.0.1:{server.getsockname()[1]}", "--allow-other-url", "--timeout", "1"])
+        self.assertEqual(code, 2)
+        self.assertLess(time.monotonic() - started, 6, "one timeout, not one per request")
+        self.assertIn("cannot reach", err.getvalue())
+
+    def test_a_flood_that_gets_no_answer_at_all_stops_early(self):
+        target = oc.load.Target(self.closed_port_url(), timeout=1.0)
+        started = time.monotonic()
+        counts = oc.flood(target, {}, 10_000, 8)
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual(counts["ok"] + counts["limited"], 0)
+        self.assertLessEqual(counts["errors"], oc.FAIL_FAST + 8)
+
+    def test_it_says_what_it_is_doing_before_each_flood(self):
+        import contextlib
+        import io
+        Handler.bucket = Bucket(rate=40.0, burst=30)
+        Handler.honour_trusted = False
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        self.addCleanup(server.shutdown)
+        with contextlib.redirect_stdout(io.StringIO()) as out:
+            oc.main(["--url", f"http://127.0.0.1:{server.server_address[1]}", "--allow-other-url", "--requests", "60", "--concurrency", "4", "--pause", "0.2"])
+        text = out.getvalue()
+        self.assertIn("reached http://127.0.0.1", text)
+        for name, *_ in oc.CASES:
+            self.assertRegex(text, rf"{name}\s+sending 60 lookups")
+
+
 if __name__ == "__main__":
     unittest.main()

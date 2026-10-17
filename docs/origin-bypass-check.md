@@ -30,7 +30,7 @@ It sends the same flood of lookups seven ways, one after another with a 12-secon
 
 The last line prints **BYPASS PRESENT** (with the headers that skip the limit) or **CLOSED**. If the baseline is not limited it says it cannot judge. Against the real service code on 2026-10-15, with the staging settings, it reported the bypass for the first four headers and limited the last two.
 
-For a different URL (a service you operate), add `--allow-other-url`; for the staging service from a machine whose DNS does not reach it, `--connect-to <ingress-address>`.
+For a different URL (a service you operate), add `--allow-other-url`. From a machine inside the network the name often resolves to the public address, which that machine cannot use; the check starts with one lookup and, if it cannot reach the service, stops within `--timeout` seconds (10 by default) saying so: then add `--connect-to <ingress-address>` (the Ingress's load balancer address). It prints a line before each of its seven floods, so a slow run is not a silent one.
 
 ## A check without the repository
 
