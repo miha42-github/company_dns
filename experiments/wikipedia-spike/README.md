@@ -420,7 +420,7 @@ data: real CIK `0001652044`, real ISIN `US02079K1079`, real tickers
 "Meta" resolved to "Meta Inc." (a real page) - but only `description`/
 `name`/`website`/`wikipediaURL` came back correct; `cik`, `industry`,
 and `exchanges` all came back `"Unknown"`, and `country` came back
-garbled (`"U.S.<br /> {{Coord"`, an infobox-parsing artifact on a
+garbled (`"U.S.<br /> &#123;&#123;Coord"`, an infobox-parsing artifact on a
 coordinate template - a separate, smaller known limitation, not fixed
 here). Traced it: `action=query&titles=Meta Inc.&redirects=1` correctly
 follows Wikipedia's own redirect to "Meta Platforms" (confirmed via the
