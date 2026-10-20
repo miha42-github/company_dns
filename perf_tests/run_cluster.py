@@ -93,8 +93,8 @@ class Cluster:
     def deployment(self, namespace: str = NAMESPACE) -> dict:
         return json.loads(self.run("get", "deployment", DEPLOYMENT, "-o", "json", namespace=namespace))
 
-    def pods(self, namespace: str = NAMESPACE) -> list[dict]:
-        return json.loads(self.run("get", "pods", "-l", SELECTOR, "-o", "json", namespace=namespace))["items"]
+    def pods(self, namespace: str = NAMESPACE, selector: str = SELECTOR) -> list[dict]:
+        return json.loads(self.run("get", "pods", "-l", selector, "-o", "json", namespace=namespace))["items"]
 
     def restarts(self, namespace: str) -> int:
         return sum(c.get("restartCount", 0) for p in self.pods(namespace) for c in p["status"].get("containerStatuses", []))

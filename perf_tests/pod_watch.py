@@ -80,11 +80,11 @@ def combine(now_iso: str, states: list[dict], cg: dict, prev: dict | None, secon
 
 
 class Watcher:
-    def __init__(self, cluster: rc.Cluster, namespace: str):
-        self.cluster, self.namespace = cluster, namespace
+    def __init__(self, cluster: rc.Cluster, namespace: str, selector: str = rc.SELECTOR):
+        self.cluster, self.namespace, self.selector = cluster, namespace, selector
 
     def pods(self) -> list[dict]:
-        return self.cluster.pods(self.namespace)
+        return self.cluster.pods(self.namespace, self.selector)
 
     def read_cgroup(self, name: str) -> dict | None:
         try:
@@ -107,8 +107,8 @@ def run(a, cluster=None, log=print, sleep=time.sleep, now=time.time) -> int:
         return 2
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    w = Watcher(cluster, a.namespace)
-    log(f"watching {a.namespace} every {a.interval:g} s; results in {out}/ (Ctrl-C to stop)")
+    w = Watcher(cluster, a.namespace, a.selector)
+    log(f"watching the pods labelled {a.selector} in {a.namespace} every {a.interval:g} s; results in {out}/ (Ctrl-C to stop)")
     end = now() + a.hours * 3600 if a.hours else None
     prev = prev_t = prev_restarts = None
     rows = 0
@@ -148,6 +148,8 @@ def run(a, cluster=None, log=print, sleep=time.sleep, now=time.time) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--namespace", default=rc.NAMESPACE, help="default: the staging namespace; another one is read-only too")
+    ap.add_argument("--selector", default=rc.SELECTOR, help="which pods, as a label selector. The default is the staging pods and V3's production pods (app.kubernetes.io/name=company-dns); "
+                    "V4 in production is app.kubernetes.io/name=company-dns-v4: a watch of the production namespace with the default sees only V3")
     ap.add_argument("--interval", type=float, default=30.0, help="seconds between samples")
     ap.add_argument("--hours", type=float, help="stop after this long (default: until Ctrl-C)")
     ap.add_argument("--out", type=Path, default=Path("perf_tests/results") / f"watch-{time.strftime('%Y%m%d-%H%M')}")

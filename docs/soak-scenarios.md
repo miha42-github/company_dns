@@ -139,7 +139,7 @@ python3 perf_tests/soak_analyze.py merge ./site-a ./site-b ./site-c --out ./soak
 
 ## Scenario 4: the same soak on production, after the cutover (24 to 72 hours)
 
-The first soak's command, aimed at the production address (`--url`), with V3 standing by and `pod_watch.py --namespace company-dns` watching read-only. Compare with the staging baseline: p95 within noise of 116 ms from the same tester, no errors.
+The first soak's command, aimed at the production address (`--url`), with V3 standing by and `pod_watch.py --namespace company-dns --selector app.kubernetes.io/name=company-dns-v4` watching read-only (without `--selector` it watches V3's pods in that namespace, not V4's). Compare with the staging baseline: p95 within noise of 116 ms from the same tester, no errors.
 This is the soak of the production cutover plan ([plans/v4-production-cutover.md](plans/v4-production-cutover.md), WP7).
 
 ## Scenario 5: the rate limit, CORS and the ceiling (about 90 minutes, three machines)

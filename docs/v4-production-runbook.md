@@ -323,7 +323,7 @@ Preconditions: part 3 done; the clients have been told; the rollback (part 5) is
 **4.1. Start the cluster-side watcher** in its own `tmux` window (`Ctrl-b c`), so there is a record (it reads only):
 
 ```bash
-python3 perf_tests/pod_watch.py --namespace company-dns --interval 5 --out ./tmp/watch-cutover
+python3 perf_tests/pod_watch.py --namespace company-dns --selector app.kubernetes.io/name=company-dns-v4 --interval 5 --out ./tmp/watch-cutover
 ```
 
 Switch back to the first window (`Ctrl-b 0`).

@@ -40,8 +40,8 @@ class FakeCluster(rc.Cluster):
         self.reads = {}
         self.fail = set()
 
-    def pods(self, namespace=rc.NAMESPACE):
-        self.calls.append(("pods", namespace))
+    def pods(self, namespace=rc.NAMESPACE, selector=rc.SELECTOR):
+        self.calls.append(("pods", namespace, selector))
         return self.pod_list
 
     def run(self, *args, namespace=rc.NAMESPACE, stdin=None, check=True):
@@ -104,6 +104,23 @@ class Watch(unittest.TestCase):
         c.fail = {"b"}
         states, cg = pw.Watcher(c, "x").sample()
         self.assertEqual((len(states), list(cg)), (2, ["a"]))
+
+    def test_it_watches_the_pods_that_were_asked_for_and_by_default_the_staging_and_v3_pods(self):
+        # in the production namespace V3 and V4 are labelled apart; the cutover watch once saw only V3's four pods because the label was fixed
+        c = FakeCluster()
+        pw.Watcher(c, "company-dns", "app.kubernetes.io/name=company-dns-v4").sample()
+        pw.Watcher(c, "company-dns").sample()
+        selectors = [call[2] for call in c.calls if call[0] == "pods"]
+        self.assertEqual(selectors, ["app.kubernetes.io/name=company-dns-v4", rc.SELECTOR])
+
+    def test_the_selector_is_an_option_and_the_help_says_why(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            pw.main(["--help"])
+        self.assertIn("--selector", out.getvalue())
+        self.assertIn("company-dns-v4", out.getvalue())
 
     def test_a_tiny_interval_is_refused(self):
         self.assertEqual(pw.main(["--interval", "1"]), 2)
