@@ -83,7 +83,7 @@ class Watch(unittest.TestCase):
         c.reads = {"a": cgroup(1_000_000, 10, 0, 100 * 1048576), "b": cgroup(2_000_000, 10, 1, 120 * 1048576)}
         with tempfile.TemporaryDirectory() as d:
             clock = [1_000_000.0]
-            args = argparse.Namespace(out=d, namespace="company-dns-staging", interval=30.0, hours=0.0042)  # 15 s: two samples
+            args = argparse.Namespace(out=d, namespace="company-dns-staging", selector=rc.SELECTOR, interval=30.0, hours=0.0042)  # 15 s: two samples
             code = pw.run(args, cluster=c, log=lambda *_: None, sleep=lambda s: clock.__setitem__(0, clock[0] + 10), now=lambda: clock[0])
             self.assertEqual(code, 0)
             rows = list(csv.DictReader(open(Path(d) / "watch.csv")))
