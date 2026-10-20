@@ -40,8 +40,8 @@ class FakeCluster(rc.Cluster):
         self.reads = {}
         self.fail = set()
 
-    def pods(self, namespace=rc.NAMESPACE):
-        self.calls.append(("pods", namespace))
+    def pods(self, namespace=rc.NAMESPACE, selector=rc.SELECTOR):
+        self.calls.append(("pods", namespace, selector))
         return self.pod_list
 
     def run(self, *args, namespace=rc.NAMESPACE, stdin=None, check=True):
@@ -83,7 +83,7 @@ class Watch(unittest.TestCase):
         c.reads = {"a": cgroup(1_000_000, 10, 0, 100 * 1048576), "b": cgroup(2_000_000, 10, 1, 120 * 1048576)}
         with tempfile.TemporaryDirectory() as d:
             clock = [1_000_000.0]
-            args = argparse.Namespace(out=d, namespace="company-dns-staging", interval=30.0, hours=0.0042)  # 15 s: two samples
+            args = argparse.Namespace(out=d, namespace="company-dns-staging", selector=rc.SELECTOR, interval=30.0, hours=0.0042)  # 15 s: two samples
             code = pw.run(args, cluster=c, log=lambda *_: None, sleep=lambda s: clock.__setitem__(0, clock[0] + 10), now=lambda: clock[0])
             self.assertEqual(code, 0)
             rows = list(csv.DictReader(open(Path(d) / "watch.csv")))
@@ -104,6 +104,23 @@ class Watch(unittest.TestCase):
         c.fail = {"b"}
         states, cg = pw.Watcher(c, "x").sample()
         self.assertEqual((len(states), list(cg)), (2, ["a"]))
+
+    def test_it_watches_the_pods_that_were_asked_for_and_by_default_the_staging_and_v3_pods(self):
+        # in the production namespace V3 and V4 are labelled apart; the cutover watch once saw only V3's four pods because the label was fixed
+        c = FakeCluster()
+        pw.Watcher(c, "company-dns", "app.kubernetes.io/name=company-dns-v4").sample()
+        pw.Watcher(c, "company-dns").sample()
+        selectors = [call[2] for call in c.calls if call[0] == "pods"]
+        self.assertEqual(selectors, ["app.kubernetes.io/name=company-dns-v4", rc.SELECTOR])
+
+    def test_the_selector_is_an_option_and_the_help_says_why(self):
+        import contextlib
+        import io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), self.assertRaises(SystemExit):
+            pw.main(["--help"])
+        self.assertIn("--selector", out.getvalue())
+        self.assertIn("company-dns-v4", out.getvalue())
 
     def test_a_tiny_interval_is_refused(self):
         self.assertEqual(pw.main(["--interval", "1"]), 2)
