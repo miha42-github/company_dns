@@ -11,7 +11,7 @@ Checked against the V4 staging service on 16 October 2026 (the row counts and si
 
 The Zetaris scripts send `user-agent "YOUR_APP_NAME YOUR_CONTACT_EMAIL"` and tell you to replace it. **Do replace it, with a real contact, such as `MyTeam/1.0 (you@example.org)`.** The service gives the standard limit only to a `User-Agent` that contains an e-mail address or a URL (`@`, `http://` or `https://`). The placeholder has neither, so it is treated as an unidentified caller and gets the strictest limit: by default 5 a minute with a burst of 1. In a test on 16 October a client sending the placeholder text got about a dozen answers and then `429`s (`Retry-After` about a minute, and a message that says to set a self-identifying `User-Agent`).
 
-As of 16 October 2026 the placeholder is still what Zetaris's scripts carry, so every team has to make this change itself (or Zetaris has to change the default).
+Zetaris's scripts were updated on 20 October 2026 to require this: their header says the `User-Agent` must be an app name and a contact e-mail address, and `scripts/run_sql.py` **refuses to send the placeholder** and refuses a value that does not identify the caller (it fills the placeholder from `ZETARIS_USER_AGENT`). The placeholder text is still in the statements themselves, so a team that pastes them into the Zetaris console by hand must replace it first.
 
 How to set it: put the real value in the three `HEADER (user-agent "...")` lines, or run the scripts with Zetaris's `scripts/run_sql.py`, which fills it in from the `ZETARIS_USER_AGENT` environment variable.
 
@@ -59,7 +59,7 @@ Every row carries its full rollup: `section_id`, `section_desc`, `division_id`, 
 
 ## Which host to use
 
-The Zetaris scripts point at the V4 **staging** host and, for the US data, also at the V3 production host. Use whichever host your operator tells you is the one for the event. When V4 replaces V3 on the production host, the `/V3.0/` paths there are answered by V4 in V3's shape (with one extra field, `total`), so a script that loads `/V3.0/na/sic/code/%25` keeps working unchanged, and only the host in the `/V4.0/` scripts changes. Everything else in the scripts stays as it is.
+Use the **production host**, `https://company-dns.mediumroast.io`: since 17 October 2026 it is served by V4, and Zetaris's scripts now point at it for the V3 and V4 paths and say the staging host is retired. The `/V3.0/` paths on the production host are answered by V4 in V3's shape (with one extra field, `total`), and **they are not going away**: they are part of V4's compatibility with existing V3 clients, so a script that loads `/V3.0/na/sic/code/%25` keeps working (Zetaris's header expects the V3 path to disappear; it will not, so the V3 steps and the USL scripts that read the V3 raw table need no move to the V4 data). The V4 and V3 service versions are different things from the V3 and V4 *paths*: V3, the Python service, is deprecated; its URL shapes are kept.
 
 ## Rate limits, caching and many teams at once
 
