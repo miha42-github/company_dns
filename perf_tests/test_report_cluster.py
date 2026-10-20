@@ -58,5 +58,33 @@ class Numbers(unittest.TestCase):
         self.assertIn("# Soak test: PASS", text)
 
 
+SOAK48 = Path(__file__).resolve().parent.parent / "docs/results/2026-10-17-soak-prod-48h"
+
+
+class Soak48(unittest.TestCase):
+    def test_the_48_hour_production_soak_numbers(self):
+        k = rc.soak_summary(rc.read_soak(SOAK48 / "windows.csv"))
+        self.assertEqual((k["windows"], k["requests"], k["errors"], k["rate_limited"]), (2880, 10365156, 0, 0))
+        self.assertEqual((k["canaries_ok"], k["canaries_total"], k["windows_missed"]), (14400, 14400, 0))
+        self.assertAlmostEqual(k["hours"], 48.70, places=2)
+        self.assertEqual((round(k["p95_min"], 1), round(k["p95_median"], 1), round(k["p95_max"], 1)), (106.3, 113.9, 331.8))
+        self.assertEqual(k["slowest_request_ms"], 22630.7)
+        self.assertLess(abs(k["last_quarter_p95"] - k["first_quarter_p95"]), 3.0, "no drift")
+
+    def test_the_summary_in_the_repo_agrees_with_the_data(self):
+        k = rc.soak_summary(rc.read_soak(SOAK48 / "windows.csv"))
+        text = (SOAK48 / "summary.md").read_text()
+        self.assertIn(f"| requests | {k['requests']} |", text)
+        self.assertIn("# Soak test: PASS", text)
+
+    @unittest.skipIf(rc.plt is None, "matplotlib is not installed (perf_tests/.venv)")
+    def test_a_soak_alone_draws_its_picture_named_by_its_hours(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self.assertEqual(rc.main(["--soak", str(SOAK48), "--out", d]), 0)
+            self.assertTrue((Path(d) / "s1-soak-48h.png").stat().st_size > 20000)
+            self.assertFalse((Path(d) / "c1-shapes-at-12-cores.png").exists(), "no sizing data was given")
+
+
 if __name__ == "__main__":
     unittest.main()

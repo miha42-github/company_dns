@@ -160,7 +160,7 @@ def fig_scaling(data: dict, s: dict, out: Path, foot: str) -> None:
 
 
 def fig_soak(rows: list[dict], s: dict, out: Path, foot: str, label: str) -> None:
-    fig, top = _frame(f"{s['hours']:.0f} hours at {s['rps_median']:.0f} requests/s from outside the network: p95 stayed between {s['p95_min']:.0f} and {s['p95_max']:.0f} ms, "
+    fig, top = _frame(f"{s['hours']:.1f} hours at {s['rps_median']:.0f} requests/s from outside the network: p95 stayed between {s['p95_min']:.0f} and {s['p95_max']:.0f} ms, "
                  f"{s['errors']} errors, {s['canaries_ok']:,} of {s['canaries_total']:,} canary answers correct",
                  f"{s['requests']:,} requests in {s['windows']:,} one-minute windows ({label}). The run was capped at 60 requests/s, so this shows stability for that workload, not capacity. "
                  f"Median p95 {s['first_quarter_p95']:.0f} ms in the first quarter of the hold, {s['last_quarter_p95']:.0f} ms in the last.", foot)
@@ -185,24 +185,29 @@ def fig_soak(rows: list[dict], s: dict, out: Path, foot: str, label: str) -> Non
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--sizing", type=Path, required=True)
+    ap.add_argument("--sizing", type=Path, help="the sizing data; without it only the soak picture is drawn")
     ap.add_argument("--soak", type=Path, required=True, help="a directory with windows.csv and meta.json")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if plt is None:
         print("matplotlib is not installed: use perf_tests/.venv (perf_tests/requirements-report.txt)", file=sys.stderr)
         return 2
-    sizing = json.loads(a.sizing.read_text())
     rows = read_soak(a.soak / "windows.csv")
     meta = json.loads((a.soak / "meta.json").read_text())
-    s, k = sizing_summary(sizing), soak_summary(rows)
+    k = soak_summary(rows)
     a.out.mkdir(parents=True, exist_ok=True)
-    foot_c = f"Cluster sizing, recorded {sizing['recorded']}: perf_tests/run_cluster.py, staging namespace, closed-loop load from the build node. Data: docs/results/2026-10-12-cluster/sizing.json"
-    foot_s = f"Soak test started {meta['started_utc']}, perf_tests/soak.py, label {meta['label']}, {meta['python']} on {meta['platform'].split('-with')[0]}. Data: docs/results/2026-10-12-soak/"
-    fig_shapes(sizing, s, a.out / "c1-shapes-at-12-cores.png", foot_c)
-    fig_scaling(sizing, s, a.out / "c2-lookups-scale-with-pods.png", foot_c)
-    fig_soak(rows, k, a.out / "s1-soak-24h.png", foot_s, meta["label"])
-    print(json.dumps({"sizing": s, "soak": {x: v for x, v in k.items() if x != "hourly_p95"}}, indent=1))
+    foot_s = f"Soak test of {meta.get('url', 'the service')} started {meta['started_utc']}, perf_tests/soak.py, label {meta['label']}, {meta['python']} on {meta['platform'].split('-with')[0]}. Data: {a.soak}/"
+    soak_png = a.out / f"s1-soak-{int(k['hours'])}h.png"
+    out = {"soak": {x: v for x, v in k.items() if x != "hourly_p95"}, "picture": str(soak_png)}
+    if a.sizing:
+        sizing = json.loads(a.sizing.read_text())
+        s = sizing_summary(sizing)
+        foot_c = f"Cluster sizing, recorded {sizing['recorded']}: perf_tests/run_cluster.py, staging namespace, closed-loop load from the build node. Data: docs/results/2026-10-12-cluster/sizing.json"
+        fig_shapes(sizing, s, a.out / "c1-shapes-at-12-cores.png", foot_c)
+        fig_scaling(sizing, s, a.out / "c2-lookups-scale-with-pods.png", foot_c)
+        out["sizing"] = s
+    fig_soak(rows, k, soak_png, foot_s, meta["label"])
+    print(json.dumps(out, indent=1))
     return 0
 
 

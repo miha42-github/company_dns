@@ -14,7 +14,7 @@ with the tools in this repository. Written for the maintainers and for anyone de
 | Where does it buckle? | **About 2,100 lookups a second**, CPU-limited (18 to 19 of 20 cores), from 768 in flight; best sustained 1,931/s at p95 0.9 s; nothing failed up to 3,072 in flight | ceiling test, three machines, 2026-10-14 |
 | How many semantic searches? | **About 340 a second for a mix of the three routes, 815 for US similarity, 286 for global similarity, 207 for hybrid**, CPU-limited on the 20 pods, no errors; the lookups ceiling is unchanged by the ingress change (2,153/s) | route-by-route ceiling, 2026-10-16 |
 | Does the per-address limit work? | **Yes, since the ingress fix.** Before it, the ingress hid the callers' addresses and two machines shared two allowances (200/s, split 139 and 60). After `externalTrafficPolicy: Local`, three machines each got exactly 100/s (300 together), no trade-off | limit probe, 2026-10-14 and 15 |
-| Does it stay up and correct? | **Yes, for the known workload:** 24 hours at 60 requests/s from outside the network, 5.18 million requests, **no errors**, 7,200 of 7,200 known-answer checks correct, p95 110 to 126 ms with no drift | soak test, 2026-10-12 and 13 |
+| Does it stay up and correct? | **Yes, for the known workload:** 24 hours on staging (5.18 million requests) and then **48.7 hours on production (10.37 million requests)** at 60 requests/s from outside the network: **no errors**, every known-answer check correct (7,200 of 7,200 and 14,400 of 14,400), p95 within a few ms of 114 ms with no drift. One request took 22.6 s once, cause unknown; the production run has no cluster-side record | soak tests, 2026-10-12 and 13, and 2026-10-17 to 20 |
 
 What none of it shows is stated at the end ("What this does not show"). Read that before quoting a number.
 
@@ -98,6 +98,31 @@ The files are in [`results/2026-10-12-soak/`](results/2026-10-12-soak/): the per
 | throughput | 60 requests/s in every window after the first ten (the cap) |
 
 **For this known workload, stability is proven:** no errors, no wrong answers, no drift.
+
+### 3b. The same soak on production, for 48 hours (17 to 20 October)
+
+After the cutover (17 October) a remote tester ran the soak again, this time against **production** (`company-dns.mediumroast.io`, V4, image `10172026-0eaeb0b`, 20 pods) with V3 standing by, from 17 October 23:37 UTC for 48.7 hours (instructions: [`soak-prod-48h.md`](soak-prod-48h.md)). The same workload as section 3: `GET` lookups at a steady 60 requests/s, no credentials, five known-answer questions every minute. The files are in [`results/2026-10-17-soak-prod-48h/`](results/2026-10-17-soak-prod-48h/).
+
+![48.7 hours at 60 requests/s against production](results/2026-10-20/s1-soak-48h.png)
+
+| | |
+|---|---|
+| requests | 10,365,156 in 2,880 one-minute windows |
+| errors, `429`s | 0, 0 |
+| windows missing the bar (error rate above 1%, p95 above 2 s, or a wrong canary) | 0 of 2,880 |
+| known-answer checks correct | 14,400 of 14,400 |
+| p95 | median 113.9 ms; 95% of windows under 117.7 ms |
+| p50 | median 27.9 ms |
+| drift | the median p95 was 113.2 ms in the first quarter of the hold and 114.3 ms in the last; by six-hour blocks 113.2 to 114.6 ms |
+| throughput | 60.0 requests/s (the cap) in 2,836 of the 2,840 windows of the hold; the other four were 47.5 (the oddity below), 59.2, 59.8 and 59.8 |
+| the slowest request | 22.6 seconds, once, at 23:22 UTC on 18 October (about 23.8 hours in); see below |
+
+**For this known workload, stability on production is proven for two days**: no errors, no wrong answers, no drift, and the latency a client sees is the same as on staging in section 3 (median p95 117 ms, p50 28 ms).
+
+- **The one oddity.** In a single one-minute window (23:22 UTC on 18 October) one request took 22.6 seconds, p95 rose to 332 ms and the rate fell to 47.5 requests/s. It still answered (no error was counted) and the window did not miss the bar, and the next window was normal. **We do not know the cause**: it could be the tester's network, the ingress or a pod, and there is no cluster-side record to tell them apart (below).
+- **What was not observed: the cluster side.** The pod watcher was meant to run beside the soak and did not (it was started outside `tmux` and ended after 2 hours 17 minutes), and its label selector was V3's, so even those two hours recorded V3's four pods (idle, no restarts) and not one V4 pod. **Memory, CPU and restarts of V4's pods over time during these 48 hours were not recorded.** The watcher now takes `--selector` (pull request 177). Not run again by decision.
+- **One read-only snapshot, taken afterwards (20 October, once the soak had ended; `kubectl get pods` and `kubectl top pods`).** All 20 V4 pods were still the ones deployed at the cutover (age 2 days 4 hours, so none had been replaced), **each with 0 restarts** (an out-of-memory kill or a failed liveness check would have shown as a restart), at **160 to 172 MiB** of memory each, the same range as fresh pods in the earlier runs (about 163 to 172 MiB), so no sign of a leak. CPU was about 1 millicore each (no load by then). It is one moment, not a record: it cannot show CPU, throttling or memory during the run, nor what happened to the 22.6-second request.
+- **Not shown:** capacity (the rate was capped at 60 requests/s), any route but the lookups, and the event's real traffic. A different workload needs its own evidence.
 
 ## 4. Changes under load: rollback, roll forward and a lost pod (13 October)
 
